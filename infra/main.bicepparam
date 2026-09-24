@@ -24,7 +24,7 @@ param cnameRecords = {
   lyncdiscover: 'webdir.online.lync.com'
   msoid: 'clientconfig.microsoftonline-p.net'
   enterpriseregistration: 'enterpriseregistration.windows.net'
-  enterpriseenrollment: 'enterpriseenrollment.manage.microsoft.com'
+  enterpriseenrollment: 'enterpriseenrollment-s.manage.microsoft.com'
 }
 
 param srvRecords = [
