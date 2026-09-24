@@ -10,18 +10,12 @@ Static site for coleuhlig.com.
 
 ## Architecture
 
-Azure Static Web Apps (Free tier, region `centralus`, $0/month) serves the site with free auto-renewing certificates
+Azure Static Web Apps (Free tier, region `centralus`) serves the site with free auto-renewing certificates
 for `coleuhlig.com` and `www.coleuhlig.com`. `www` redirects to the apex domain (`content/js/canonical-host.js`).
 
-DNS is hosted in Microsoft 365 (Settings → Domains → coleuhlig.com). The site needs these records:
-
-| Type  | Name  | Value                                     |
-|-------|-------|-------------------------------------------|
-| A     | `@`   | `20.84.233.22` (IP behind the default hostname) |
-| CNAME | `www` | `icy-mud-0098ef010.2.azurestaticapps.net` |
-
-Microsoft 365 DNS can't alias the apex domain to a hostname, so the apex uses the IP. If it ever changes,
-`scripts/deploy.sh --infra-only` prints the current value.
+DNS is an Azure DNS zone in the stack (about $0.50/month), delegated from Amazon Registrar. The apex uses an alias record
+that follows the Static Web App, `www` is a CNAME, and the Microsoft 365 records (email, Teams, Entra/Intune) are set in
+`infra/main.bicepparam`. To add or change DNS records, edit that file and redeploy.
 
 ## Deployed version
 

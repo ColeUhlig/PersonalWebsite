@@ -2,13 +2,12 @@
 # Deploys the personal website to Azure Static Web Apps (Free tier).
 #
 #   1. Creates/updates the infrastructure as a Deployment Stack (infra/main.bicep).
-#   2. Binds the custom domains and prints the DNS records they need; certificates are automatic.
+#   2. Binds the custom domains (DNS records live in the stack's Azure DNS zone); certificates are automatic.
 #   3. Uploads ./content to the Static Web App.
 #
 # Usage: scripts/deploy.sh [--infra-only | --content-only] [--configure-github]
 #
 #   --infra-only        Only update the stack and custom domains.
-#                       DNS is hosted in Microsoft 365, so records are added there by hand.
 #   --content-only      Only upload content (stack must already exist).
 #   --configure-github  Store the Azure IDs GitHub Actions needs as repo variables (uses gh).
 #
@@ -35,7 +34,7 @@ for arg in "$@"; do
     --infra-only) do_content=false ;;
     --content-only) do_infra=false ;;
     --configure-github) configure_github=true ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
@@ -69,7 +68,7 @@ if $do_infra; then
   if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
     # One-time subscription setup; the GitHub identity is scoped to the resource group and can't do this.
     log "Registering resource providers"
-    for ns in Microsoft.Web Microsoft.ManagedIdentity; do
+    for ns in Microsoft.Web Microsoft.Network Microsoft.ManagedIdentity; do
       az provider register --namespace "$ns" --wait >/dev/null
     done
   fi
@@ -97,7 +96,6 @@ APEX="$(output apexDomain)"
 
 if $do_infra; then
   log "Custom domains"
-  default_host="$(output defaultHostName)"
   for host in $(output hostNames); do
     if [[ "$host" == "$APEX" ]]; then
       bind_hostname "$host" dns-txt-token
@@ -117,13 +115,14 @@ if $do_infra; then
     sleep 10
   done
 
-  echo "  DNS records required in Microsoft 365 (Settings > Domains > $APEX > DNS records):"
-  echo "    A      @     $(dig +short "$default_host" | tail -1)   (one of the rotating IPs behind $default_host; an existing record that still serves the site is fine)"
-  for host in $(output hostNames); do
-    [[ "$host" != "$APEX" ]] && echo "    CNAME  ${host%%.$APEX}   $default_host"
-  done
   if [[ "$apex_status" != "Ready" && -n "$token" ]]; then
-    echo "    TXT    @     $token   (until $APEX shows Ready)"
+    echo "  Add '$token' to apexTxtRecords in infra/main.bicepparam and redeploy to validate $APEX."
+  fi
+
+  name_servers="$(dig +short NS "$APEX" 2>/dev/null || true)"
+  if [[ "$name_servers" != *azure-dns* ]]; then
+    echo "  $APEX is not delegated to Azure DNS. Set these name servers at the registrar:"
+    output nameServers | sed 's/^/    /'
   fi
 fi
 
