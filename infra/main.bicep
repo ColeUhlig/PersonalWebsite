@@ -13,7 +13,7 @@ param apexDomain string
 @description('Subdomains that should also serve the site, e.g. [\'www\'].')
 param subdomains array = ['www']
 
-@description('GitHub repository (owner/name) allowed to deploy via OIDC.')
+@description('GitHub repository allowed to deploy via OIDC, as it appears in the token subject (owner@ownerId/repo@repoId).')
 param githubRepo string
 
 @description('Git branch allowed to deploy via OIDC.')

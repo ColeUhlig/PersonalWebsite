@@ -118,7 +118,7 @@ if $do_infra; then
   done
 
   echo "  DNS records required in Microsoft 365 (Settings > Domains > $APEX > DNS records):"
-  echo "    A      @     $(dig +short "$default_host" | tail -1)   (IP behind $default_host)"
+  echo "    A      @     $(dig +short "$default_host" | tail -1)   (one of the rotating IPs behind $default_host; an existing record that still serves the site is fine)"
   for host in $(output hostNames); do
     [[ "$host" != "$APEX" ]] && echo "    CNAME  ${host%%.$APEX}   $default_host"
   done

@@ -35,7 +35,7 @@ curl -sI https://coleuhlig.com | grep -i x-git-commit
 
 GitHub Actions doesn't store any Azure secret. The stack creates a user-assigned managed identity
 (`id-personalwebsite-github`) with a federated credential that trusts GitHub's OIDC tokens for
-`repo:ColeUhlig/PersonalWebsite:ref:refs/heads/main` only. The workflow asks GitHub for a short-lived token
+`repo:ColeUhlig@112791537/PersonalWebsite@1384588112:ref:refs/heads/main` only (GitHub uses immutable owner/repo IDs in the subject). The workflow asks GitHub for a short-lived token
 (`permissions: id-token: write`), and `azure/login` exchanges it for an Azure token as that identity. The identity
 is Owner of `rg-personalwebsite` only. The repo variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and
 `AZURE_SUBSCRIPTION_ID` are identifiers, not secrets. `scripts/deploy.sh --configure-github` sets them.
