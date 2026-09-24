@@ -21,8 +21,8 @@ param githubRepo string
 @description('Git branch allowed to deploy via OIDC.')
 param githubBranch string = 'main'
 
-@description('TXT values on the apex, e.g. SPF and verification records.')
-param apexTxtRecords array = []
+@description('TXT records: { name: [values] }, e.g. SPF on \'@\' and DMARC on \'_dmarc\'.')
+param txtRecords object = {}
 
 @description('MX records on the apex: [{ preference, exchange }].')
 param mxRecords array = []
@@ -86,14 +86,16 @@ resource subdomainCnames 'Microsoft.Network/dnsZones/CNAME@2018-05-01' = [
   }
 ]
 
-resource apexTxt 'Microsoft.Network/dnsZones/TXT@2018-05-01' = if (!empty(apexTxtRecords)) {
-  parent: dnsZone
-  name: '@'
-  properties: {
-    TTL: 3600
-    TXTRecords: map(apexTxtRecords, v => { value: [v] })
+resource txts 'Microsoft.Network/dnsZones/TXT@2018-05-01' = [
+  for r in items(txtRecords): {
+    parent: dnsZone
+    name: r.key
+    properties: {
+      TTL: 3600
+      TXTRecords: map(r.value, v => { value: [v] })
+    }
   }
-}
+]
 
 resource mx 'Microsoft.Network/dnsZones/MX@2018-05-01' = if (!empty(mxRecords)) {
   parent: dnsZone

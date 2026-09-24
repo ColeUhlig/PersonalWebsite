@@ -116,7 +116,7 @@ if $do_infra; then
   done
 
   if [[ "$apex_status" != "Ready" && -n "$token" ]]; then
-    echo "  Add '$token' to apexTxtRecords in infra/main.bicepparam and redeploy to validate $APEX."
+    echo "  Add '$token' to txtRecords['@'] in infra/main.bicepparam and redeploy to validate $APEX."
   fi
 
   name_servers="$(dig +short NS "$APEX" 2>/dev/null || true)"
