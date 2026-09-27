@@ -47,3 +47,16 @@ To change the infrastructure, edit `infra/main.bicep` and redeploy. Anything you
 deleted from Azure (`--action-on-unmanage deleteResources`).
 
 To tear everything down: `az group delete -n rg-personalwebsite`
+
+## VEX explainer (`content/vex/`)
+
+An interactive, scroll-driven explanation of VEX robot motion software, served at `/vex/`. Design spec:
+`docs/superpowers/specs/2026-09-27-vex-explainer-design.md`. Plain ES modules with pinned CDN libraries — no build step.
+
+```sh
+npm install                    # once
+npm test                       # unit tests + coverage (node:test)
+npx playwright install chromium   # once
+npm run test:e2e               # Playwright, desktop + mobile
+npm run serve                  # http://127.0.0.1:8766/vex/
+```
