@@ -27,6 +27,66 @@
     <p class="stage-notice" id="stage-notice" hidden>The 3D view needs WebGL, which this browser doesn't provide. The text still works.</p>
   </div>
   <main class="story" id="story">
+    <section class="chapter" id="chapter-odometry">
+      <div class="beat">
+        <h1>How does a robot know where it is?</h1>
+        <p>No GPS, no cameras watching the field. Yet a good VEX robot can drive a 20-second autonomous routine and end up within an inch of where it planned. Here's how.</p>
+      </div>
+      <div class="beat">
+        <h2>It's dark in here</h2>
+        <p>Turn the field off and the robot has exactly what it has in a match: its own sensors, bolted to its own frame. Everything it knows about the world, it has to work out from those.</p>
+      </div>
+      <div class="beat">
+        <h2>Three little wheels and a gyro</h2>
+        <p>Under the chassis sit three free-spinning <em>tracking wheels</em>: two rolling forward (left and right), one rolling sideways. An inertial sensor (IMU) measures how much the robot has turned.</p>
+      </div>
+      <div class="beat">
+        <h2>Flatten it</h2>
+        <p>Everything from here on is 2D geometry. The robot becomes a rectangle, the wheels become lines, and the numbers that matter are the wheels' sideways offsets from the center: <span class="t-estimate">s<sub>L</sub></span>, <span class="t-estimate">s<sub>R</sub></span>, <span class="t-estimate">s<sub>S</sub></span>.</p>
+      </div>
+      <div class="beat">
+        <h2>Heading from wheels</h2>
+        <p>If the robot turns, the outer wheel rolls farther than the inner one. The difference divided by the distance between them is the turn angle.</p>
+        <div class="formula" id="f-heading"></div>
+        <p>An IMU gives the same number more directly, which is why most teams use one.</p>
+      </div>
+      <div class="beat">
+        <h2>One tick</h2>
+        <p>Every 10 ms the robot asks: how far did each wheel roll, and how much did I turn? It assumes it moved along a <span class="t-construct">circular arc</span>. The arc's radius is wheel distance divided by turn angle (plus the wheel's offset), and the straight-line <span class="t-target">chord</span> across it is:</p>
+        <div class="formula" id="f-chord"></div>
+      </div>
+      <div class="beat">
+        <h2>Robot frame to field frame</h2>
+        <p>That chord is in the robot's own coordinates. Rotating it by the heading <em>halfway</em> through the tick puts it on the field.</p>
+        <div class="formula" id="f-rotate"></div>
+      </div>
+      <div class="beat">
+        <h2>Stack up the ticks</h2>
+        <p>Do that a hundred times a second, add each chord to the last position, and the path appears.</p>
+      </div>
+      <div class="beat">
+        <h2>Why arcs and not straight lines?</h2>
+        <p>Treating each tick as a straight step seems fine at 10 ms. Slow the loop down and the error piles up, while the arc method stays exact.</p>
+      </div>
+      <div class="beat">
+        <h2>Only the sideways offset matters</h2>
+        <p>Slide a tracking wheel forward or back and its reading doesn't change: a rolling wheel only feels motion along its own axis. That's why only <span class="t-estimate">s</span> appears in the math.</p>
+      </div>
+      <div class="beat">
+        <h2>The catch</h2>
+        <p>Real wheels slip, real encoders jitter, and a diameter measured a hair wrong adds up. Turn the noise on and the robot's belief (<span class="t-estimate">cyan</span>) slowly parts from where it really is (<span class="t-truth">white</span>). We'll fix this in chapter 8.</p>
+      </div>
+      <div class="beat">
+        <div class="tryit" id="tryit-odometry">
+          <h3>Try it</h3>
+          <p>Drive with WASD or the arrow keys (or drag on a phone).</p>
+          <p class="readout" id="odom-readout">x 0.0  y 0.0  θ 0.0°</p>
+          <label>Noise <input type="range" id="odom-noise" min="0" max="5" step="0.5" value="0"></label>
+          <label>Sensors <select id="odom-setup"><option value="threeWheel">3 tracking wheels</option><option value="twoWheelImu">2 tracking wheels + IMU</option><option value="driveImu">Drive motor encoders + IMU</option></select></label>
+        </div>
+        <p class="credit">Same math as <a href="https://github.com/LemLib/LemLib">LemLib</a>'s tracking-wheel odometry, based on 5225A's tracking paper. Explanation follows the <a href="https://wiki.purduesigbots.com/software/odometry">Purdue SIGBots wiki</a>.</p>
+      </div>
+    </section>
   </main>
   <script type="module" src="js/main.js"></script>
 </body>
