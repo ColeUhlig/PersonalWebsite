@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How a VEX robot knows where it is</title>
+  <link rel="canonical" href="https://coleuhlig.com/vex/">
+  <script src="/js/canonical-host.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.9/dist/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+        "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.15.0/index.js",
+        "gsap/ScrollTrigger": "https://cdn.jsdelivr.net/npm/gsap@3.15.0/ScrollTrigger.js",
+        "katex": "https://cdn.jsdelivr.net/npm/katex@0.18.9/dist/katex.mjs"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <canvas id="three"></canvas>
+    <canvas id="overlay"></canvas>
+    <p class="stage-notice" id="stage-notice" hidden>The 3D view needs WebGL, which this browser doesn't provide. The text still works.</p>
+  </div>
+  <main class="story" id="story">
+  </main>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
