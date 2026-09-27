@@ -124,15 +124,20 @@ content/ocean/
     workers/             cascade.worker.js, painter.worker.js
     render/              Three.js: surface, materials, horizon, sky and lighting, unleashed shaders
     stages/              one recipe per step
-  tests/                 node --test
 ```
+
+Tests live outside `content/` (which is uploaded as it is) in `tests/ocean/`, run with `node --test`, the
+same arrangement as the VEX page's `tests/vex/`.
 
 ### 4.2 `core/`: one JavaScript twin per pure Luau module
 
 Twins of `Spectrum`, `FFT`, `Cascade`, `WaveField`, `Jacobian`, `FieldStore`, `OceanClock`, `RingLayout`,
 `SurfaceSampler`, `Swells`, `WaveSampler`, `FoamField`, `FoamPaint`, `WaterColour`, `PeakMask`,
-`NormalTexels`, `ScatterLobe`, `MapRotation` and `Tier` (about 2,900 lines of Luau), plus `random.js`
-(section 4.6) and small teaching helpers for steps 1 to 6. Same names (camelCase files), same inputs, same
+`NormalTexels`, `ScatterLobe`, `MapRotation`, `Tier`, `Jonswap` (the prototype's wave bank, which steps 3
+to 6 draw from) and `FoamRoughness` (about 2,900 lines of Luau), plus `random.js` (section 4.6), `luau.js`
+(the Luau semantics JavaScript lacks: floored modulo, `math.round`, `bit32`, float32 `Color3`) and small
+teaching helpers for steps 1 to 6. One addition the Luau does not have: `Spectrum.validateParams` rejects a
+zero or negative wind, fetch or depth with a clear error, because sliders reach places Studio never did. Same names (camelCase files), same inputs, same
 outputs, same constants. Typed arrays stand in for Luau `buffer`s with the same byte layouts, so the Luau
 comparison (section 5) can compare bytes. The constants come from the Roblox project's `Look.luau` and
 `Spectrum.NORMAL`. The hero sea state is chosen with Cole during A2, starting from what the Roblox place
@@ -176,9 +181,12 @@ close-up) at the same frozen time, compare, and only then show Cole, who judges.
 ### 4.6 Randomness
 
 The Luau `Cascade` draws its starting waves from Roblox's `Random.new(seed)`, which exists only inside
-Roblox and whose algorithm Roblox does not publish. The web engine uses a documented generator
-(PCG32) in `core/random.js`, and the Luau bundle (section 5) swaps in a Luau implementation of the same
-generator. Consequence, stated on the page: the web ocean is the same kind of sea as the game, not the
+Roblox and whose algorithm Roblox does not publish. The web engine uses a documented generator,
+xoshiro128** 1.1 (Blackman and Vigna) seeded through a SplitMix32 finaliser, in `core/random.js`, and the
+Luau bundle (section 5) swaps in a Luau implementation of the same generator. It was chosen over PCG32
+because every step is a 32-bit xor, shift or rotate or a multiply by 5 or 9, all exact in Luau's doubles
+and `bit32`; PCG32 needs 64-bit integer multiplies Luau does not have. Reference outputs (state 1, 2, 3, 4:
+11520, 0, 5927040, 70819200, 2031721883, 1637235492) were checked against the reference C code. Consequence, stated on the page: the web ocean is the same kind of sea as the game, not the
 same individual waves.
 
 ## 5. The Luau proof panel
@@ -186,7 +194,7 @@ same individual waves.
 - **Bundle:** a new script in the Roblox repo, `scripts/web_bundle.py` (modelled on `m2_preview.py`),
   inlines the pure modules that the panel runs (`Spectrum`, `FFT`, `Cascade`, `WaveField`, `Jacobian`,
   `FoamField`, `WaterColour`, `PeakMask`) into one Luau chunk with shims for the Roblox-only globals they
-  touch (`Random` → the PCG32 of section 4.6, `Color3`, `Vector3`). Its output is copied into
+  touch (`Random` → the xoshiro128** of section 4.6, `Color3`, `Vector3`). Its output is copied into
   `content/ocean/luau/` and committed, so the site keeps no build step.
 - **Runtime:** official Luau compiled to WebAssembly. First choice: the `luau-web` npm package (MIT),
   checked at implementation time for a Luau version with the `buffer` library. Fallback: build Luau from
