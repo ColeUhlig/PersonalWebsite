@@ -1,0 +1,14 @@
+{
+  "name": "personal-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --experimental-test-coverage --test-coverage-include='content/vex/js/core/**' 'tests/vex/**/*.test.js'",
+    "test:e2e": "playwright test",
+    "serve": "http-server content -p 8766 -s -c-1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "http-server": "14.1.1"
+  }
+}
