@@ -1,0 +1,8 @@
+{
+	"name": "personal-website",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test:ocean": "node --test --experimental-test-coverage --test-coverage-include='content/ocean/js/core/**' 'tests/ocean/**/*.test.js'"
+	}
+}
