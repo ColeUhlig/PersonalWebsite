@@ -85,9 +85,10 @@ content/vex/
       kalman.js          1D Gaussian predict / update
       sim.js             fixed 10 ms step combining the pieces above
     scene/
+      style.js           shared matte materials + edge-outline helper (see "3D models" below)
       field.js           procedural V5 field: 6×6 tiles of 24", perimeter walls, markings
-      robot.js           stylized drivetrain; tracking wheels, IMU and distance sensors can be highlighted;
-                         x-ray (semi-transparent chassis) mode
+      robot.js           procedural robot: box chassis, 4 drive wheels, tracking wheels, IMU, 2 distance
+                         sensors; named parts can be highlighted/spun; x-ray (semi-transparent chassis) mode
       camera-rig.js      perspective ↔ top-down orthographic transition
       overlay.js         2D drawing layer lined up with the field (world → screen projection);
                          arcs, circles, rays, dimension lines, trails, labels
@@ -100,6 +101,23 @@ tests/vex/               node:test unit tests for js/core/* (not deployed)
 tests/e2e/               Playwright smoke test (not deployed)
 package.json             repo root; devDependencies + "test" scripts only (not deployed)
 ```
+
+### 3D models
+
+- **For now, no CAD.** The field and robot are built in code from simple shapes. The robot is a box chassis
+  plus only the parts the chapters point at: 4 drive wheels (they spin at simulated speed), left/right/strafe
+  tracking wheels (they spin), an IMU block, and rear + left distance sensors (with laser beams when active).
+  Part positions come from one shared `robotConfig` (track width, wheel offsets s_L/s_R/s_S, sensor mounts),
+  and the same config feeds `core/`, so the model and the math always agree.
+- **Look:** matte materials with crisp edge outlines (a clean CAD-render look) on the dark theme. For the
+  flatten beat, shading fades out and only the outlines remain, so the 3D robot becomes the 2D diagram.
+- **Swapping in CAD later:** `robot.js` and `field.js` each export a builder that returns
+  `{ root: THREE.Object3D, parts: { name → Object3D } }`. A later glTF loader only has to return the same
+  shape, with the named parts (`driveWheels`, `trackingWheels.left|right|strafe`, `imu`,
+  `distanceSensors.rear|left`, `chassis`), and no chapter code changes. Future sources: Cole's early-season
+  robot CAD (Onshape export → glTF), with sensors added from VEX's official parts CAD if missing, and VEX's
+  official field CAD. Raw CAD would live in a git-ignored `cad-src/`; optimized `.glb` files
+  (field < 4 MB, robot < 3 MB) in `content/vex/models/`. Not part of the current milestones.
 
 ### Core rules
 
