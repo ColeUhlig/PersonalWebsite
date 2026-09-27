@@ -425,3 +425,30 @@ test('an hour later the looped sea repeats (Review Focus 3)', () => {
 		expect.near(a.height[index], b.height[index], 1e-6, `height[${index}]`);
 	}
 });
+
+test('sampling a hair below zero wraps to the first cell', () => {
+	const cascade = synthesised(9, 2);
+	for (const hair of [-1e-15, -1e-17, -Number.MIN_VALUE]) {
+		for (const other of [0, 5.3]) {
+			for (const [x, z, x0, z0, axis] of [
+				[hair, other, 0, other, 'x'],
+				[other, hair, other, 0, 'z'],
+			]) {
+				const got = Cascade.sample(cascade, x, z);
+				const want = Cascade.sample(cascade, x0, z0);
+				for (let i = 0; i < 8; i++) {
+					expect.truthy(Number.isFinite(got[i]), `sample field ${i} finite at ${axis} = ${hair}`);
+					expect.near(got[i], want[i], 1e-9, `sample field ${i} at ${axis} = ${hair}, other ${other}`);
+				}
+				const [h, dx, dz] = Cascade.sampleHeight(cascade, x, z);
+				const five = Cascade.sampleNoJacobian(cascade, x, z);
+				const [jxx, jzz, jxz] = Cascade.sampleJacobian(cascade, x, z);
+				const rest = [h, dx, dz, ...five, jxx, jzz, jxz];
+				const restWant = [want[0], want[1], want[2], ...want.subarray(0, 5), want[5], want[6], want[7]];
+				for (let i = 0; i < rest.length; i++) {
+					expect.near(rest[i], restWant[i], 1e-9, `narrow sampler value ${i} at ${axis} = ${hair}, other ${other}`);
+				}
+			}
+		}
+	}
+});

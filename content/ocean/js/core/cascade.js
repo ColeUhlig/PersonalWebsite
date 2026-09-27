@@ -310,8 +310,14 @@ const CORNERS = new Float64Array(8);
 function corners(c, x, z) {
 	const n = c.n;
 	// Floored modulo: x and z go negative when the camera wanders (Review Focus 1).
-	const u = mod((x / c.size) * n, n);
-	const v = mod((z / c.size) * n, n);
+	let u = mod((x / c.size) * n, n);
+	let v = mod((z / c.size) * n, n);
+	// A coordinate a hair below zero (about 1e-15) rounds the modulo up to exactly n, which would
+	// read past the grid (NaN along z, the wrong row along x). The Luau (Cascade.luau corners and
+	// sampleHeight) has the same edge; this twin deliberately folds it to cell 0 so the renderer
+	// never receives NaN.
+	if (u >= n) u -= n;
+	if (v >= n) v -= n;
 	const column = Math.floor(u);
 	const row = Math.floor(v);
 	const fu = u - column;
@@ -370,8 +376,12 @@ export function sample(c, x, z, out = new Float64Array(8)) {
 export function sampleHeight(c, x, z, out = new Float64Array(3)) {
 	const n = c.n;
 	// Floored modulo, as in `corners` (Review Focus 1).
-	const u = mod((x / c.size) * n, n);
-	const v = mod((z / c.size) * n, n);
+	let u = mod((x / c.size) * n, n);
+	let v = mod((z / c.size) * n, n);
+	// Folded as in `corners`: the Luau has the same edge; this twin folds a result of exactly n
+	// back to cell 0 so the renderer never receives NaN.
+	if (u >= n) u -= n;
+	if (v >= n) v -= n;
 	const column = Math.floor(u);
 	const row = Math.floor(v);
 	const fu = u - column;
