@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --experimental-test-coverage --test-coverage-include='content/vex/js/core/**' 'tests/vex/**/*.test.js'",
+    "test": "node --test --experimental-test-coverage --test-coverage-include='content/vex/js/core/**' --test-coverage-include='content/vex/js/input/**' --test-coverage-include='content/vex/js/chapters/**/beats.js' 'tests/vex/**/*.test.js'",
     "test:e2e": "playwright test",
     "serve": "http-server content -p 8766 -s -c-1"
   },
