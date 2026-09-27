@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ROBOT } from '../../content/vex/js/core/robot-config.js';
 import { runScript } from '../../content/vex/js/core/sim.js';
+import { pointOnCircle } from '../../content/vex/js/core/geometry.js';
 import { robotDiagram, truthGhost, trails, tickArc, frameAxes, errorLink } from '../../content/vex/js/chapters/odometry/beats.js';
 
 const pose = { x: 10, y: -20, theta: 0.4 };
@@ -37,6 +38,15 @@ test('tickArc draws nothing for a straight tick and a full construction for a tu
   assert.ok(chord, 'chord arrow present');
   const start = frames.at(-1).debug.start;
   assert.deepEqual(chord.from, [start.x, start.y]);
+});
+
+test('tickArc: the exaggerated chord ends exactly where the exaggerated arc ends', () => {
+  const frames = runScript([{ duration: 1, left: 1, right: 0.5 }], { cfg: ROBOT });
+  const prims = tickArc(frames.at(-1).debug, 40);
+  const arc = prims.find((p) => p.type === 'arc');
+  const chord = prims.find((p) => p.type === 'ray' && p.arrow);
+  const [ex, ey] = pointOnCircle(arc.center, arc.radius, arc.to);
+  assert.ok(Math.hypot(chord.to[0] - ex, chord.to[1] - ey) < 1e-6, `chord ends ${Math.hypot(chord.to[0] - ex, chord.to[1] - ey)}" off the arc`);
 });
 
 test('frameAxes labels the rotation angle in degrees', () => {

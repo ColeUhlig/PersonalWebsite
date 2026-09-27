@@ -19,20 +19,26 @@ export function createDriveInput(dragTarget, win = window) {
   let drag = null; // { startX, startY, x, y }
   let enabled = false; // only capture keys while the try-it panel is on screen, so arrow keys still scroll elsewhere
 
+  // Keys typed into the panel's own controls (the noise slider, the sensor menu) belong to them.
+  const inFormField = (target) =>
+    Boolean(target && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable));
+
   const onKey = (pressed) => (e) => {
     const known = Object.values(KEYS).some((codes) => codes.includes(e.code));
-    if (!known || !enabled) return;
+    if (!known || !enabled || inFormField(e.target)) return;
     e.preventDefault();
     pressed ? down.add(e.code) : down.delete(e.code);
   };
   const keydown = onKey(true);
   const keyup = onKey(false);
+  const release = () => { down.clear(); drag = null; }; // window lost focus: no keyup will ever arrive
   const pointerdown = (e) => { drag = { startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY }; dragTarget.setPointerCapture?.(e.pointerId); };
   const pointermove = (e) => { if (drag) { drag = { ...drag, x: e.clientX, y: e.clientY }; } };
   const pointerup = () => { drag = null; };
 
   win.addEventListener('keydown', keydown);
   win.addEventListener('keyup', keyup);
+  win.addEventListener('blur', release);
   dragTarget.addEventListener('pointerdown', pointerdown);
   dragTarget.addEventListener('pointermove', pointermove);
   dragTarget.addEventListener('pointerup', pointerup);
@@ -42,7 +48,9 @@ export function createDriveInput(dragTarget, win = window) {
 
   function setEnabled(on) {
     enabled = on;
-    if (!on) { down.clear(); drag = null; }
+    if (!on) release();
+    // While driving, a finger on the stage steers instead of scrolling the page.
+    if (dragTarget.style) dragTarget.style.touchAction = on ? 'none' : '';
   }
 
   function read() {
@@ -64,6 +72,7 @@ export function createDriveInput(dragTarget, win = window) {
   function destroy() {
     win.removeEventListener('keydown', keydown);
     win.removeEventListener('keyup', keyup);
+    win.removeEventListener('blur', release);
     dragTarget.removeEventListener('pointerdown', pointerdown);
     dragTarget.removeEventListener('pointermove', pointermove);
     dragTarget.removeEventListener('pointerup', pointerup);

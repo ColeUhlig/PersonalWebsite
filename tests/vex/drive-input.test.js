@@ -72,6 +72,36 @@ test('a gamepad stick is used when no drag is active', () => {
   assert.deepEqual(input.read(), { left: 1, right: 1 });
 });
 
+test('keys typed into a form control are left alone, even while enabled', () => {
+  const win = fakeTarget();
+  const input = enabledInput(fakeTarget(), win);
+  let prevented = false;
+  win.fire('keydown', { code: 'ArrowUp', target: { tagName: 'INPUT' }, preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.deepEqual(input.read(), { left: 0, right: 0 });
+  win.fire('keydown', { code: 'ArrowUp', target: { tagName: 'SELECT' } });
+  assert.deepEqual(input.read(), { left: 0, right: 0 });
+});
+
+test('losing window focus releases held keys', () => {
+  const win = fakeTarget();
+  const input = enabledInput(fakeTarget(), win);
+  win.fire('keydown', { code: 'KeyW' });
+  assert.deepEqual(input.read(), { left: 1, right: 1 });
+  win.fire('blur');
+  assert.deepEqual(input.read(), { left: 0, right: 0 });
+});
+
+test('enabling turns off touch scrolling on the drag target so a drag drives instead of scrolling', () => {
+  const stage = { ...fakeTarget(), style: {} };
+  const input = createDriveInput(stage, fakeTarget());
+  assert.notEqual(stage.style.touchAction, 'none');
+  input.setEnabled(true);
+  assert.equal(stage.style.touchAction, 'none');
+  input.setEnabled(false);
+  assert.notEqual(stage.style.touchAction, 'none');
+});
+
 test('destroy removes every listener', () => {
   const stage = fakeTarget(); const win = fakeTarget();
   const input = createDriveInput(stage, win);

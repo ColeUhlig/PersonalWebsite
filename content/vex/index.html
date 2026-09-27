@@ -83,6 +83,7 @@
           <p class="readout" id="odom-readout">x 0.0  y 0.0  θ 0.0°</p>
           <label>Noise <input type="range" id="odom-noise" min="0" max="5" step="0.5" value="0"></label>
           <label>Sensors <select id="odom-setup"><option value="threeWheel">3 tracking wheels</option><option value="twoWheelImu">2 tracking wheels + IMU</option><option value="driveImu">Drive motor encoders + IMU</option></select></label>
+          <button type="button" id="odom-reset">Reset</button>
         </div>
         <p class="credit">Same math as <a href="https://github.com/LemLib/LemLib">LemLib</a>'s tracking-wheel odometry, based on 5225A's tracking paper. Explanation follows the <a href="https://wiki.purduesigbots.com/software/odometry">Purdue SIGBots wiki</a>.</p>
       </div>

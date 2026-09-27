@@ -2,6 +2,7 @@ import katex from 'katex';
 import { runScript } from '../../core/sim.js';
 import { combineReadings, selectInputs, stepOdometry, stepStraightLine } from '../../core/odometry.js';
 import { setXray, setShading, placeRobot } from '../../scene/robot.js';
+import { trackingWheelPoints } from '../../core/robot-geometry.js';
 import { S_CURVE, START_POSE } from './script.js';
 import * as draw from './beats.js';
 import { createTryIt } from './tryit.js';
@@ -34,6 +35,11 @@ export default {
   _noisy: null,
   _view: { beat: 0, local: 0 },
 
+  /** Runs at boot for every chapter, with or without WebGL: the formulas are part of the text. */
+  prepare(ui) {
+    formulas(ui);
+  },
+
   setup(ctx) {
     this._ctx = ctx;
     this._clean = runScript(S_CURVE, { cfg: ctx.cfg, pose: START_POSE, env: { setup: 'threeWheel', noise: 0, slip: 0 } });
@@ -41,7 +47,6 @@ export default {
     ctx.camera.setMode('orbit');
     ctx.camera.set({ topdown: 0, orbitAngle: 0.6 });
     ctx.camera.setFocus([0, 0]);
-    formulas(ctx.ui);
     placeRobot(ctx.robot.root, START_POSE);
     this._tryit = createTryIt(ctx, ctx.ui.querySelector('#tryit-odometry'));
   },
@@ -54,12 +59,13 @@ export default {
     const frames = this._clean;
     const at = (t) => frames[Math.min(frames.length - 1, Math.max(0, Math.floor(t * (frames.length - 1))))];
 
-    // Camera + model state per beat (instant, so scrolling backwards works).
-    const topdownBeats = beat >= 3;
-    camera.set({ topdown: topdownBeats ? 1 : 0, orbitAngle: 0.6 + (beat <= 1 ? local * 0.6 : 0.6) });
+    // Camera + model state per beat (instant, so scrolling backwards works). The flatten beat (3)
+    // scrubs the camera overhead and fades the 3D shading out as the reader scrolls through it.
+    const topdown = beat === 3 ? local : beat > 3 ? 1 : 0;
+    camera.set({ topdown, orbitAngle: 0.6 + (beat <= 1 ? local * 0.6 : 0.6) });
     camera.setMode(beat === 2 ? 'close' : 'orbit');
-    setXray(robot.parts, beat === 2 ? local : 0);
-    setShading(robot.root, topdownBeats ? 0 : 1);
+    setShading(robot.root, 1 - topdown);
+    setXray(robot.parts, beat === 2 ? local : 0); // after setShading, which resets every material
     this._ctx.field.root.visible = beat !== 1;
 
     this._live = beat === BEATS - 1;
@@ -69,7 +75,7 @@ export default {
       beat <= 1 ? at(local) // drive the S-curve during the opening shot
       : beat === 2 ? at(0)
       : beat === 7 ? at(local) // stacking ticks
-      : beat >= 9 ? this._noisy[Math.floor(local * (this._noisy.length - 1))]
+      : beat >= 10 ? this._noisy[Math.floor(local * (this._noisy.length - 1))]
       : at(0.35); // frozen mid-curve for the geometry beats
     placeRobot(robot.root, frame.truth);
     camera.setFocus(beat === 2 ? [frame.truth.x, frame.truth.y] : [0, 0]);
@@ -96,7 +102,15 @@ export default {
       case 6: return [...base, ...draw.frameAxes(frames[mid].debug)];
       case 7: return [...draw.trails(frames.slice(0, Math.floor(local * frames.length))), ...base];
       case 8: return [...draw.trails(frames), ...base, ...this._straightVsArc(local)];
-      case 9: return [...base, ...draw.robotDiagram(f.estimate, cfg, { rightForward: Math.sin(local * Math.PI * 2) * 5 })];
+      case 9: {
+        // The right wheel slides fore and aft; its reading for this tick stays the same.
+        const rightForward = Math.sin(local * Math.PI * 2) * 5;
+        const wheel = trackingWheelPoints(f.estimate, cfg, rightForward).right;
+        return [
+          ...draw.robotDiagram(f.estimate, cfg, { rightForward }),
+          { type: 'label', at: wheel, text: `ΔR = ${frames[mid].readings.dR.toFixed(3)}"`, color: 'estimate', offset: [12, 0] },
+        ];
+      }
       default: return [...draw.trails(this._noisy.slice(0, Math.floor(local * this._noisy.length)), { truth: true }), ...base, ...draw.truthGhost(f.truth, cfg), ...draw.errorLink(f.truth, f.estimate)];
     }
   },

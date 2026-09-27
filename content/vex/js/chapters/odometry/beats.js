@@ -1,4 +1,4 @@
-import { degrees, pointOnCircle, angleTo, headingVector, add, scale, sub } from '../../core/geometry.js';
+import { degrees, pointOnCircle, angleTo, headingVector, add, scale, sub, arcChord, localToGlobal } from '../../core/geometry.js';
 import { chassisCorners, trackingWheelPoints } from '../../core/robot-geometry.js';
 
 // Overlay primitives for the odometry chapter's top-down beats. Pure: frames in, drawing out.
@@ -39,14 +39,19 @@ export function trails(frames, { truth = false, estimate = true } = {}) {
   return out;
 }
 
-/** One tick's arc: the instant center, radius, the arc itself, and the chord across it. */
+/**
+ * One tick's arc: the instant center, radius, the arc itself, and the chord across it.
+ * `exaggerate` stretches the tick `k` times along the same circle (k·travel, k·Δθ) so a 10 ms
+ * step is big enough to see; the chord is recomputed for the stretched arc so it still joins its ends.
+ */
 export function tickArc(debug, exaggerate = 1) {
   if (!debug.center) return [];
-  const { start, center, dTheta, radius, globalDelta } = debug;
+  const { start, center, dTheta, radius, travel } = debug;
+  const k = exaggerate;
   const from = [start.x, start.y];
-  const end = add(from, scale(globalDelta, exaggerate));
+  const end = add(from, localToGlobal(arcChord(scale(travel, k), dTheta * k), start.theta + (dTheta * k) / 2));
   const a0 = angleTo(center, from);
-  const a1 = a0 + dTheta * exaggerate;
+  const a1 = a0 + dTheta * k;
   const r = Math.abs(radius);
   return [
     { type: 'ray', from: center, to: from, color: 'construct', width: 1, dash: [4, 4] },

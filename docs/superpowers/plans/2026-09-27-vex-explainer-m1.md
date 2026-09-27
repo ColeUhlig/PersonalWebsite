@@ -12,6 +12,8 @@
 
 All code in this plan was run and verified in a prototype: 52 unit tests pass with 100% line coverage of `core/`, and the Playwright suite passes on desktop and mobile Chromium with zero console errors. Copy the code exactly; do not "improve" it while implementing.
 
+> **Post-review note (2026-09-27):** the prototype checks only sampled the middle of each beat. The whole-branch review found visitor-facing bugs the plan's code carried (beat triggers overlapping so progress capped at 70%, the "One tick" chord not meeting its arc, touch-drag broken on phones, the x-ray beat inert, formulas blank without WebGL, no reset for the try-it robot, arrow keys stolen from the panel's controls, beat 9 riding the noisy run, keys sticking on blur, the flatten as a hard cut). They were fixed with tests in the commit after Task 12; the committed code, not this plan's listings, is the reference.
+
 ## Global Constraints
 
 - The site is static files under `content/`; everything in `content/` is uploaded as-is on every push to `main` (see `README.md`, `scripts/deploy.sh`). Nothing outside `content/` is deployed. **Commit as you go, but do not `git push` unless Cole asks — a push goes live.**

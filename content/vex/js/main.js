@@ -25,6 +25,10 @@ function boot() {
   const threeCanvas = document.getElementById('three');
   const overlayCanvas = document.getElementById('overlay');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ui = document.getElementById('story');
+
+  // Static parts of the text (formulas) render whether or not the 3D view can.
+  for (const chapter of CHAPTERS) chapter.prepare?.(ui);
 
   if (!webglAvailable()) {
     document.getElementById('stage-notice').hidden = false;
@@ -53,7 +57,7 @@ function boot() {
   resize();
   window.addEventListener('resize', resize);
 
-  const ctx = { scene, field, robot, camera, overlay, cfg: ROBOT, reducedMotion, story: null, stage, ui: document.getElementById('story') };
+  const ctx = { scene, field, robot, camera, overlay, cfg: ROBOT, reducedMotion, story: null, stage, ui };
   const story = createStory(CHAPTERS, ctx);
   ctx.story = story;
 

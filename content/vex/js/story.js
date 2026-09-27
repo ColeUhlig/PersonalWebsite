@@ -8,8 +8,11 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
 
+// A beat's progress runs while it crosses the 65% line of the viewport: from its top reaching it to
+// its bottom reaching it. Using the same line for start and end makes consecutive beats tile exactly,
+// so no two beat triggers are ever active at once and each one reaches progress 1.
 const BEAT_START = 'top 65%';
-const BEAT_END = 'bottom 35%';
+const BEAT_END = 'bottom 65%';
 
 export function createStory(chapters, ctx, root = document) {
   let active = null;
