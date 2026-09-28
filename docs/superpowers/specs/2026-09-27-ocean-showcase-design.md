@@ -2,9 +2,9 @@
 
 **Date:** 2026-09-27
 **Status:** Draft, awaiting review
-**A1 (core port):** done on 2026-09-27 at commit `0f457b3`: 21 modules, 159 carried-over Luau cases plus
-22 new tests, coverage 93.6% or better. Node timing for one High-tier frame: cascades 3.6 ms,
-surface fill 5.4 ms.
+**A1 (core port):** done on 2026-09-27 at commit `9fb0df3`: 21 modules, 159 carried-over Luau cases plus
+22 new tests, coverage 93.6% or better. Node timing for one High-tier frame: cascades 3.8 ms,
+surface fill 3.8 ms.
 **Lives at:** `content/ocean/` → `https://coleuhlig.com/ocean/`
 **Source project:** `~/Projects/roblox-ocean` (GitHub `ColeUhlig/tessendorf-ocean-roblox`, private), the
 Sea of Thieves-style FFT ocean Cole built in Roblox.

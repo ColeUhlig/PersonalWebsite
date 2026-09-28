@@ -47,24 +47,37 @@ test('one High-tier frame: cascades, store, every patch, foam and the colour and
 	const store = FieldStore.create(preset.n, preset.sizes);
 	const cells = preset.n * preset.n;
 	const packed = new Float32Array(FieldStore.bufferSize(cells) / 4);
+	// Only the pipeline's own calls are timed; every check runs after its window closes.
+	const promoted = [];
 	const started = performance.now();
 	for (let index = 1; index <= preset.sizes.length; index++) {
 		WaveField.update(field, index, T);
 		FieldStore.pack(field.cascades[index - 1], packed);
 		FieldStore.receive(store, index, packed, T);
-		expect.truthy(FieldStore.promote(store, index, index), `cascade ${index} promoted`);
+		promoted.push(FieldStore.promote(store, index, index));
 		FieldStore.blend(store, index, 1);
 	}
 	const cascadeMs = performance.now() - started;
+	promoted.forEach((ok, i) => expect.truthy(ok, `cascade ${i + 1} promoted`));
 
 	const layout = RingLayout.build({ rings: preset.rings, patchCells: preset.patchCells, textureTile: preset.textureTile });
 	const swells = Swells.create(SWELL_SPECS, params, LOOP);
 	const rings = preset.rings;
 	// Surface.adopt: each ring's window centre for this viewer.
 	const centres = rings.map((ringSpec) => RingLayout.windowCentre(FOCUS_X, FOCUS_Z, ringSpec.spacing));
-	let written = 0;
-	let covered = 0;
-	let maxHeight = 0;
+	// Surface.new: one instance per patch, grouped by ring, each owning the positions and normals
+	// it is filled into every frame.
+	const byRing = rings.map(() => []);
+	for (const patch of layout.patches) {
+		const count = (patch.cells + 1) * (patch.cells + 1);
+		byRing[patch.ring - 1].push({
+			patch,
+			count,
+			positions: new Float32Array(count * 3),
+			normals: new Float32Array(count * 3),
+			hidden: false,
+		});
+	}
 	const fillStarted = performance.now();
 	// Surface.write: ring by ring, the ring's context and the finer window it skirts worked out once.
 	for (let ring = 1; ring <= rings.length; ring++) {
@@ -77,20 +90,25 @@ test('one High-tier frame: cascades, store, every patch, foam and the colour and
 		const innerX = inner ? inner[0] : 0;
 		const innerZ = inner ? inner[1] : 0;
 		const innerHalf = innerRing ? innerRing.halfExtent : 0;
-		for (const patch of layout.patches) {
-			if (patch.ring !== ring) {
-				continue;
-			}
-			const count = (patch.cells + 1) * (patch.cells + 1);
-			const positions = new Float32Array(count * 3);
-			const normals = new Float32Array(count * 3);
-			const hidden = SurfaceSampler.fill(
-				patch, ringSpec, nextRingSpec, ringSpec.halfExtent, store, swells, T, CHOP,
+		for (const instance of byRing[ring - 1]) {
+			instance.hidden = SurfaceSampler.fill(
+				instance.patch, ringSpec, nextRingSpec, ringSpec.halfExtent, store, swells, T, CHOP,
 				centre[0], centre[1], FOCUS_X, FOCUS_Z, innerX, innerZ, innerHalf, SKIRT_Y,
-				positions, normals, FLAT, context,
+				instance.positions, instance.normals, FLAT, context,
 			);
+		}
+	}
+	const fillMs = performance.now() - fillStarted;
+
+	let written = 0;
+	let covered = 0;
+	let maxHeight = 0;
+	for (let ring = 1; ring <= rings.length; ring++) {
+		for (const { count, positions, normals, hidden } of byRing[ring - 1]) {
 			for (let i = 0; i < positions.length; i++) {
-				expect.truthy(Number.isFinite(positions[i]) && Number.isFinite(normals[i]), `patch value ${i} finite`);
+				if (!(Number.isFinite(positions[i]) && Number.isFinite(normals[i]))) {
+					throw new Error(`ring ${ring}: patch value ${i} is not finite`);
+				}
 			}
 			for (let v = 0; v < count; v++) {
 				const y = positions[v * 3 + 1];
@@ -105,28 +123,36 @@ test('one High-tier frame: cascades, store, every patch, foam and the colour and
 			written += count;
 		}
 	}
-	const fillMs = performance.now() - fillStarted;
 	expect.equal(written, layout.vertexCount, 'every vertex of the layout was written');
 	expect.truthy(covered > 0 && covered < layout.patches.length, `some patches, not all, lie under a finer ring: ${covered}`);
 	expect.truthy(maxHeight > 0.5 && maxHeight < BOUNDS_HEIGHT, `plausible heights at scale 8: max ${maxHeight}`);
 
 	const texels = 128;
 	const all = [1, 2, 3];
-	const mapsStarted = performance.now();
+	// The painter's Configure builds the lut and its buffers once; a paint only fills them.
 	// WaterColour.base is RGB, 3 bytes a texel; the peak mask is RGBA, 4.
-	const colour = new Uint8Array(texels * texels * 3);
 	const lut = WaterColour.lut(color3(8 / 255, 46 / 255, 72 / 255), color3(28 / 255, 168 / 255, 156 / 255));
-	WaterColour.base(colour, texels, preset.textureTile, store.display, all, 10.3, 0.35, lut);
+	const colour = new Uint8Array(texels * texels * 3);
 	const mask = new Uint8Array(texels * texels * 4);
-	const found = PeakMask.fill(mask, texels, preset.textureTile, store.display, all, 10.3, 0.8);
-	expect.truthy(Number.isFinite(found) && found > 0, `mask found a crest: ${found}`);
-	expect.truthy(colour.some((byte) => byte > 0), 'the colour map has colour');
-	expect.truthy(mask.some((byte, i) => i % 4 !== 3 && byte > 0), 'the mask lights a crest');
-
 	const foam = FoamField.create(256);
-	const cover = FoamField.stepRows(foam, 0, 256, store.display, all, preset.textureTile, CHOP, { whitecap: 0.35, grow: 2, decay: 0.86 });
+	const foamParams = { whitecap: 0.35, grow: 2, decay: 0.86 };
+	const mapsStarted = performance.now();
+	WaterColour.base(colour, texels, preset.textureTile, store.display, all, 10.3, 0.35, lut);
+	const found = PeakMask.fill(mask, texels, preset.textureTile, store.display, all, 10.3, 0.8);
+	const cover = FoamField.stepRows(foam, 0, 256, store.display, all, preset.textureTile, CHOP, foamParams);
 	const mapsMs = performance.now() - mapsStarted;
-	expect.truthy(cover >= 0 && cover <= 1, `foam cover in range: ${cover}`);
+
+	expect.truthy(Number.isFinite(found) && found > 0, `mask found a crest: ${found}`);
+	expect.truthy(mask.some((byte, i) => i % 4 !== 3 && byte > 0), 'the mask lights a crest');
+	// The deep colour alone is non-zero, so "has colour" proves nothing: the waves must tint the
+	// map, which shows as more than one distinct RGB triple across it.
+	const triples = new Set();
+	for (let i = 0; i < colour.length; i += 3) {
+		triples.add((colour[i] << 16) | (colour[i + 1] << 8) | colour[i + 2]);
+	}
+	expect.truthy(triples.size > 1, `the colour map follows the waves: ${triples.size} distinct colours`);
+	// Some water folds at this sea state (measured 0.089), so a step that never foams fails here.
+	expect.truthy(cover > 0 && cover <= 1, `foam cover in range and non-zero: ${cover}`);
 
 	console.log(`[ocean-core] cascades ${cascadeMs.toFixed(1)} ms, surface fill ${fillMs.toFixed(1)} ms (${written} vertices), maps ${mapsMs.toFixed(1)} ms, foam cover ${cover.toFixed(3)}`);
 });
