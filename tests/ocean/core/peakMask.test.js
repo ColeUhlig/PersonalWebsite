@@ -136,8 +136,12 @@ test('a texel at or below the mean surface is black', () => {
 // here: the same fields are filled at 4 texels and then at 8, and those 8 x 8 bytes must be the
 // bytes an 8 x 8 fill writes on its own. The scratch lives as long as the module, and no other
 // case fills wider than 4, so the 8-texel fill takes the growth path whatever order the runner
-// reaches the cases in. (In Luau a fill that read a short scratch would error; a JavaScript typed
-// array reads undefined past its end instead, which would come out as different bytes here.)
+// reaches the cases in. In Luau a fill into a short scratch errors, which is what makes the
+// byte comparison a test there. In JavaScript it is not one: both 8-texel fills go through the
+// same module scratch, and a typed array drops writes past its end and reads undefined there,
+// so a scratch that never grew would give grown and fresh the same wrong bytes (black past the
+// old 16 texels). The added check restores the guard: the first fill's maximum is the tallest
+// texel's own magnitude, so that texel must read white, and with a 16-texel scratch it reads 0.
 test('the scratch grows for a larger map', () => {
 	const f = fields();
 	const WIDE = TEXELS * 2;
@@ -150,6 +154,11 @@ test('the scratch grows for a larger map', () => {
 	for (let offset = 0; offset <= WIDE * WIDE * 4 - 1; offset++) {
 		expect.equal(grown[offset], fresh[offset], `byte ${offset} after a narrower fill`);
 	}
+	let brightest = 0;
+	for (let offset = 0; offset <= WIDE * WIDE * 4 - 1; offset += 4) {
+		brightest = Math.max(brightest, grown[offset]);
+	}
+	expect.equal(brightest, 255, 'the tallest texel of the grown fill reads white');
 });
 
 // Foam is painted over the crest it came from, so a crest under it must not glow through it: the
@@ -183,4 +192,16 @@ test('nextMax decays', () => {
 	expect.equal(PeakMask.nextMax(1, 0.5, 0.98), 0.98, 'a smaller find decays');
 	expect.equal(PeakMask.nextMax(1, 2, 0.98), 2, 'a larger find takes over at once');
 	expect.equal(PeakMask.DECAY, 0.98, 'the decay per fill');
+});
+
+// Not in the Luau, whose buffer writes error past the end: a typed array drops them instead.
+test('an undersized mask buffer throws', () => {
+	let threw = false;
+	try {
+		PeakMask.fill(new Uint8Array(TEXELS * TEXELS * 4 - 1), TEXELS, TILE, [fields()], [1], 0, 1);
+	} catch (error) {
+		threw = error instanceof Error && error.message.includes('bytes');
+	}
+	expect.truthy(threw, 'a buffer one byte short of four per texel throws');
+	PeakMask.fill(new Uint8Array(TEXELS * TEXELS * 4), TEXELS, TILE, [fields()], [1], 0, 1);
 });

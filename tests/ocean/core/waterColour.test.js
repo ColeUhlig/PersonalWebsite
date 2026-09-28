@@ -110,3 +110,16 @@ test('tint 0 is deep everywhere; heights beyond the peak clamp', () => {
 		expectTriple(out, index, lut, 0, `trough texel ${index}`);
 	}
 });
+
+// Not in the Luau, whose buffer writes error past the end: a typed array drops them instead.
+test('an undersized base buffer throws', () => {
+	const lut = WaterColour.lut(DEEP, SUBSURFACE);
+	let threw = false;
+	try {
+		WaterColour.base(new Uint8Array(TEXELS * TEXELS * 3 - 1), TEXELS, TILE, [fields()], [1], 8, 1, lut);
+	} catch (error) {
+		threw = error instanceof Error && error.message.includes('bytes');
+	}
+	expect.truthy(threw, 'a buffer one byte short of three per texel throws');
+	WaterColour.base(new Uint8Array(TEXELS * TEXELS * 3), TEXELS, TILE, [fields()], [1], 8, 1, lut);
+});

@@ -154,6 +154,16 @@ export function band(out, colourTexels, rowStart, rowCount, base, baseTexels, fi
 	if (mod(colourTexels, baseTexels) !== 0) {
 		throw new Error("the colour map's texels are not a whole multiple of the base map's");
 	}
+	// Not in the Luau, whose buffer writes error past the end: a typed array drops them, so a short
+	// buffer would paint part of the band and say nothing.
+	const outBytes = rowCount * colourTexels * BYTES;
+	if (out.byteLength < outBytes) {
+		throw new Error(`the band buffer holds ${out.byteLength} bytes, needs ${outBytes} (RGBA for ${rowCount} rows)`);
+	}
+	const baseBytes = baseTexels * baseTexels * BASE_BYTES;
+	if (base.byteLength < baseBytes) {
+		throw new Error(`the base holds ${base.byteLength} bytes, needs ${baseBytes} (RGB per base texel)`);
+	}
 	if (coverageOut != null && coverageOut.byteLength !== baseTexels * baseTexels * BYTES) {
 		throw new Error('the coverage buffer is not one f32 per base texel');
 	}

@@ -103,6 +103,15 @@ export function create(n, sizes) {
 	};
 }
 
+// Not in the Luau, where a buffer has one type: a Float64Array of half the count or an Int32Array
+// of the same count has the right byteLength and would be read element by element as wrong values.
+function checkFloat32(buffer) {
+	if (!(buffer instanceof Float32Array)) {
+		const kind = buffer?.constructor?.name ?? typeof buffer;
+		throw new Error(`field buffer must be a Float32Array, got ${kind}`);
+	}
+}
+
 /**
  * Writes the eight fields of `fields` (a Cascade satisfies Fields) into `out`, field-major:
  * field `which` (1-based, FIELD_NAMES order), cell `index` (1-based) lands at
@@ -112,6 +121,7 @@ export function create(n, sizes) {
  * @param {Float32Array} out at least bufferSize(cells) bytes
  */
 export function pack(fields, out) {
+	checkFloat32(out);
 	const cells = fields.n * fields.n;
 	const needed = bufferSize(cells);
 	if (out.byteLength < needed) {
@@ -133,6 +143,7 @@ export function pack(fields, out) {
  * @param {Fields} fields
  */
 export function unpack(input, fields) {
+	checkFloat32(input);
 	const cells = fields.n * fields.n;
 	const expected = bufferSize(cells);
 	if (input.byteLength !== expected) {
@@ -150,7 +161,7 @@ export function unpack(input, fields) {
 /**
  * The buffer fills the WAITING slot, which nothing on screen is reading, and nothing moves: the
  * display keeps showing previous and current until promote is called. A rejected buffer leaves
- * the store exactly as it was, because unpack checks the length before it writes a single value.
+ * the store exactly as it was, because unpack checks the type and length before it writes a single value.
  * Two results arriving between two promotions is not an error, just the first one lost.
  * @param {Store} store
  * @param {number} index Luau cascade number

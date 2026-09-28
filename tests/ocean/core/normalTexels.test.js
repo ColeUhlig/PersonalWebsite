@@ -155,3 +155,11 @@ test('FLIP_G mirrors the green channel', () => {
 		}
 	}
 });
+
+// Not in the Luau, whose buffer writes error past the end: a typed array drops them instead.
+test('an undersized normal block throws', () => {
+	const short = new Uint8Array(TEXELS * TEXELS * 4 - 1);
+	expect.truthy(!pcall(NormalTexels.fill, short, TEXELS, BLOCK, [fields()], [1]), 'a block one byte short throws');
+	const exact = new Uint8Array(TEXELS * TEXELS * 4);
+	expect.truthy(pcall(NormalTexels.fill, exact, TEXELS, BLOCK, [fields()], [1]), 'an exact block fills');
+});

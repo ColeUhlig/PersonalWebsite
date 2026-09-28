@@ -48,6 +48,11 @@ export function lut(deep, subsurface) {
  * @param {Uint8Array} lut 256 * 3 bytes, from `lut`
  */
 export function base(out, texels, tile, fields, cascades, peak, tint, lut) {
+	// Not in the Luau, whose buffer writes error past the end: a typed array drops them.
+	const needed = texels * texels * 3;
+	if (out.byteLength < needed) {
+		throw new Error(`the colour base holds ${out.byteLength} bytes, needs ${needed} (RGB per texel)`);
+	}
 	const step = tile / texels;
 	const inversePeak = peak > 0 ? 1 / peak : 0;
 	const sample = Cascade.sampleHeight;

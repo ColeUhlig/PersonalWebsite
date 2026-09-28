@@ -31,8 +31,11 @@ test('seeds are floored then taken modulo 2^32', () => {
 	expect.equal(Random.create(-1).state().join(' '), Random.create(4294967295).state().join(' '), '-1 is 2^32 - 1');
 	expect.equal(Random.create(7.9).state().join(' '), Random.create(7).state().join(' '), '7.9 floors to 7');
 	expect.equal(Random.create(4294967296 + 7).state().join(' '), Random.create(7).state().join(' '), 'wraps at 2^32');
-	// WaveField derives seed * 7919 + index; a large product must still seed deterministically.
-	expect.equal(Random.create(123456 * 7919 + 3).nextU32(), Random.create(123456 * 7919 + 3).nextU32(), 'deterministic');
+	// WaveField derives seed * 7919 + index, which passes 2^32 for a seed above about 542,000 and goes
+	// negative for a negative seed; the floored modulo must reduce it exactly well past 2^32 on both
+	// sides (2^40 + 7 is exactly representable; 2^60 + 7 would round to 2^60).
+	expect.equal(Random.create(2 ** 40 + 7).state().join(' '), Random.create(7).state().join(' '), '2^40 + 7 wraps to 7');
+	expect.equal(Random.create(-(2 ** 40) + 7).state().join(' '), Random.create(7).state().join(' '), '-2^40 + 7 wraps to 7');
 });
 
 test('non-finite seeds throw', () => {

@@ -285,3 +285,15 @@ test('laceSoft 0 with a lace paints the veil times the opacity', () => {
 	expect.near(out[0], midpoint, 1, 'the midpoint at texel (0,0)');
 	expect.near(out[(5 * COLOUR + 3) * 4], midpoint, 1, 'and at (3,5)');
 });
+
+// Not in the Luau, whose buffer writes error past the end: a typed array drops them instead, so a
+// short band buffer or base would paint a partial map without a word. Checked once per band.
+test('an undersized band buffer or base throws', () => {
+	const fields = [field(BASE, TILE, 0)];
+	const shortOut = new Uint8Array(COLOUR * 2 * 4 - 1); // two rows need COLOUR * 2 * 4 bytes
+	expect.truthy(!pcall(FoamPaint.band, shortOut, COLOUR, 2, 2, base(), BASE, fields, TILE, params(), null), 'short out');
+	const shortBase = new Uint8Array(BASE * BASE * 3 - 1);
+	const out = new Uint8Array(COLOUR * 2 * 4);
+	expect.truthy(!pcall(FoamPaint.band, out, COLOUR, 2, 2, shortBase, BASE, fields, TILE, params(), null), 'short base');
+	expect.truthy(pcall(FoamPaint.band, out, COLOUR, 2, 2, base(), BASE, fields, TILE, params(), null), 'exact sizes paint');
+});

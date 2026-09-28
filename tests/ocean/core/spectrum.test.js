@@ -206,3 +206,48 @@ test('validateParams rejects zero or negative wind, fetch and depth, and extreme
 		}
 	}
 });
+
+test('validateParams rejects non-finite values, gamma at or below 0, and isotropy or swell outside 0 .. 1', () => {
+	// Each row was one slider away from a NaN sea: Cascade.create at n = 16 gave NaN h0 cells for
+	// isotropy 1.5 / -0.5, gamma -1 and windSpeed Infinity (which passes a bare `> 0`).
+	const rows = [
+		['isotropy', 1.5],
+		['isotropy', -0.5],
+		['isotropy', Number.NaN],
+		['gamma', 0],
+		['gamma', -1],
+		['gamma', Number.NaN],
+		['windSpeed', Infinity],
+		['windSpeed', Number.NaN],
+		['fetch', Infinity],
+		['depth', Number.NaN],
+		['gravity', Infinity],
+		['swell', 1.5],
+		['swell', -0.1],
+		['swell', Number.NaN],
+		['scale', Infinity],
+		['tailBoost', Number.NaN],
+		['windDirection', Infinity],
+	];
+	for (const [name, value] of rows) {
+		let threw = false;
+		try {
+			Spectrum.validateParams({ ...Spectrum.NORMAL, [name]: value });
+		} catch (error) {
+			threw = error instanceof RangeError && error.message.includes(name);
+		}
+		expect.truthy(threw, `${name} = ${value} throws a RangeError naming it`);
+	}
+	const valid = [
+		Spectrum.NORMAL,
+		{ ...Spectrum.NORMAL, isotropy: 0.4, scale: 8, tailBoost: -0.3 },
+		{ ...Spectrum.NORMAL, isotropy: undefined },
+		{ ...Spectrum.NORMAL, isotropy: 1, swell: 1 },
+		{ ...Spectrum.NORMAL, isotropy: 0, swell: 0 },
+	];
+	for (const p of valid) {
+		expect.equal(Spectrum.validateParams(p), p, `accepts ${JSON.stringify(p)}`);
+	}
+	const { isotropy: _isotropy, ...withoutIsotropy } = Spectrum.NORMAL;
+	expect.equal(Spectrum.validateParams(withoutIsotropy), withoutIsotropy, 'accepts params with no isotropy field');
+});

@@ -359,3 +359,31 @@ test('the display tables can be sampled like a cascade', () => {
 	const fromCascade = Cascade.sample(cascade, 10.5, 3.25)[0];
 	expect.near(fromDisplay, fromCascade, Math.abs(fromCascade) * 1e-6 + 1e-9, 'height');
 });
+
+// Not in the Luau, where a buffer has one type: a JavaScript typed array of another element type
+// with the same byteLength (a Float64Array of half the count, an Int32Array of the same count)
+// passed the byteLength check and was read element by element as the wrong values.
+test('a buffer that is not a Float32Array is rejected by pack, unpack and receive', () => {
+	const bytes = FieldStore.bufferSize(CELLS);
+	const wrongTypes = [
+		['Float64Array', new Float64Array(bytes / 8)],
+		['Int32Array', new Int32Array(bytes / 4)],
+	];
+	const fields = FieldStore.newFields(N, 128);
+	const store = FieldStore.create(N, SIZES);
+	for (const [label, wrong] of wrongTypes) {
+		expect.equal(wrong.byteLength, bytes, `${label} has the right byteLength`);
+		expect.truthy(throws(FieldStore.pack, fields, wrong), `pack into a ${label}`);
+		expect.truthy(throws(FieldStore.unpack, wrong, fields), `unpack from a ${label}`);
+		expect.truthy(throws(FieldStore.receive, store, 1, wrong, 1), `receive a ${label}`);
+	}
+	expect.truthy(!FieldStore.hasFields(store, 1), 'nothing was filled');
+	const cascade = synthesised(2, 5, 128);
+	const packed = newBuffer(bytes);
+	FieldStore.pack(cascade, packed);
+	FieldStore.unpack(packed, fields);
+	for (let index = 1; index <= CELLS; index += 17) {
+		const want = cascade.height[index - 1];
+		expect.near(fields.height[index - 1], want, Math.abs(want) * 1e-6 + 1e-9, `a Float32Array round-trips: height[${index}]`);
+	}
+});

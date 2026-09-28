@@ -43,13 +43,37 @@ export const NORMAL = Object.freeze({
 	isotropy: 0,
 });
 
-// Not in the Luau: the web page's sliders can reach values Studio never saw, and a zero here turns
-// the fetch laws into divisions by zero. Returns p so callers can write validateParams(p) inline.
+// Not in the Luau: the web page's sliders can reach values Studio never saw. A zero wind, fetch or
+// depth turns the fetch laws into divisions by zero, a gamma at or below 0 or an isotropy outside
+// 0 .. 1 gives negative or NaN variance, and an Infinity passes a bare `> 0`; each would hand the
+// renderer a NaN sea. Returns p so callers can write validateParams(p) inline.
+const POSITIVE_FIELDS = ['windSpeed', 'fetch', 'depth', 'gravity', 'gamma'];
+const FINITE_FIELDS = ['scale', 'tailBoost', 'windDirection'];
+
+function reject(name, rule, value) {
+	throw new RangeError(`Spectrum params: ${name} must be ${rule}, got ${value}`);
+}
+
+function checkUnit(name, value) {
+	if (!(Number.isFinite(value) && value >= 0 && value <= 1)) {
+		reject(name, 'a finite number in 0 .. 1', value);
+	}
+}
+
 export function validateParams(p) {
-	for (const name of ['windSpeed', 'fetch', 'depth', 'gravity']) {
-		if (!(p[name] > 0)) {
-			throw new RangeError(`Spectrum params: ${name} must be above 0, got ${p[name]}`);
+	for (const name of POSITIVE_FIELDS) {
+		if (!(Number.isFinite(p[name]) && p[name] > 0)) {
+			reject(name, 'finite and above 0', p[name]);
 		}
+	}
+	for (const name of FINITE_FIELDS) {
+		if (!Number.isFinite(p[name])) {
+			reject(name, 'finite', p[name]);
+		}
+	}
+	checkUnit('swell', p.swell); // Luau Params: "swell: number, -- 0 .. 1"
+	if (p.isotropy !== undefined && p.isotropy !== null) {
+		checkUnit('isotropy', p.isotropy); // optional, as in the Luau's `p.isotropy or 0`
 	}
 	return p;
 }

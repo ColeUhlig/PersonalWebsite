@@ -33,6 +33,11 @@ function byte(value) {
  * @param {boolean} [flipG]
  */
 export function fill(out, blockTexels, blockStuds, fields, cascades, flipG = FLIP_G) {
+	// Not in the Luau, whose buffer writes error past the end: a typed array drops them.
+	const needed = blockTexels * blockTexels * 4;
+	if (out.byteLength < needed) {
+		throw new Error(`the normal block holds ${out.byteLength} bytes, needs ${needed} (RGBA per texel)`);
+	}
 	const step = blockStuds / blockTexels;
 	const flip = flipG ? -1 : 1;
 	const sample = Cascade.sampleNoJacobian;

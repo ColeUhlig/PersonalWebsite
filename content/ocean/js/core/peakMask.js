@@ -61,6 +61,11 @@ export function nextMax(previous, found, decay) {
 export function fill(out, texels, tile, fields, cascades, dMax, gamma, foam) {
 	// `foam ~= nil` in the Luau: undefined or null both mean no foam field.
 	const hasFoam = foam != null;
+	// Not in the Luau, whose buffer writes error past the end: a typed array drops them.
+	const needed = texels * texels * 4;
+	if (out.byteLength < needed) {
+		throw new Error(`the mask holds ${out.byteLength} bytes, needs ${needed} (RGBA per texel)`);
+	}
 	if (hasFoam) {
 		// Once, here: the field's `at` does not wrap, so a field of another size would read the
 		// wrong texel across the whole map or run off the end halfway through it.
