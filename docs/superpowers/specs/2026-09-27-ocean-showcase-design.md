@@ -2,9 +2,10 @@
 
 **Date:** 2026-09-27
 **Status:** Draft, awaiting review
-**A1 (core port):** done on 2026-09-27 at commit `9fb0df3`: 21 modules, 159 carried-over Luau cases plus
-22 new tests, coverage 93.6% or better. Node timing for one High-tier frame: cascades 3.8 ms,
-surface fill 3.8 ms.
+**A1 (core port):** done on 2026-09-27; code at commit `a29cb26` (the final review's fix wave, after
+`4a9aa21`): 21 modules, 159 carried-over Luau cases plus 28 new tests (187), line coverage 93.6% or
+better per file. Node timing for one High-tier frame, cold (the first frame, V8 warm-up included):
+cascades 3.8 ms, surface fill 3.8 ms; a warm second fill measured about 1.2 ms.
 **Lives at:** `content/ocean/` → `https://coleuhlig.com/ocean/`
 **Source project:** `~/Projects/roblox-ocean` (GitHub `ColeUhlig/tessendorf-ocean-roblox`, private), the
 Sea of Thieves-style FFT ocean Cole built in Roblox.
@@ -187,8 +188,13 @@ The Luau `Cascade` draws its starting waves from Roblox's `Random.new(seed)`, wh
 Roblox and whose algorithm Roblox does not publish. The web engine uses a documented generator,
 xoshiro128** 1.1 (Blackman and Vigna) seeded through a SplitMix32 finaliser, in `core/random.js`, and the
 Luau bundle (section 5) swaps in a Luau implementation of the same generator. It was chosen over PCG32
-because every step is a 32-bit xor, shift or rotate or a multiply by 5 or 9, all exact in Luau's doubles
-and `bit32`; PCG32 needs 64-bit integer multiplies Luau does not have. Reference outputs (state 1, 2, 3, 4:
+because it needs only 32-bit multiplies, where PCG32 needs 64-bit integer multiplies Luau does not have.
+Every `nextU32` step is a 32-bit xor, shift or rotate or a multiply by 5 or 9, all exact in Luau's doubles
+and `bit32`. The seeding is not exact as written: the fmix32 finaliser in `create(seed)` multiplies 32-bit
+values by `0x85ebca6b` and `0xc2b2ae35`, and in Luau `(z * 0x85ebca6b) % 2^32` loses low bits once
+z >= 2^21 (the product passes 2^53). The Luau shim must do those two multiplies as a `mul32(a, b)` built
+from 16-bit halves (what `Math.imul` does in the JavaScript), and it must reproduce the test vectors of
+"SplitMix32 seeding matches the reference C code" in `tests/ocean/core/random.test.js`. Reference outputs (state 1, 2, 3, 4:
 11520, 0, 5927040, 70819200, 2031721883, 1637235492) were checked against the reference C code. Consequence, stated on the page: the web ocean is the same kind of sea as the game, not the
 same individual waves.
 

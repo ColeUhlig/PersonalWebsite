@@ -1,8 +1,14 @@
 // Stands in for Roblox's Random, which exists only inside Roblox and whose algorithm Roblox does not
 // publish. xoshiro128** 1.1 (Blackman and Vigna, public-domain reference code), its four words
 // seeded from a SplitMix32 sequence (a golden-ratio Weyl step through the MurmurHash3 fmix32
-// finaliser). Chosen because every step is a 32-bit xor, shift or rotate, or a multiply by 5 or 9,
-// all exact in Luau's doubles and bit32, so the Luau shim in the proof panel draws the same numbers.
+// finaliser). Chosen over PCG32, which needs 64-bit multiplies Luau does not have, because this
+// needs only 32-bit ones. Every nextU32 step is a 32-bit xor, shift or rotate, or a multiply by 5
+// or 9, all exact in Luau's doubles and bit32. Seeding is not: fmix32 multiplies 32-bit values by
+// 0x85ebca6b and 0xc2b2ae35, and in Luau `(z * 0x85ebca6b) % 2^32` loses low bits once z >= 2^21
+// (the product passes 2^53). The Luau shim in the proof panel must do those two multiplies as a
+// `mul32(a, b)` built from 16-bit halves (what Math.imul does here), and must reproduce the vectors
+// in "SplitMix32 seeding matches the reference C code" (tests/ocean/core/random.test.js); then it
+// draws the same numbers.
 import { mod } from './luau.js';
 
 const GOLDEN = 0x9e3779b9;
