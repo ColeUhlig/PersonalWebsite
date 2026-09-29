@@ -42,6 +42,7 @@ export function createScene(canvas) {
 	environmentScene.add(environmentSky);
 	const environment = pmrem.fromScene(environmentScene).texture;
 	scene.environment = environment;
+	scene.environmentIntensity = Lighting.ENVIRONMENT_INTENSITY;
 	pmrem.dispose();
 
 	// The direction the engine is handed each frame: setSun rewrites it in place, so the caller's
