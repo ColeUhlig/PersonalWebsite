@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Roblox Ocean</title>
+	<meta name="description" content="A Sea of Thieves-style FFT ocean built in Roblox, running live in the browser.">
+	<link rel="canonical" href="https://coleuhlig.com/ocean/">
+	<script src="/js/canonical-host.js"></script>
+	<link rel="stylesheet" href="style.css">
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+		}
+	}
+	</script>
+</head>
+<body>
+	<canvas id="ocean" aria-label="Live ocean simulation"></canvas>
+	<div id="notice" hidden></div>
+	<pre id="stats" hidden></pre>
+	<script type="module" src="js/main.js"></script>
+</body>
+</html>
