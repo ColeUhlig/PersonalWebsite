@@ -87,7 +87,8 @@ function toMainThread(painter, why) {
 }
 
 function onError(painter, role, event) {
-	const text = event?.message ?? 'unknown error';
+	// `||`, not `??`: a worker that fails to load reports an empty message.
+	const text = event?.message || 'unknown error';
 	if (painter.mode === 'workers') {
 		toMainThread(painter, `${role} painter failed: ${text}`);
 		return;
@@ -101,13 +102,24 @@ function onError(painter, role, event) {
 }
 
 // Each worker is recorded as soon as it exists, so a spawn that throws on the second role still
-// leaves the first where toMainThread can terminate it.
+// leaves the first where toMainThread can terminate it. Both handlers act only while their own
+// worker is the current one: terminate() cancels nothing already queued, so when both module
+// workers fail to load, the second error (or a ready one sent first) can land after the first has
+// replaced them, and must not be read as a main-thread failure or counted toward the new pair.
 function wire(painter, spawn) {
 	painter.workers = { maps: null, colour: null };
 	for (const role of ROLES) {
 		const worker = spawn(role);
-		worker.onmessage = ({ data }) => onReply(painter, role, data);
-		worker.onerror = (event) => onError(painter, role, event);
+		worker.onmessage = ({ data }) => {
+			if (painter.workers[role] === worker) {
+				onReply(painter, role, data);
+			}
+		};
+		worker.onerror = (event) => {
+			if (painter.workers[role] === worker) {
+				onError(painter, role, event);
+			}
+		};
 		painter.workers[role] = worker;
 	}
 }

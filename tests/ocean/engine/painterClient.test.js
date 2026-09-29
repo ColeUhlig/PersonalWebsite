@@ -130,3 +130,86 @@ test('a spawn that throws paints on the main thread instead (Review Focus 1)', a
 	await flush();
 	expect.truthy(uploads.length > 0, 'still paints');
 });
+
+// Wraps the real core, but every paint reports an error instead of painting, as a worker whose
+// fill throws would.
+function failingOnPaint() {
+	const inner = createInProcessWorker(createPainterWorker);
+	const worker = { onmessage: null, onerror: null, terminate: () => inner.terminate() };
+	inner.onmessage = (event) => worker.onmessage(event);
+	worker.postMessage = (message, transfer) => {
+		if (message.type === 'paint') {
+			queueMicrotask(() => worker.onerror({ message: 'boom' }));
+			return;
+		}
+		inner.postMessage(message, transfer);
+	};
+	return worker;
+}
+
+test('events queued by replaced workers are ignored: one fallback, no false main-thread failure, no stray readies', async () => {
+	// Both module workers fail to load: both error events (and anything else they queued) can be
+	// waiting before the first is handled, and terminate() cancels none of them.
+	const spawned = [];
+	const fake = () => {
+		const worker = { onmessage: null, onerror: null, postMessage() {}, terminate() {} };
+		spawned.push(worker);
+		return worker;
+	};
+	const { painter, warnings } = harness(fake);
+	const handlers = spawned.map((worker) => ({ error: worker.onerror, message: worker.onmessage }));
+	handlers[0].error({ message: '' });
+	handlers[1].error({ message: 'blocked' });
+	handlers[0].message({ data: { type: 'ready' } });
+	handlers[1].message({ data: { type: 'ready' } });
+	expect.equal(PainterClient.mode(painter), 'main-thread', 'fell back');
+	expect.equal(PainterClient.fallbackReason(painter), 'maps painter failed: unknown error', 'an empty message still names a reason');
+	expect.equal(warnings.filter((w) => w.includes('painters on the main thread')).length, 1, 'one fallback warning');
+	expect.equal(warnings.filter((w) => w.includes('failed on the main thread')).length, 0, 'no false main-thread failure');
+	expect.equal(PainterClient.ready(painter), false, 'readies from the replaced workers not counted');
+	await flush();
+	expect.equal(PainterClient.ready(painter), true, 'the new pair answers for itself');
+});
+
+test('a worker that reports an error moves painting to the main thread, reason kept, and painting continues', async () => {
+	const { painter, uploads, warnings, store } = harness(failingOnPaint);
+	await flush();
+	expect.equal(PainterClient.mode(painter), 'workers', 'workers until something fails');
+	PainterClient.step(painter, 2, 0, store);
+	await flush();
+	expect.equal(PainterClient.mode(painter), 'main-thread', 'fell back');
+	expect.truthy(PainterClient.fallbackReason(painter).includes('boom'), `reason: ${PainterClient.fallbackReason(painter)}`);
+	expect.equal(warnings.filter((w) => w.includes('failed on the main thread')).length, 0, 'the second error is not a main-thread failure');
+	for (let frame = 3; frame <= 5; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.truthy(uploads.some((u) => u.startsWith('colour')), 'colour still paints');
+	expect.truthy(uploads.some((u) => u.startsWith('mask')), 'maps still paint');
+});
+
+test('after a fallback the colour rotation restarts at band 1', async () => {
+	const { painter, uploads, store } = harness(failingOnPaint);
+	await flush();
+	PainterClient.step(painter, 2, 0, store); // band 1 goes to the failing worker and is lost
+	await flush();
+	for (let frame = 3; frame <= 6; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	const colours = uploads.filter((u) => u.startsWith('colour')).map((u) => u.split(':')[0]);
+	expect.equal(colours.join(','), 'colour1,colour2,colour3,colour4', 'the new colour worker starts on band 1');
+});
+
+test('with no sink the pixels are dropped and counted', async () => {
+	const { painter, uploads, store } = harness();
+	painter.sink = null;
+	await flush();
+	for (let frame = 2; frame <= 5; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(uploads.length, 0, 'nothing uploaded');
+	expect.equal(PainterClient.report(painter).dropped, 8, 'four colour and four maps replies dropped');
+	expect.equal(PainterClient.report(painter).dropped, 0, 'per window');
+});
