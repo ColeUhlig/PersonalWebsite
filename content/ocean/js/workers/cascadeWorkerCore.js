@@ -1,0 +1,36 @@
+// Twin of CascadeWorker.client.luau: one cascade per worker. `configure` builds the cascade and
+// answers `ready`; `evolve` steps it to t, synthesises the eight fields, packs them into the buffer
+// the coordinator lent with the request and sends that buffer back. The coordinator lends it again
+// with the next request, so one buffer shuttles per cascade and nothing is allocated per frame.
+// Browser-free: the Worker entry point is cascade.worker.js.
+import * as Cascade from '../core/cascade.js';
+import * as FFT from '../core/fft.js';
+import * as FieldStore from '../core/fieldStore.js';
+
+export function createCascadeWorker(post) {
+	let cascade = null;
+	let plan = null;
+	let index = 0;
+	return function handle(message) {
+		if (message.type === 'configure') {
+			cascade = Cascade.create(message.config);
+			plan = FFT.plan(message.config.n);
+			index = message.index;
+			post({ type: 'ready', index });
+			return;
+		}
+		if (message.type === 'evolve') {
+			if (!cascade) {
+				throw new Error(`cascade worker ${index}: evolve before configure`);
+			}
+			const started = performance.now();
+			Cascade.evolve(cascade, message.t);
+			Cascade.synthesise(cascade, plan);
+			FieldStore.pack(cascade, new Float32Array(message.buffer));
+			const ms = performance.now() - started;
+			post({ type: 'fields', index, t: message.t, buffer: message.buffer, ms }, [message.buffer]);
+			return;
+		}
+		throw new Error(`cascade worker: unknown message type ${message.type}`);
+	};
+}
