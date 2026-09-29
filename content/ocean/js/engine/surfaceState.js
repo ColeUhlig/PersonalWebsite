@@ -123,6 +123,9 @@ export function create(layout, bounds, flatNormals) {
 		// Worst case seen since the caller last took them, so the report can prove the bounds hold.
 		maxAbsY: 0,
 		maxLateral: 0,
+		// Seconds the last snapAndWrite spent moving patches (0 when no ring moved): the Luau
+		// returns it as snapAndWrite's second value, and the coordinator charges it to `snap`.
+		snapSeconds: 0,
 	};
 	snap(surface, 0, 0);
 	return surface;
@@ -319,14 +322,18 @@ export function takeExtremes(surface) {
 
 // One frame of the surface, with the two writes in a deliberate order. The new windows are
 // adopted FIRST, so the vertices written this frame are the ones that belong where the patches
-// are about to be, and only then do the patches move. Returns how many rings shifted.
+// are about to be, and only then do the patches move. Returns how many rings shifted; the time
+// the move took is left in `surface.snapSeconds` (the Luau's second return value).
 export function snapAndWrite(surface, focusX, focusZ, store, swells, t, chop, frame) {
 	const moved = adopt(surface, focusX, focusZ);
 	// `adopt` has already marked the rings that shifted, so the write sees them and covers every
 	// ring on this frame; `repositionDirty` below clears the marks once it is done.
 	write(surface, store, swells, t, chop, frame);
+	surface.snapSeconds = 0;
 	if (moved > 0) {
+		const started = performance.now();
 		repositionDirty(surface);
+		surface.snapSeconds = (performance.now() - started) / 1000;
 	}
 	return moved;
 }
