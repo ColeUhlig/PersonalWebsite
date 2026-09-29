@@ -20,8 +20,14 @@ export const CSS_FILTER = 'contrast(1.08) saturate(1.12)';
 // Roblox EmissiveStrength reaches about 30 on the brightest patch; Three.js emissive intensity is
 // on another scale. Tuned in the look match.
 export const EMISSIVE_SCALE = 0.05;
-// The ripple normal map's green channel carries +z; whether Three.js reads it as +v or -v is decided
-// by the calibration test in Task 7, which sets this to 1 or -1 and records the measurement.
+// The ripple normal map's green channel carries +z; whether Three.js reads it as +v or -v was decided
+// by the calibration test in Task 7 (tests/ocean/e2e/materials.spec.js): the luminance of the high
+// shot with cascade 1 in the vertex normals against the same shot with cascade 1 in the normal map.
+// Measured under SwiftShader on 2026-09-29, 48 x 27 grid: r = 0.876 with 1, above the 0.5 the stop
+// rule asks for, so the sign stays 1. The test does not separate the signs by much: -1 measured 0.773
+// and the stand-in material with no normal map at all 0.552, because the sky rows are identical in
+// both shots and the displaced geometry shades alike. With the rows' local means taken out (each
+// texel minus its 3 x 3 neighbourhood, 192 x 108 grid) 1 still leads: 0.549 against 0.317.
 export const NORMAL_SCALE_Y = 1;
 export const SKY = Object.freeze({ turbidity: 4, rayleigh: 1.5, mieCoefficient: 0.005, mieDirectionalG: 0.8 });
 export const MAX_PIXEL_RATIO = 2;

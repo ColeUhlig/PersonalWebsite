@@ -1,11 +1,12 @@
-// Page boot: read the config, check WebGL, and start the ocean: scene, camera, the CPU-written
-// meshes over the engine's typed arrays, the frame loop and the stats readout.
-import * as THREE from 'three';
+// Page boot: read the config, check WebGL, and start the ocean: scene, camera, the painted
+// materials, the CPU-written meshes over the engine's typed arrays, the frame loop and the stats
+// readout.
 import { readConfig } from './engine/config.js';
 import * as Ocean from './engine/ocean.js';
 import { createScene } from './render/scene.js';
 import { createCameraRig } from './render/cameraRig.js';
 import { createOceanMeshes } from './render/oceanMeshes.js';
+import { createMaterials } from './render/materials.js';
 import { createPerfReadout } from './ui/perfReadout.js';
 
 // three@0.186's WebGLRenderer asks for WebGL 2 only and throws without it, so WebGL 1 does not count.
@@ -33,13 +34,7 @@ function start(config) {
 		spawnPainter: () => new Worker(new URL('./workers/painter.worker.js', import.meta.url), { type: 'module' }),
 		now: () => performance.now() / 1000,
 	});
-	// Task 7 replaces this stand-in with the painted materials.
-	const plain = new THREE.MeshStandardMaterial({ color: 0x1e5b78, roughness: 0.4 });
-	const materials = {
-		patchMaterials: ocean.surface.patches.map(() => plain),
-		quadMaterials: ocean.horizon.quads.map(() => plain),
-		sink: { uploadColourBand() {}, uploadMaskOrNormal() {}, uploadRoughness() {} },
-	};
+	const materials = createMaterials(ocean, view.renderer);
 	Ocean.attachSink(ocean, materials.sink);
 	const meshes = createOceanMeshes(view.scene, ocean, materials);
 	const stats = document.getElementById('stats');
@@ -50,13 +45,19 @@ function start(config) {
 	let last = performance.now();
 	view.resize();
 	window.addEventListener('resize', view.resize);
-	window.__ocean = { status: () => Ocean.status(ocean), report: () => Ocean.report(ocean), camera: view.camera };
+	window.__ocean = {
+		status: () => Ocean.status(ocean),
+		report: () => Ocean.report(ocean),
+		camera: view.camera,
+		materialsProbe: () => materials.probe(),
+	};
 
 	function frame(now) {
 		const dt = (now - last) / 1000;
 		last = now;
 		rig.update();
 		Ocean.step(ocean, dt, rig.focus(focus), rig.eye(eye), view.sunDirection);
+		materials.applyStrengths(ocean.strengths);
 		meshes.sync();
 		view.render();
 		readout.frame(now);
