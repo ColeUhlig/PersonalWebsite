@@ -50,6 +50,9 @@ function start(config) {
 		report: () => Ocean.report(ocean),
 		camera: view.camera,
 		materialsProbe: () => materials.probe(),
+		setNormalScale: (x, y) => materials.setNormalScale(x, y),
+		setSun: (direction) => view.setSun(direction),
+		setEnvironment: (enabled) => view.setEnvironment(enabled),
 	};
 
 	function frame(now) {

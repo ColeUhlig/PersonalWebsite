@@ -40,8 +40,33 @@ export function createScene(canvas) {
 	environmentSky.scale.setScalar(8000);
 	Object.assign(environmentSky.material.uniforms, THREE.UniformsUtils.clone(uniforms));
 	environmentScene.add(environmentSky);
-	scene.environment = pmrem.fromScene(environmentScene).texture;
+	const environment = pmrem.fromScene(environmentScene).texture;
+	scene.environment = environment;
 	pmrem.dispose();
+
+	// The direction the engine is handed each frame: setSun rewrites it in place, so the caller's
+	// reference follows.
+	const sunArray = sunDirection.toArray();
+	// A test hook for the calibration (tests/ocean/e2e/materials.spec.js): moves the DirectionalLight
+	// and the engine's sun vector to `direction`. The sky and its environment reflections keep the
+	// place's sun; nothing in the shipped page calls this.
+	function setSun(direction) {
+		const v = new THREE.Vector3(...direction);
+		const length = v.length();
+		if (!Number.isFinite(length) || length === 0 || direction.length !== 3) {
+			throw new Error(`setSun needs a non-zero 3-vector, got ${JSON.stringify(direction)}`);
+		}
+		v.divideScalar(length);
+		sun.position.copy(v).multiplyScalar(1000);
+		v.toArray(sunArray);
+	}
+
+	// A test hook for the calibration: the sky's environment reflections off (false) or back (true).
+	// They keep the place's sun lobe off along -x whatever setSun does, so the calibration takes
+	// them out; the shipped page keeps them.
+	function setEnvironment(enabled) {
+		scene.environment = enabled ? environment : null;
+	}
 
 	function resize() {
 		const width = canvas.clientWidth;
@@ -56,7 +81,9 @@ export function createScene(canvas) {
 		renderer,
 		scene,
 		camera,
-		sunDirection: sunDirection.toArray(),
+		sunDirection: sunArray,
+		setSun,
+		setEnvironment,
 		resize,
 		render: () => renderer.render(scene, camera),
 	};
