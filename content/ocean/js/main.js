@@ -8,10 +8,11 @@ import { createCameraRig } from './render/cameraRig.js';
 import { createOceanMeshes } from './render/oceanMeshes.js';
 import { createPerfReadout } from './ui/perfReadout.js';
 
+// three@0.186's WebGLRenderer asks for WebGL 2 only and throws without it, so WebGL 1 does not count.
 export function webglSupported() {
 	try {
 		const probe = document.createElement('canvas');
-		return Boolean(probe.getContext('webgl2') || probe.getContext('webgl'));
+		return Boolean(probe.getContext('webgl2'));
 	} catch {
 		return false;
 	}
@@ -69,8 +70,16 @@ const config = readConfig(location.search);
 for (const warning of config.warnings) {
 	console.warn(`[ocean] ${warning}`);
 }
+const NO_WEBGL = 'This live ocean needs WebGL 2, which this browser has turned off or does not support.';
 if (webglSupported()) {
-	start(config);
+	// The probe can pass and the renderer's own context still fail (a lost GPU process, a blocklist
+	// that applies to the second context): say so instead of leaving a blank page.
+	try {
+		start(config);
+	} catch (error) {
+		console.error('[ocean] could not start', error);
+		showNotice(NO_WEBGL);
+	}
 } else {
-	showNotice('This live ocean needs WebGL, which this browser has turned off or does not support.');
+	showNotice(NO_WEBGL);
 }

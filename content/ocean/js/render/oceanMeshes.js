@@ -65,7 +65,9 @@ export function createOceanMeshes(scene, ocean, materials) {
 
 	function sync() {
 		const flat = surface.flatNormals;
-		surface.patches.forEach((state, i) => {
+		const patches = surface.patches;
+		for (let i = 0; i < patches.length; i++) {
+			const state = patches[i];
 			const mesh = patchMeshes[i];
 			mesh.visible = !state.hidden;
 			if (state.written) {
@@ -78,14 +80,16 @@ export function createOceanMeshes(scene, ocean, materials) {
 				mesh.position.set(state.worldX, 0, state.worldZ);
 				state.uvsChanged = false;
 			}
-		});
-		horizon.quads.forEach((quad, i) => {
+		}
+		const quads = horizon.quads;
+		for (let i = 0; i < quads.length; i++) {
+			const quad = quads[i];
 			if (quad.uvsChanged) {
 				quadMeshes[i].geometry.attributes.uv.needsUpdate = true;
 				quadMeshes[i].position.set(quad.worldX, HorizonState.QUAD_Y, quad.worldZ);
 				quad.uvsChanged = false;
 			}
-		});
+		}
 	}
 
 	return { sync, patchMeshes, quadMeshes };
