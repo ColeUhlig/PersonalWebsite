@@ -34,6 +34,14 @@ export function float32Ulps(a, b) {
 	return Math.abs(ordinal(a) - ordinal(b));
 }
 
+// Only typed arrays of the one kind are compared: a plain Array has no buffer, so a Uint32Array
+// view of it would be empty and anything would compare as identical.
+function checkTypes(a, b, Type) {
+	if (!(a instanceof Type) || !(b instanceof Type)) {
+		throw new TypeError(`can only compare two ${Type.name}s`);
+	}
+}
+
 function checkLengths(a, b) {
 	if (a.length !== b.length) {
 		throw new Error(`cannot compare ${a.length} values with ${b.length}`);
@@ -48,6 +56,7 @@ function checkLengths(a, b) {
  *   largest distance in float32 steps; within says whether maxUlps is inside FLOAT32_ULPS.
  */
 export function compareFloat32(a, b) {
+	checkTypes(a, b, Float32Array);
 	checkLengths(a, b);
 	// Compared as bits, so "identical" means the same bytes: +0 and -0 differ here (by 0 ulps).
 	const bitsA = new Uint32Array(a.buffer, a.byteOffset, a.length);
@@ -78,6 +87,7 @@ export function compareFloat32(a, b) {
  * @returns {{ count: number, differing: number, largest: number, largestAt: number, within: boolean }}
  */
 export function compareBytes(a, b) {
+	checkTypes(a, b, Uint8Array);
 	checkLengths(a, b);
 	let differing = 0;
 	let largest = 0;

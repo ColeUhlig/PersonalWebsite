@@ -5,6 +5,8 @@
 // measurement on 2026-09-30: no value differed at all), every map byte within one step, the mask's
 // largest height (a double) within DOUBLE_RELATIVE. A failure here means a twin disagrees with the
 // Luau: find which, fix the twin in core/ with a test, and never widen a tolerance to pass.
+// Beside each pass line the tests also pin the measured state, 0 values differing, so even a
+// change inside the tolerance shows up here first.
 //
 // The two divergences the A1 twins record, and why neither reaches this comparison:
 // - Spectrum.validateParams: the JavaScript refuses a zero or negative wind, fetch or depth (and
@@ -54,7 +56,9 @@ for (const { seed, index, time } of CASES) {
 		const result = compareFloat32(luau.packed, js.packed);
 		t.diagnostic(`${describe(result)}; Luau ${luau.ms.toFixed(1)} ms, JavaScript ${js.ms.toFixed(1)} ms`);
 		expect.equal(luau.packed.length, 8 * options.n * options.n, 'eight fields');
+		expect.truthy(js.packed.some((value) => value !== 0), 'the packed fields are not all zero, so the comparison is not of two empty fields');
 		expect.truthy(result.within, describe(result));
+		expect.equal(result.differing, 0, `the measured state is bit for bit: ${describe(result)}`);
 	});
 }
 
@@ -67,8 +71,11 @@ test('the maps agree: water colour base, peak mask and foam field', async (t) =>
 	const foam = compareFloat32(luau.foam, js.foam);
 	t.diagnostic(`base ${describe(base)}; mask ${describe(mask)}; foam ${describe(foam)}; found ${luau.found} vs ${js.found}; Luau ${luau.ms.toFixed(0)} ms, JavaScript ${js.ms.toFixed(0)} ms`);
 	expect.truthy(base.within, `base: ${describe(base)}`);
+	expect.equal(base.differing, 0, `base, measured bit for bit: ${describe(base)}`);
 	expect.truthy(mask.within, `mask: ${describe(mask)}`);
+	expect.equal(mask.differing, 0, `mask, measured bit for bit: ${describe(mask)}`);
 	expect.truthy(foam.within, `foam: ${describe(foam)}`);
+	expect.equal(foam.differing, 0, `foam, measured bit for bit: ${describe(foam)}`);
 	expect.near(luau.found, js.found, Math.abs(js.found) * DOUBLE_RELATIVE, 'the mask\'s largest height');
 	let foamed = 0;
 	for (const value of js.foam) {
@@ -89,7 +96,8 @@ test('the Asyncify build (browsers without JSPI) gives the same bytes', () => {
 		const { packed } = await runner.cascade(cascadeOptions());
 		process.stdout.write(JSON.stringify({ jspi: 'Suspending' in WebAssembly, bytes: Buffer.from(packed.buffer, packed.byteOffset, packed.byteLength).toString('base64') }));
 	`;
-	const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+	const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 60_000 });
+	expect.truthy(!result.error && result.signal === null, `the Asyncify child did not finish within 60 s: ${result.error?.message ?? `killed by ${result.signal}`}`);
 	expect.equal(result.status, 0, result.stderr);
 	const { jspi, bytes } = JSON.parse(result.stdout);
 	expect.equal(jspi, false, 'JSPI hidden');

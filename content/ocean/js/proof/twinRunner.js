@@ -64,7 +64,7 @@ export function runMapsTwin(o) {
 	const tile = o.sizes[0];
 	const cascades = o.sizes.map((_, i) => i + 1);
 	const foam = FoamField.newGrid(o.foamTexels, tile);
-	const quarter = o.foamTexels / QUARTERS;
+	const quarter = Math.floor(o.foamTexels / QUARTERS); // Luau's foamTexels // 4
 	for (let k = 1; k <= o.foamSteps; k++) {
 		const tk = o.time - (o.foamSteps - k) / FOAM_HZ;
 		for (const index of cascades) {

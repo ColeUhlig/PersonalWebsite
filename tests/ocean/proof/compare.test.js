@@ -58,13 +58,36 @@ test('compareBytes allows one step and no more', () => {
 });
 
 test('arrays of different lengths are an error, not a pass', () => {
-	for (const compare of [compareFloat32, compareBytes]) {
+	for (const [compare, Type] of [[compareFloat32, Float32Array], [compareBytes, Uint8Array]]) {
 		let threw = false;
 		try {
-			compare(new Float32Array(2), new Float32Array(3));
+			compare(new Type(2), new Type(3));
 		} catch {
 			threw = true;
 		}
 		expect.truthy(threw, compare.name);
 	}
+});
+
+// What a call with the wrong kind of array throws, or 'none' when it returns.
+function thrown(call) {
+	try {
+		call();
+	} catch (error) {
+		return error.constructor.name;
+	}
+	return 'none';
+}
+
+test('compareFloat32 refuses anything but two Float32Arrays, rather than calling them identical', () => {
+	expect.equal(thrown(() => compareFloat32([1, 2, 3], [4, 5, 6])), 'TypeError', 'two plain Arrays');
+	expect.equal(thrown(() => compareFloat32(Float32Array.of(1), [1])), 'TypeError', 'a plain Array second');
+	expect.equal(thrown(() => compareFloat32(Float64Array.of(1), Float64Array.of(2))), 'TypeError', 'Float64Arrays');
+	expect.equal(thrown(() => compareFloat32(Uint8Array.of(1), Uint8Array.of(2))), 'TypeError', 'Uint8Arrays');
+});
+
+test('compareBytes refuses anything but two Uint8Arrays, rather than calling them within a step', () => {
+	expect.equal(thrown(() => compareBytes(Float32Array.of(0.1), Float32Array.of(0.9))), 'TypeError', 'Float32Arrays');
+	expect.equal(thrown(() => compareBytes([10, 20], [10, 90])), 'TypeError', 'two plain Arrays');
+	expect.equal(thrown(() => compareBytes(Uint8Array.of(1), Uint8ClampedArray.of(1))), 'TypeError', 'a Uint8ClampedArray second');
 });
