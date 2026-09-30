@@ -149,3 +149,54 @@ test('a fallback whose build throws leaves the transport as it was (no main-thre
 	expect.equal(cascades.fallbackReason(), null, 'no reason recorded');
 	expect.equal(cascades.request(1, 0, 1), 'waiting', 'a later request is answered, not a TypeError');
 });
+
+function retuneHarness(useWorkers) {
+	const state = { scale: 1 };
+	const received = [];
+	const cascades = createCascades({
+		count: 1,
+		cells: CELLS,
+		configFor: (index) => ({ ...configFor(index), params: { ...Spectrum.NORMAL, scale: state.scale } }),
+		spawn: () => createInProcessWorker(createCascadeWorker),
+		useWorkers,
+		onFields: (index, packed) => received.push(packed.slice()),
+		onReady: () => {},
+		log: { warn() {} },
+	});
+	return { cascades, received, state };
+}
+
+function doubled(later, earlier) {
+	let nonZero = 0;
+	for (const i of [3, 50, 101]) {
+		expect.equal(later[i], earlier[i] * 2, `value ${i} doubled`);
+		if (earlier[i] !== 0) nonZero += 1;
+	}
+	expect.truthy(nonZero > 0, 'the compared values are not all zero');
+}
+
+test('retune sends the current config to a ready worker, and the next result carries it', async () => {
+	const { cascades, received, state } = retuneHarness(true);
+	expect.equal(cascades.retune(1), 'waiting', 'not ready: the caller keeps it pending');
+	await flush();
+	cascades.request(1, 4, 1);
+	await flush();
+	state.scale = 2;
+	expect.equal(cascades.retune(1), 'sent', 'sent to the ready worker');
+	cascades.request(1, 4, 2);
+	await flush();
+	expect.equal(received.length, 2, 'two results');
+	doubled(received[1], received[0]);
+	expect.truthy(Number.isFinite(cascades.lastRetuneMs[0]), 'the rebuild time is kept');
+});
+
+test('on the main thread a retune rebuilds the local cascade at once', () => {
+	const { cascades, received, state } = retuneHarness(false);
+	expect.truthy(Number.isNaN(cascades.lastRetuneMs[0]), 'no rebuild timed yet');
+	cascades.request(1, 4, 1);
+	state.scale = 2;
+	expect.equal(cascades.retune(1), 'local', 'rebuilt on this thread');
+	cascades.request(1, 4, 2);
+	doubled(received[1], received[0]);
+	expect.truthy(Number.isFinite(cascades.lastRetuneMs[0]), 'the rebuild time is kept');
+});
