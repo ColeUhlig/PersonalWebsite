@@ -123,9 +123,13 @@ test("the world's edge is out of frame or under fog in every shot and blend (fix
 	for (const { name, blended } of everyFrame()) {
 		for (const aspect of ASPECTS) {
 			const fog = edgeFog(blended.shot, blended.look.fog, aspect, WORLD_HALF, LAST.spacing);
-			// A2's own fog in this same frame: at an ultrawide frame the sides see the world's side
-			// edge at about 1,830 studs (3,064 / tan 59 degrees), where A2's fog is 93%. The finale
-			// keeps A2's fog, so no shot is held to more than A2 itself gives there.
+			// The floor is A2's fog density applied to this same frame, not the number A2's own deck
+			// shot gets. At an ultrawide frame the sides see the world's side edge at about 1,830
+			// studs (3,064 / tan 59 degrees); from the deck shot that edge is 93% fogged. Other
+			// frames meet the edge nearer: the 11 -> 12 blends at 2.4 get 0.863 to 0.889 between
+			// progress 0.1 and 0.5, under HIDDEN and under the deck's 0.93. They pass because they
+			// keep A2's density, so a steps-11-to-12 frame shows as much edge as A2's density would
+			// show from that camera, and no more.
 			const a2 = edgeFog(blended.shot, FOG_DENSITY, aspect, WORLD_HALF, LAST.spacing);
 			if (fog < Math.min(HIDDEN, a2)) {
 				failures.push(`${name} at ${aspect.toFixed(2)}: ${fog.toFixed(3)}`);

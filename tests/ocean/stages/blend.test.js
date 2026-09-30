@@ -25,8 +25,11 @@ test('numbers lerp between; fetch and fog on a log scale; the sun the short way 
 	expect.near(rise.engine.sine.amplitude, 0.375, 1e-12, "a quarter of step 2's 1.5");
 	const fetch = blendRecipes(applySliders(recipeFor(7), { fetch: 5000 }), recipeFor(7), 0.5);
 	expect.near(fetch.engine.sea.fetch, Math.sqrt(5000 * 80000), 1e-6, 'geometric midpoint of the fetches');
-	const fog = blendRecipes(recipeFor(5), recipeFor(6), 0.5);
-	expect.near(fog.look.fog, Math.sqrt(recipeFor(5).look.fog * recipeFor(6).look.fog), 1e-12, 'geometric midpoint of the fogs');
+	// Steps 1 and 2 have different fogs (0.0015 and A2's 0.0009), so a plain lerp (0.0012) would
+	// miss the geometric midpoint (about 0.00116) by far more than the tolerance.
+	const fog = blendRecipes(recipeFor(1), recipeFor(2), 0.5);
+	expect.truthy(recipeFor(1).look.fog !== recipeFor(2).look.fog, 'the two fogs differ');
+	expect.near(fog.look.fog, Math.sqrt(recipeFor(1).look.fog * recipeFor(2).look.fog), 1e-12, 'geometric midpoint of the fogs');
 	const sun = blendRecipes(applySliders(recipeFor(4), { sunAzimuth: 350 }), applySliders(recipeFor(4), { sunAzimuth: 10 }), 0.5);
 	expect.near(sun.look.sun.azimuth, 0, 1e-9, 'through north, not round the long way');
 	const shot = blendRecipes(recipeFor(5), recipeFor(6), 0.5);
