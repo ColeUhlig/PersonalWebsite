@@ -3,3 +3,7 @@ test-results/
 playwright-report/
 .superpowers/
 .DS_Store
+# scripts/ocean-footage.mjs leftovers after a killed run
+content/ocean/media/.ocean-footage-*/
+content/ocean/media/*.partial
+content/ocean/media/footage.json.lock

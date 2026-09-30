@@ -1,6 +1,6 @@
 import { test } from 'node:test';
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +27,59 @@ function footage(args) {
 }
 
 const magic = (file, length) => readFileSync(file).subarray(0, length).toString('hex');
+
+const CLI = join(ROOT, 'scripts/ocean-footage.mjs');
+
+// Runs the tool without blocking, so two can run at once or one can be sent a signal.
+function footageAsync(args, env = {}) {
+	const child = spawn(process.execPath, [CLI, ...args], { cwd: ROOT, env: { ...process.env, ...env } });
+	let stderr = '';
+	child.stderr.on('data', (chunk) => {
+		stderr += chunk;
+	});
+	const done = new Promise((settle) => {
+		child.on('close', (status, signal) => settle({ status, signal, stderr }));
+	});
+	return { child, done };
+}
+
+// Stands in for ffmpeg without encoding: first passes (output -) succeed at once; each real
+// output waits FAKE_DELAY seconds, then the mp4 is a copy of a real clip (ffprobe reads it) and
+// the webm and poster are a few bytes, or FAKE_WEBM_BYTES zero bytes for an oversized webm.
+const FAKE_ENCODER = `#!/bin/sh
+for last; do :; done
+[ "$last" = "-" ] && exit 0
+sleep "\${FAKE_DELAY:-0}"
+case "$last" in
+	*.mp4) cp "$FAKE_MP4" "$last" ;;
+	*.webm) if [ -n "$FAKE_WEBM_BYTES" ]; then head -c "$FAKE_WEBM_BYTES" /dev/zero > "$last"; else printf webm > "$last"; fi ;;
+	*) printf poster > "$last" ;;
+esac
+`;
+
+function fakeEncoder(dir) {
+	const file = join(dir, 'fake-ffmpeg');
+	writeFileSync(file, FAKE_ENCODER, { mode: 0o755 });
+	return { FFMPEG: file, FAKE_MP4: recording(dir, 'sample.mp4', '320x180') };
+}
+
+const OLD_DECK = `${JSON.stringify({ clips: [{ shot: 'deck', webm: 'deck.webm', mp4: 'deck.mp4', poster: 'deck.jpg', width: 1280, height: 720, seconds: 20 }] })}\n`;
+
+function seedDeck(out) {
+	const old = { 'deck.webm': 'old webm', 'deck.mp4': 'old mp4', 'deck.jpg': 'old poster', 'footage.json': OLD_DECK };
+	mkdirSync(out, { recursive: true });
+	for (const [name, text] of Object.entries(old)) {
+		writeFileSync(join(out, name), text);
+	}
+	return old;
+}
+
+function expectUntouched(out, old, extra = []) {
+	for (const [name, text] of Object.entries(old)) {
+		expect.equal(readFileSync(join(out, name), 'utf8'), text, `${name} untouched`);
+	}
+	expect.equal(readdirSync(out).sort().join(','), [...Object.keys(old), ...extra].sort().join(','), 'nothing else left in the output directory');
+}
 
 test('encodes a recording into the three files and the manifest', { skip: SKIP, timeout: 180_000 }, () => {
 	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
@@ -142,6 +195,106 @@ test('a narrow recording is not upscaled', { skip: SKIP, timeout: 120_000 }, () 
 		expect.equal(run.status, 0, `run failed: ${run.stderr}`);
 		const [clip] = footageClips(JSON.parse(readFileSync(join(out, 'footage.json'), 'utf8')));
 		expect.equal(`${clip.width}x${clip.height}`, '640x360', 'kept at its own size');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('two shots encoded at once both end up in footage.json', { skip: SKIP, timeout: 60_000 }, async () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const env = { ...fakeEncoder(dir), FAKE_DELAY: '0.5' };
+		const out = join(dir, 'media');
+		const runs = ['deck', 'crest'].map((shot) => footageAsync([shot, input, '--out', out], env).done);
+		const [deck, crest] = await Promise.all(runs);
+		expect.equal(deck.status, 0, `deck run failed: ${deck.stderr}`);
+		expect.equal(crest.status, 0, `crest run failed: ${crest.stderr}`);
+		const clips = footageClips(JSON.parse(readFileSync(join(out, 'footage.json'), 'utf8')));
+		expect.equal(clips.map((c) => c.shot).join(','), 'deck,crest', 'both clips listed');
+		expect.equal(readdirSync(out).sort().join(','), 'crest.jpg,crest.mp4,crest.webm,deck.jpg,deck.mp4,deck.webm,footage.json', 'no lock, partial or staging files left');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('an oversized encode is refused and leaves the shot\'s files and the manifest as they were', { skip: SKIP, timeout: 60_000 }, () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		const old = seedDeck(out);
+		const env = { ...process.env, ...fakeEncoder(dir), FAKE_WEBM_BYTES: '6000001' };
+		const run = spawnSync(process.execPath, [CLI, 'deck', input, '--out', out], { cwd: ROOT, encoding: 'utf8', env });
+		expect.equal(run.status, 1, `exit code: ${run.stderr}`);
+		expect.truthy(run.stderr.includes('too large') && run.stderr.includes('webm 6.00 MB'), `says what is too large: ${run.stderr}`);
+		expectUntouched(out, old);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('Ctrl-C mid-encode stops the tool, leaves the shot and the manifest, and removes its temp folders', { skip: SKIP, timeout: 60_000 }, async () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		const old = seedDeck(out);
+		const temp = join(dir, 'tmp');
+		mkdirSync(temp);
+		const marker = join(dir, 'encoding');
+		// A first pass that says it has started and then takes 30 s, as a real encode would.
+		const slow = join(dir, 'slow-ffmpeg');
+		writeFileSync(slow, `#!/bin/sh\ntouch "${marker}"\nexec sleep 30\n`, { mode: 0o755 });
+		const { child, done } = footageAsync(['deck', input, '--out', out], { FFMPEG: slow, TMPDIR: temp });
+		const deadline = Date.now() + 20_000;
+		while (!existsSync(marker) && Date.now() < deadline) {
+			await new Promise((wake) => setTimeout(wake, 50));
+		}
+		expect.truthy(existsSync(marker), 'the encode started');
+		expect.equal(readdirSync(temp).length, 1, 'the pass-log folder exists while encoding');
+		const started = Date.now();
+		child.kill('SIGINT');
+		const guard = setTimeout(() => child.kill('SIGKILL'), 15_000);
+		const result = await done;
+		clearTimeout(guard);
+		expect.truthy(Date.now() - started < 10_000, 'stopped without waiting for the encode');
+		expect.equal(result.status, 130, `exit code after SIGINT (signal ${result.signal}): ${result.stderr}`);
+		expect.truthy(result.stderr.includes('SIGINT'), `says it was stopped: ${result.stderr}`);
+		expectUntouched(out, old);
+		expect.equal(readdirSync(temp).join(','), '', 'pass-log folder removed');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('staging folders a killed run left hours ago are cleared, a running one is kept', { skip: SKIP, timeout: 60_000 }, () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		mkdirSync(join(out, '.ocean-footage-stale'), { recursive: true });
+		writeFileSync(join(out, '.ocean-footage-stale', 'deck.webm'), 'half');
+		const hoursAgo = new Date(Date.now() - 7 * 3600 * 1000);
+		utimesSync(join(out, '.ocean-footage-stale'), hoursAgo, hoursAgo);
+		mkdirSync(join(out, '.ocean-footage-live'));
+		const env = { ...process.env, ...fakeEncoder(dir) };
+		const run = spawnSync(process.execPath, [CLI, 'flyup', input, '--out', out], { cwd: ROOT, encoding: 'utf8', env });
+		expect.equal(run.status, 0, `run failed: ${run.stderr}`);
+		expect.equal(readdirSync(out).sort().join(','), '.ocean-footage-live,flyup.jpg,flyup.mp4,flyup.webm,footage.json', 'stale folder gone, live one kept');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('a recording whose name has a colon is read as a file, not a protocol', { skip: SKIP, timeout: 60_000 }, () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		recording(dir, 'take:1.mov', '640x360');
+		const out = join(dir, 'media');
+		const run = spawnSync(process.execPath, [CLI, 'crest', 'take:1.mov', '--length', '1', '--out', out], { cwd: dir, encoding: 'utf8' });
+		expect.equal(run.status, 0, `run failed: ${run.stderr}`);
+		expect.equal(footageClips(JSON.parse(readFileSync(join(out, 'footage.json'), 'utf8')))[0].shot, 'crest', 'listed');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
