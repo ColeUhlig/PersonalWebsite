@@ -53,3 +53,71 @@ test('moduleSections refuses unbalanced markers', () => {
 		expect.truthy(threw, JSON.stringify(bad));
 	}
 });
+
+// Throws the test's way: returns the error, or null when nothing was thrown.
+function thrown(fn) {
+	try {
+		fn();
+	} catch (error) {
+		return error;
+	}
+	return null;
+}
+
+test('heightImage draws a NaN height magenta, never as a trough', () => {
+	const pixels = heightImage(Float32Array.of(NaN, -Infinity, Infinity, 0), 2, 1);
+	expect.equal([...pixels.slice(0, 4)].join(','), '255,0,255,255', 'NaN is magenta');
+	expect.equal([...pixels.slice(4, 8)].join(','), '0,0,0,255', '-Infinity clamps to black');
+	expect.equal([...pixels.slice(8, 12)].join(','), '255,255,255,255', '+Infinity clamps to white');
+});
+
+test('differenceImage: one ulp still shows, the same NaN bits agree, scale 0 is full red, blue stays 0', () => {
+	const one = Float32Array.of(1);
+	const next = new Float32Array(1);
+	new Uint32Array(next.buffer)[0] = new Uint32Array(one.buffer)[0] + 1;
+	const ulp = differenceImage(one, next, 1, 1);
+	expect.equal(ulp[0], 96, 'a one-ulp difference is still a visible red');
+	const nan = Float32Array.of(NaN);
+	expect.equal(differenceImage(nan, Float32Array.of(NaN), 1, 1)[0], 0, 'the same NaN bits agree: black');
+	const zeroScale = differenceImage(Float32Array.of(1), Float32Array.of(2), 1, 0);
+	expect.equal(zeroScale[0], 255, 'scale 0 draws any difference full red');
+	const mixed = differenceImage(Float32Array.of(1, 2, 3, 4), Float32Array.of(1, 5, 3, NaN), 2, 1);
+	for (let i = 0; i < 4; i++) {
+		expect.equal(mixed[i * 4 + 1], 0, `green ${i}`);
+		expect.equal(mixed[i * 4 + 2], 0, `blue ${i}`);
+		expect.equal(mixed[i * 4 + 3], 255, `alpha ${i}`);
+	}
+});
+
+test('differenceImage refuses anything but two Float32Arrays holding n * n values', () => {
+	const four = new Float32Array(4);
+	const wrongType = thrown(() => differenceImage(new Float64Array(4), four, 2, 1));
+	expect.truthy(wrongType instanceof TypeError, `a Float64Array is refused (${wrongType})`);
+	const plain = thrown(() => differenceImage([0, 0, 0, 0], four, 2, 1));
+	expect.truthy(plain instanceof TypeError, `a plain Array is refused (${plain})`);
+	const short = thrown(() => differenceImage(new Float32Array(3), four, 2, 1));
+	expect.truthy(short instanceof RangeError, `too few values is refused (${short})`);
+	expect.truthy(short.message.includes('4'), `the message names what is needed (${short.message})`);
+});
+
+test('moduleSections reads CRLF line endings', () => {
+	const sections = moduleSections('-- @module A (a.luau)\r\nlocal a = 1\r\n-- @end A\r\n');
+	expect.equal([...sections.keys()].join(' '), 'A', 'one module');
+	expect.equal(sections.get('A').origin, 'a.luau', 'origin without a carriage return');
+	expect.equal(sections.get('A').text, 'local a = 1', 'text without a carriage return');
+});
+
+test('moduleSections refuses a duplicate name and a bundle with no sections', () => {
+	const duplicate = thrown(() => moduleSections('-- @module A (x)\n-- @end A\n-- @module A (y)\n-- @end A\n'));
+	expect.truthy(duplicate?.message.includes('A twice'), `duplicate (${duplicate?.message})`);
+	const none = thrown(() => moduleSections('local x = 1\n'));
+	expect.truthy(none?.message.includes('no marked modules'), `none (${none?.message})`);
+	expect.truthy(thrown(() => moduleSections('')) !== null, 'an empty bundle');
+});
+
+test('moduleSections says which module is open when the wrong one closes', () => {
+	const wrong = thrown(() => moduleSections('-- @module A (x)\n-- @end B\n'));
+	expect.equal(wrong?.message, 'the bundle closes B while A is open', 'names both');
+	const stray = thrown(() => moduleSections('-- @end B\n'));
+	expect.equal(stray?.message, 'the bundle closes B without opening it', 'nothing open');
+});

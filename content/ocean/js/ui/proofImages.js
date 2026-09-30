@@ -3,6 +3,8 @@
 // and the difference of two fields (black where they agree to the bit, red where they do not).
 // Cell (column, row) of an n x n field (index row * n + column) is pixel (column, row).
 
+const NAN_COLOUR = Object.freeze([255, 0, 255, 255]);
+
 // The largest |value| over the first `count` values; 1 when they are all zero, so a flat field
 // draws as mid grey instead of dividing by zero.
 export function symmetricScale(values, count = values.length) {
@@ -26,6 +28,12 @@ export function heightImage(values, n, scale) {
 	const pixels = new Uint8ClampedArray(n * n * 4);
 	for (let i = 0; i < n * n; i++) {
 		const t = Math.max(-1, Math.min(1, values[i] / scale));
+		if (Number.isNaN(t)) {
+			// A NaN height (the Luau with invalid sea parameters makes them) is magenta: left to
+			// the grey ramp it would store as 0 and pass for the deepest trough.
+			pixels.set(NAN_COLOUR, i * 4);
+			continue;
+		}
 		const grey = Math.round(127.5 + 127.5 * t);
 		pixels[i * 4] = grey;
 		pixels[i * 4 + 1] = grey;
@@ -45,6 +53,14 @@ export function heightImage(values, n, scale) {
  * @returns {Uint8ClampedArray}
  */
 export function differenceImage(a, b, n, scale) {
+	// Only Float32Arrays: the bits are read through Uint32Array views of the same bytes, so any
+	// other type (a Float64Array, a plain Array) would compare the wrong bits or none at all.
+	if (!(a instanceof Float32Array) || !(b instanceof Float32Array)) {
+		throw new TypeError('differenceImage compares two Float32Arrays');
+	}
+	if (a.length < n * n || b.length < n * n) {
+		throw new RangeError(`differenceImage needs ${n * n} values in each array, got ${a.length} and ${b.length}`);
+	}
 	const bitsA = new Uint32Array(a.buffer, a.byteOffset, n * n);
 	const bitsB = new Uint32Array(b.buffer, b.byteOffset, n * n);
 	const pixels = new Uint8ClampedArray(n * n * 4);

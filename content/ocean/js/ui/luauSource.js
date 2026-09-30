@@ -15,18 +15,25 @@ export function moduleSections(bundle) {
 	const sections = new Map();
 	let open = null;
 	let lines = [];
-	for (const line of bundle.split('\n')) {
+	// Split on either line ending, so a bundle checked out with CRLF reads the same.
+	for (const line of bundle.split(/\r?\n/)) {
 		const begin = BEGIN.exec(line);
 		const end = END.exec(line);
 		if (begin) {
 			if (open) {
 				throw new Error(`the bundle opens ${begin[1]} inside ${open.name}`);
 			}
+			if (sections.has(begin[1])) {
+				throw new Error(`the bundle marks ${begin[1]} twice`);
+			}
 			open = { name: begin[1], origin: begin[2] };
 			lines = [];
 		} else if (end) {
-			if (!open || open.name !== end[1]) {
+			if (!open) {
 				throw new Error(`the bundle closes ${end[1]} without opening it`);
+			}
+			if (open.name !== end[1]) {
+				throw new Error(`the bundle closes ${end[1]} while ${open.name} is open`);
 			}
 			sections.set(open.name, { origin: open.origin, text: lines.join('\n') });
 			open = null;
@@ -36,6 +43,9 @@ export function moduleSections(bundle) {
 	}
 	if (open) {
 		throw new Error(`the bundle never closes ${open.name}`);
+	}
+	if (sections.size === 0) {
+		throw new Error('the bundle has no marked modules');
 	}
 	return sections;
 }
