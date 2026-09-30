@@ -49,6 +49,8 @@ async function checkPage(page) {
 	const reasons = await page.evaluate(() => [...document.querySelectorAll('[data-copy-skip]')].map((el) => el.dataset.copySkip));
 	for (const reason of reasons) expect(SKIP_REASONS).toContain(reason);
 	expect(await page.locator('.tex:not([data-copy-skip="math"])').count()).toBe(0);
+	// The reverse: the math label hides nothing but math, so it can't smuggle a number past the check.
+	expect(await page.locator('[data-copy-skip="math"]:not(.tex)').count()).toBe(0);
 }
 
 test('every number in the page text sits inside a sourced phrase', async ({ page }) => {

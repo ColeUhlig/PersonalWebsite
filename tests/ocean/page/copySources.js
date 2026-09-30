@@ -7,8 +7,10 @@
 //
 // A phrase is the page's own wording around the number, long enough that it can only match where
 // the claim it sources is made: "holds 60 fps", not "60 fps", so a false "60 fps in a live game"
-// elsewhere is not covered by accident. copy.spec.js also fails on a phrase the page, the notices
-// and the proof panel no longer use, so a stale source cannot linger here.
+// elsewhere is not covered by accident. Words a writer puts next to a covered phrase (a false
+// qualifier such as "in Studio") are not caught by substring matching: review owns those.
+// copy.spec.js also fails on a phrase the page, the notices and the proof panel no longer use, so a
+// stale source cannot linger here.
 const FACTS = 'site:tests/ocean/page/facts.test.js';
 const SPEC = 'site:docs/superpowers/specs/2026-09-27-ocean-showcase-design.md';
 const RECIPES = 'site:content/ocean/js/stages/recipes.js';
@@ -19,12 +21,12 @@ const LEDGER = 'roblox:docs/research/engine-assumptions.md';
 
 export const COPY_SOURCES = Object.freeze([
 	// Structure, measured from the code (facts.test.js; the test names carry the page's wording).
-	{ phrase: '224 patches in 5 rings', source: FACTS, quote: 'the High tier: 224 patches in 5 rings' },
+	{ phrase: '224 patches in 5 rings on the top tier', source: FACTS, quote: 'the High tier: 224 patches in 5 rings' },
 	{ phrase: '18,144 of them on the top tier', source: FACTS, quote: 'the High tier: 224 patches in 5 rings, 18,144 vertices' },
 	{ phrase: "On the top tier that's three layers, 232 materials and 18,144 points", source: FACTS, quote: 'the top tier: three layers, 232 materials and 18,144 points' },
 	{ phrase: 'the lighter tier by rule: 6,480 points instead of 18,144', source: FACTS, quote: 'the lighter tier by rule: 6,480 points instead of 18,144' },
 	{ phrase: '232 separate materials on the top tier (224 patches plus 8 horizon pieces)', source: FACTS, quote: '232 materials: 224 patches plus 8 horizon pieces' },
-	{ phrase: '232 materials, each with its own glow', source: FACTS, quote: '232 materials: 224 patches plus 8 horizon pieces' },
+	{ phrase: '232 materials on the top tier, each with its own glow', source: FACTS, quote: '232 materials: 224 patches plus 8 horizon pieces' },
 	{ phrase: 'Points 2, 4, 8, 16 and 32 studs apart, ring by ring', source: FACTS, quote: 'ring spacing 2, 4, 8, 16 and 32 studs' },
 	{ phrase: '(Parallel Luau), 64 × 64 per layer', source: FACTS, quote: 'three layers of 64 × 64' },
 	{ phrase: 'Kept every layer at 64 × 64, so the whole sea is at most 3 × 64 × 64 = 12,288 wave components', source: FACTS, quote: 'three layers of 64 × 64 over 256, 64 and 16 studs: 3 × 64 × 64 = 12,288' },
@@ -36,14 +38,15 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'A 256 × 256 foam field, painted into the 512 × 512 colour map', source: FACTS, quote: 'the colour map is 512 × 512 and the foam field 256 × 256' },
 	{ phrase: 'they fit a 256-stud tile exactly', source: FACTS, quote: 'the teaching bank sits on the 256-stud tile' },
 	{ phrase: 'Here L is the 256-stud tile', source: FACTS, quote: 'the teaching bank sits on the 256-stud tile' },
-	{ phrase: 'looping every 120 s', source: FACTS, quote: 'the phase arrows loop every 120 s' },
+	{ phrase: 'the speeds the dispersion gives them, looping every 120 s', source: FACTS, quote: 'the phase arrows loop every 120 s' },
+	{ phrase: 'long waves travel fastest), looping every 120 s', source: FACTS, quote: 'the phase arrows loop every 120 s' },
 	{ phrase: 'one wave cascade, 64 × 64 cells at seed 7', source: FACTS, quote: 'the proof panel runs one wave cascade, 64 × 64 cells at seed 7' },
 	{ phrase: 'γ = 3.3 sharpens the peak', source: 'site:content/ocean/js/core/spectrum.js', quote: 'gamma: 3.3' },
-	{ phrase: 'needs WebGL 2', source: 'site:content/ocean/js/webgl.js', quote: 'asks for WebGL 2 only' },
+	{ phrase: 'This live ocean needs WebGL 2', source: 'site:content/ocean/js/webgl.js', quote: 'asks for WebGL 2 only' },
 	// The teaching recipes (recipes.js's header; facts.test.js checks the counts in its data).
 	{ phrase: 'Steps 4 and 5 sum the 16 tallest', source: RECIPES, quote: 'Steps 4 and 5 sum the 16 tallest bank waves' },
 	{ phrase: 'In step 6 the camera flies up', source: RECIPES, quote: 'The two high shots (steps 6 and 10) look steeply down' },
-	{ phrase: 'so the page keeps only the 4 tallest', source: RECIPES, quote: "Step 6 also sums only the bank's 4 tallest waves" },
+	{ phrase: 'where the small waves would blur, so the page keeps only the 4 tallest', source: RECIPES, quote: "Step 6 also sums only the bank's 4 tallest waves" },
 	{ phrase: 'The page keeps only the 4 tallest (the small ones would blur at this distance)', source: RECIPES, quote: "Step 6 also sums only the bank's 4 tallest waves" },
 	// The proof panel's runtime (proofPanel.js fills its note from runtime.js; copy.test.js checks it).
 	{ phrase: 'a fork of Luau 0.711', source: RUNTIME, quote: "LUAU_RELEASE = '0.711'" },
