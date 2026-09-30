@@ -77,3 +77,17 @@ test('calibration modes paint grey, drop foam and glow, and set the vertex norma
 	expect.equal(vertex.flatNormals, false, 'vertex mode lights through the vertex normals');
 	expect.equal(Config.readConfig('?calibrate=sideways').calibrate, null, 'unknown mode ignored');
 });
+
+test('the phone rule: a touch-first screen under 900 px on its short side gets Medium', () => {
+	expect.equal(Config.tierForDevice({ shortSide: 390, coarsePointer: true }), 'Medium', 'a phone');
+	expect.equal(Config.tierForDevice({ shortSide: 899, coarsePointer: true }), 'Medium', 'just under');
+	expect.equal(Config.tierForDevice({ shortSide: 900, coarsePointer: true }), null, 'a 900 px tablet side');
+	expect.equal(Config.tierForDevice({ shortSide: 390, coarsePointer: false }), null, 'a narrow desktop window');
+	expect.equal(Config.tierForDevice({ shortSide: Number.NaN, coarsePointer: true }), null, 'no screen size: the probe decides');
+	expect.equal(Config.PHONE_TIER, 'Medium', 'Medium');
+});
+
+test('cascadeSeed is the seed every cascade has used since A1', () => {
+	expect.equal(Config.cascadeSeed(7, 1), 7 * 7919 + 1, 'cascade 1');
+	expect.equal(Config.cascadeSeed(8, 3), 8 * 7919 + 3, 'cascade 3 of the next sea');
+});
