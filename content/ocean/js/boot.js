@@ -40,22 +40,26 @@ async function startLiveOcean() {
 		page.oceanUnavailable('load');
 		return;
 	}
+	let handle;
 	try {
-		const handle = startOcean({
+		handle = startOcean({
 			config,
 			route,
 			now: clock.now,
 			reducedMotion,
 			onPersistentError: () => showNotice(NOTICES.frames),
 		});
-		page.attachOcean(handle);
 	} catch (error) {
 		// The probe can pass and the renderer's own context still fail (a lost GPU process, a
 		// blocklist that applies to the second context): say so instead of leaving a blank page.
 		console.error('[ocean] could not start', error);
 		showNotice(NOTICES.webgl);
 		page.oceanUnavailable('start');
+		return;
 	}
+	// Outside the try: a page feature's fault is not the ocean failing to start (the page tells
+	// each feature on its own and logs any that throw).
+	page.attachOcean(handle);
 }
 
 if (webglSupported()) {
