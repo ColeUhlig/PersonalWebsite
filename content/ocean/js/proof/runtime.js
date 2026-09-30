@@ -28,6 +28,8 @@ export const LUAU_WEB_URL = `https://cdn.jsdelivr.net/npm/luau-web@${LUAU_WEB_VE
 // a fork of luau-lang/luau, head 7be7165613, 2026-03-11), whose last merge from upstream
 // (ecdfa770f1, 2026-03-09) brought in 004d88ff2b "Sync to upstream/release/711 (#2280)".
 export const LUAU_RELEASE = '0.711';
+// The fork luau-web packages, which is what actually runs; the panel names it, not "Luau".
+export const LUAU_FORK = 'luau-interop';
 // The generated Luau bundle, committed under content/ocean/luau/ (written by roblox-ocean's
 // scripts/web_bundle.py). Resolved against this file, which sits two folders below content/ocean/.
 export const BUNDLE_URL = new URL('../../luau/ocean-bundle.luau', import.meta.url).href;

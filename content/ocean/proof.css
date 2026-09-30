@@ -36,8 +36,11 @@
 	color: var(--proof-dim);
 }
 .proof-note {
-	margin: 16px 0 0;
+	margin: 12px 0 0;
 	font-size: 0.85rem;
+}
+.proof-numbers + .proof-note {
+	margin-top: 16px;
 }
 .proof-body {
 	display: grid;
@@ -159,6 +162,17 @@
 		padding: 16px;
 		border-radius: 0;
 	}
+}
+/* Embedded in a host page (mountProofPanel's `embedded: true`; piece C's finale): the host
+   supplies the glass box, so the panel and its placeholder bring none of their own. After the
+   phone rule above, which would otherwise put the padding back. */
+.proof.proof--embedded,
+.proof-placeholder.proof-placeholder--embedded {
+	max-width: none;
+	padding: 0;
+	background: none;
+	border: 0;
+	border-radius: 0;
 }
 /* The standalone dev page only. */
 .proof-dev {

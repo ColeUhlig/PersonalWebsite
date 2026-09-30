@@ -251,3 +251,160 @@ test('destroying the panel mid-run throws nothing, leaves no worker, and a later
 	expect(workers.length).toBe(1);
 	expect(errors).toEqual([]);
 });
+
+// Final review, Important 1: a module worker keeps a failed import, so the retry must come from a
+// fresh worker. The first runtime request aborts; every later one goes through.
+test('after the runtime fails to load once, the next Run really tries again and ends done', async ({ page }) => {
+	const errors = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	let requests = 0;
+	await page.context().route(RUNTIME, (route) => {
+		requests++;
+		return requests === 1 ? route.abort() : route.continue();
+	});
+	await openPanel(page);
+	const run = page.locator('[data-proof="run"]');
+	await run.click();
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed', { timeout: 60_000 });
+	await expect(page.locator('[data-proof="status"]')).toContainText('try again');
+	await run.click();
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'done', { timeout: 60_000 });
+	expect(requests).toBeGreaterThan(1);
+	expect(errors).toEqual([]);
+});
+
+// Final review, Important 2: no WebAssembly (iOS Lockdown Mode, a managed browser). The panel
+// says so at once instead of waiting out a timeout.
+test('without WebAssembly on the page the panel says so at once and throws nothing', async ({ page }) => {
+	const errors = watchErrors(page);
+	await page.addInitScript(() => {
+		delete window.WebAssembly;
+	});
+	await openPanel(page);
+	await page.locator('[data-proof="run"]').click();
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed', { timeout: 5_000 });
+	await expect(page.locator('[data-proof="status"]')).toContainText('WebAssembly switched off');
+	expect(await drawn(page, 'js-map')).toBe(true);
+	expect(page.workers().length).toBe(0);
+	expect(errors).toEqual([]);
+});
+
+// The same, when only the worker lacks WebAssembly: luau-web's own import then throws, and the
+// worker must still answer rather than leave the panel to time out.
+test('without WebAssembly in the worker the panel says so quickly and throws nothing', async ({ page }) => {
+	const errors = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await page.route('**/js/workers/luau.worker.js', async (route) => {
+		const response = await route.fetch();
+		// Imports are hoisted, so this runs after them and before the first message.
+		const body = `delete self.WebAssembly;\n${await response.text()}`;
+		await route.fulfill({ response, body });
+	});
+	await openPanel(page);
+	await page.locator('[data-proof="run"]').click();
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed', { timeout: 20_000 });
+	await expect(page.locator('[data-proof="status"]')).toContainText('WebAssembly switched off');
+	expect(errors).toEqual([]);
+});
+
+test('the note names the runtime as it is, and names the eight fields', async ({ page }) => {
+	await openPanel(page);
+	const notes = page.locator('.proof-note');
+	await expect(notes).toContainText(['luau-interop, a fork of Luau 0.711']);
+	const text = (await notes.allTextContents()).join(' ');
+	expect(text).toContain('luau-web 1.4.0');
+	expect(text).toContain('compiled to WebAssembly');
+	expect(text).toContain("not Roblox's VM");
+	for (const field of ['height', 'dispX', 'dispZ', 'slopeX', 'slopeZ', 'jxx', 'jzz', 'jxz']) {
+		expect(text).toContain(field);
+	}
+	expect(text).toContain('64 × 64 cells');
+	expect(text).toContain('Black in the height difference means the two agree to the bit.');
+	await expect(page.locator('.proof-lede')).not.toContainText('the Luau interpreter');
+	await expect(page.locator('[data-map="diff-map"] figcaption')).toHaveText('Height difference');
+});
+
+test('embedded, the panel drops its heading, lede and glass for the host to supply', async ({ page }) => {
+	await openPanel(page);
+	await remount(page, () => ({ embedded: true }));
+	const proof = page.locator('.proof');
+	await expect(proof).toHaveClass(/proof--embedded/);
+	await expect(page.locator('.proof-title')).toHaveCount(0);
+	await expect(page.locator('.proof-lede')).toHaveCount(0);
+	const box = await proof.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return { background: style.backgroundColor, border: style.borderTopWidth, padding: style.paddingTop };
+	});
+	expect(box).toEqual({ background: 'rgba(0, 0, 0, 0)', border: '0px', padding: '0px' });
+	await expect(page.locator('.proof-note').first()).toContainText('64 × 64 cells');
+	await page.evaluate(() => window.__proof.run());
+	await expect(proof).toHaveAttribute('data-proof-state', 'done', { timeout: 60_000 });
+});
+
+test('standalone, the panel keeps its heading, lede and glass', async ({ page }) => {
+	await openPanel(page);
+	await expect(page.locator('.proof-title')).toHaveCount(1);
+	await expect(page.locator('.proof-lede')).toHaveCount(1);
+	const background = await page.locator('.proof').evaluate((element) => getComputedStyle(element).backgroundColor);
+	expect(background).not.toBe('rgba(0, 0, 0, 0)');
+});
+
+test('after a Luau error or a timeout the Luau map reads "No result"', async ({ page }) => {
+	await openPanel(page);
+	for (const stage of ['run', 'timeout']) {
+		await remount(page, new Function(`return () => ({
+			createClient: () => ({
+				runCascade: () => Promise.reject(Object.assign(new Error('injected'), { stage: '${stage}' })),
+				dispose: () => {},
+			}),
+		})`)());
+		await page.evaluate(() => window.__proof.run());
+		await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed');
+		await expect(page.locator('[data-map="luau-map"] .proof-empty')).toHaveText('No result');
+	}
+});
+
+test('a JavaScript port that fails says so, blanks its map and warns in the console', async ({ page }) => {
+	const warnings = [];
+	page.on('console', (message) => {
+		if (message.type() === 'warning') warnings.push(message.text());
+	});
+	await openPanel(page);
+	await remount(page, () => ({ runTwin: () => { throw new Error('injected twin failure'); } }));
+	await page.evaluate(() => window.__proof.run());
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed');
+	await expect(page.locator('[data-proof="status"]')).toContainText('JavaScript port failed');
+	await expect(page.locator('[data-map="js-map"] .proof-empty')).toHaveText('Failed');
+	await expect.poll(() => warnings.some((text) => text.includes('injected twin failure') || text.includes('JavaScript'))).toBe(true);
+});
+
+test('when only the sign of a zero differs, the largest difference says so', async ({ page }) => {
+	await openPanel(page);
+	// Both sides from the twin; the "Luau" copy has -0 where the JavaScript has +0.
+	await remount(page, ({ runCascadeTwin }) => ({
+		runTwin: (options) => {
+			const result = runCascadeTwin(options);
+			result.packed[9] = 0;
+			return result;
+		},
+		createClient: () => ({
+			runCascade: async (options) => {
+				const result = runCascadeTwin(options);
+				result.packed[9] = -0;
+				return { packed: result.packed, ms: 1, loadMs: 0 };
+			},
+			dispose: () => {},
+		}),
+	}));
+	await page.evaluate(() => window.__proof.run());
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'done');
+	await expect(page.locator('[data-proof="largest"]')).toHaveText('0 (only the sign of a zero differs, in height)');
+	await expect(page.locator('[data-proof="differing"]')).toContainText('1 of 32,768');
+});
+
+test('the first Run reports the whole start-up, worker included', async ({ page }) => {
+	await openPanel(page);
+	await page.locator('[data-proof="run"]').click();
+	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'done', { timeout: 60_000 });
+	await expect(page.locator('[data-proof="status"]')).toHaveText(/Starting the Luau \(worker, runtime and bundle\) took \d+ ms\.$/);
+});

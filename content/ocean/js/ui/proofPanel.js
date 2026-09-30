@@ -1,8 +1,9 @@
 // The Luau proof panel (spec section 5): one button runs one cascade at one seed through the Luau
 // modules from roblox-ocean (in the WebAssembly runtime, in a Web Worker) and through the A1
 // JavaScript twin, then shows both height maps, their difference, the largest difference, the
-// verdict and both timings, next to the Luau source that ran. Self-contained: piece C places it
-// in the finale; content/ocean/proof.html shows it on its own.
+// verdict and both timings, next to the Luau source that ran. Self-contained: content/ocean/proof.html
+// shows it on its own, with its own heading, lede and glass box; piece C places it in the finale
+// with `embedded: true`, which leaves those three to the host.
 //
 // Every failure ends in a sentence in the status line, never an uncaught error: no Web Workers,
 // a runtime or bundle that cannot load, a Luau error, a crashed or silent runtime. The JavaScript
@@ -14,7 +15,7 @@ import { runCascadeTwin } from '../proof/twinRunner.js';
 import { cascadeOptions } from '../proof/proofConfig.js';
 import { compareFloat32, verdict } from '../proof/compare.js';
 import { createLuauClient } from '../proof/luauClient.js';
-import { BUNDLE_URL, LUAU_RELEASE, LUAU_WEB_VERSION } from '../proof/runtime.js';
+import { BUNDLE_URL, LUAU_FORK, LUAU_RELEASE, LUAU_WEB_VERSION } from '../proof/runtime.js';
 import { FIELD_NAMES } from '../core/fieldStore.js';
 import { differenceImage, heightImage, symmetricScale } from './proofImages.js';
 import { moduleSections } from './luauSource.js';
@@ -23,10 +24,15 @@ const DEFAULT_MODULE = 'Cascade';
 const NOT_COMPARED = 'Not compared';
 // The packed fields measured in studs; the slopes and the Jacobian terms have no unit.
 const LENGTH_FIELDS = new Set(['height', 'dispX', 'dispZ']);
+// The eight packed fields in words, with the names the largest difference uses (FIELD_NAMES).
+const FIELDS_IN_WORDS = 'height, sideways x/z (dispX, dispZ), slopes x/z (slopeX, slopeZ) and the three Jacobian terms (jxx, jzz, jxz)';
+// The Luau map's word after a failure: 'No result' once the Luau had started, 'Not run' otherwise.
+const LUAU_STARTED = new Set(['run', 'timeout']);
 
 // The sentence for each failure stage; `detail` is the error's own message, so a missing bundle
 // or a compile error is not passed off as the network.
 const EXPLANATIONS = Object.freeze({
+	wasm: () => "This browser has WebAssembly switched off, so I can't run the Luau here. The JavaScript result is shown alone.",
 	spawn: (detail) => `This browser can't start a Web Worker (${detail}), so the Luau side can't run here. The JavaScript result is shown alone.`,
 	load: (detail) => `The Luau runtime or the Luau bundle could not be loaded (${detail}). The JavaScript result is shown alone; press Run to try again.`,
 	run: (detail) => `The Luau code raised an error (${detail}). The JavaScript result is shown alone.`,
@@ -35,7 +41,7 @@ const EXPLANATIONS = Object.freeze({
 });
 
 // What the next run has to do before the Luau can run, after how the last one ended.
-const RUNTIME_AFTER = Object.freeze({ spawn: 'retry', load: 'retry', run: 'ready', crash: 'stopped', timeout: 'stopped' });
+const RUNTIME_AFTER = Object.freeze({ wasm: 'retry', spawn: 'retry', load: 'retry', run: 'ready', crash: 'stopped', timeout: 'stopped' });
 const STARTING = Object.freeze({
 	fresh: 'Loading the Luau runtime (first run only) and running the Luau…',
 	retry: 'Loading the Luau runtime again and running the Luau…',
@@ -76,6 +82,10 @@ function describeLargest(result, cells) {
 		return '0 (none)';
 	}
 	const field = FIELD_NAMES[Math.floor(result.largestAt / cells)] ?? 'an unknown field';
+	if (result.largest === 0) {
+		// The bits differ but the values are equal: +0 against -0.
+		return `0 (only the sign of a zero differs, in ${field})`;
+	}
 	const unit = LENGTH_FIELDS.has(field) ? ' studs' : '';
 	return `${result.largest.toExponential(2)}${unit} in ${field}`;
 }
@@ -84,11 +94,13 @@ function map(name, caption, n) {
 	return `<figure data-map="${name}"><div class="proof-frame"><canvas width="${n}" height="${n}" data-proof="${name}"></canvas><span class="proof-empty"></span></div><figcaption>${caption}</figcaption></figure>`;
 }
 
-function markup(o) {
-	const cells = `${o.n} × ${o.n}`;
-	return `
+// The heading and lede, left out when embedded: the host page supplies its own.
+const INTRO = `
 		<h2 class="proof-title">This is my actual Roblox code, running in your browser.</h2>
-		<p class="proof-lede">I run one wave cascade (${cells} cells, seed ${o.seed}) twice: through my actual Luau modules from the Roblox game, on the Luau interpreter compiled to WebAssembly, and through the JavaScript port that drives this page.</p>
+		<p class="proof-lede">I run the same wave cascade twice: through my actual Luau modules from the Roblox game, and through the JavaScript port that drives this page. Then I compare what they produce.</p>`;
+
+function markup(o, embedded) {
+	return `${embedded ? '' : INTRO}
 		<div class="proof-body">
 			<div class="proof-results">
 				<button type="button" class="proof-run" data-proof="run">Run both</button>
@@ -96,7 +108,7 @@ function markup(o) {
 				<div class="proof-maps">
 					${map('luau-map', 'Luau height', o.n)}
 					${map('js-map', 'JavaScript height', o.n)}
-					${map('diff-map', 'Height difference (black: identical)', o.n)}
+					${map('diff-map', 'Height difference', o.n)}
 				</div>
 				<dl class="proof-numbers">
 					<div><dt>Verdict</dt><dd data-proof="verdict">Not run yet</dd></div>
@@ -105,7 +117,9 @@ function markup(o) {
 					<div><dt>Luau time</dt><dd data-proof="luau-ms">–</dd></div>
 					<div><dt>JavaScript time</dt><dd data-proof="js-ms">–</dd></div>
 				</dl>
-				<p class="proof-note">Both times cover building, evolving and transforming the cascade. The Luau runs on an interpreter compiled to WebAssembly (Luau ${LUAU_RELEASE}, luau-web ${LUAU_WEB_VERSION}), not on Roblox's own VM, so its time isn't Roblox's. Both sides draw their random numbers from the same documented generator, not from Roblox's.</p>
+				<p class="proof-note">Each run is one wave cascade, ${o.n} × ${o.n} cells at seed ${o.seed}. Both times cover building, evolving and transforming it.</p>
+				<p class="proof-note">My Luau runs on ${LUAU_FORK}, a fork of Luau ${LUAU_RELEASE}, packaged as luau-web ${LUAU_WEB_VERSION}: an interpreter compiled to WebAssembly, not Roblox's VM, so the Luau time isn't Roblox's.</p>
+				<p class="proof-note">The comparison covers all eight fields: ${FIELDS_IN_WORDS}. Black in the height difference means the two agree to the bit. Both sides draw their random numbers from the same documented generator, not Roblox's.</p>
 			</div>
 			<div class="proof-source">
 				<label class="proof-module">Luau module <select data-proof="module"></select></label>
@@ -117,14 +131,16 @@ function markup(o) {
 
 /**
  * @param {HTMLElement} root emptied and filled with the panel
- * @param {{ createClient?: () => ReturnType<typeof createLuauClient>, loadSource?: () => Promise<string>, runTwin?: typeof runCascadeTwin, options?: import('../proof/luauRunner.js').CascadeOptions }} [deps]
+ * @param {{ embedded?: boolean, createClient?: () => ReturnType<typeof createLuauClient>, loadSource?: () => Promise<string>, runTwin?: typeof runCascadeTwin, options?: import('../proof/luauRunner.js').CascadeOptions }} [deps]
+ *   embedded: true when a host page supplies the heading, the introduction and the glass box
+ *   (piece C's finale); the panel then leaves out its h2, its lede and its own glass.
  */
 export function mountProofPanel(root, deps = {}) {
-	const { createClient = defaultClient, loadSource = defaultLoadSource, runTwin = runCascadeTwin, options = cascadeOptions() } = deps;
+	const { embedded = false, createClient = defaultClient, loadSource = defaultLoadSource, runTwin = runCascadeTwin, options = cascadeOptions() } = deps;
 	const section = document.createElement('section');
-	section.className = 'proof';
+	section.className = embedded ? 'proof proof--embedded' : 'proof';
 	section.dataset.proofState = 'idle';
-	section.innerHTML = markup(options);
+	section.innerHTML = markup(options, embedded);
 	root.replaceChildren(section);
 	const find = (name) => section.querySelector(`[data-proof="${name}"]`);
 	const button = find('run');
@@ -157,8 +173,8 @@ export function mountProofPanel(root, deps = {}) {
 		figure.querySelector('.proof-empty').textContent = '';
 	}
 
-	function fail(sentence) {
-		blank('luau-map', 'Not run');
+	function fail(sentence, luauWord = 'Not run') {
+		blank('luau-map', luauWord);
 		blank('diff-map', NOT_COMPARED);
 		setText('verdict', NOT_COMPARED);
 		setText('status', sentence);
@@ -213,7 +229,8 @@ export function mountProofPanel(root, deps = {}) {
 		setText('largest', describeLargest(all, cells));
 		setText('differing', `${all.differing.toLocaleString('en-US')} of ${all.count.toLocaleString('en-US')} (all eight fields)`);
 		setText('luau-ms', `${luau.ms.toFixed(1)} ms`);
-		const loading = luau.loadMs > 0 ? ` Loading the Luau runtime took ${Math.round(luau.loadMs)} ms.` : '';
+		// loadMs runs from spawning the worker to its first answer, minus the Luau run itself.
+		const loading = luau.loadMs > 0 ? ` Starting the Luau (worker, runtime and bundle) took ${Math.round(luau.loadMs)} ms.` : '';
 		setText('status', `Done: ${lowerFirst(line)}.${loading}`);
 		setState('done');
 	}
@@ -224,6 +241,7 @@ export function mountProofPanel(root, deps = {}) {
 		try {
 			js = runTwin(options);
 		} catch (error) {
+			console.warn('JavaScript proof run failed', error);
 			blank('js-map', 'Failed');
 			fail(`The JavaScript port failed (${messageOf(error)}).`);
 			return;
@@ -241,7 +259,7 @@ export function mountProofPanel(root, deps = {}) {
 			}
 			console.warn('Luau proof run failed', error);
 			runtime = RUNTIME_AFTER[error?.stage] ?? runtime;
-			fail(explain(error));
+			fail(explain(error), LUAU_STARTED.has(error?.stage) ? 'No result' : 'Not run');
 			return;
 		}
 		if (destroyed) {
