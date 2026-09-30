@@ -11,8 +11,9 @@ export const ROBLOX_PLACE_URL = '';
 
 // An experience page on roblox.com over https: /games/<place id>, optionally followed by the name.
 // Share links, Creator Dashboard links (those carry the universe id, not the place id), query
-// strings and lookalike hosts are refused rather than guessed at.
-const PLACE_PATTERN = /^https:\/\/(?:www\.)?roblox\.com\/games\/(\d{1,20})(?:\/[A-Za-z0-9_-]*)?\/?$/;
+// strings, fragments, ports, user info, an upper-case scheme or host, a place id of 0 or with
+// leading zeros, and lookalike hosts are refused rather than guessed at.
+const PLACE_PATTERN = /^https:\/\/(?:www\.)?roblox\.com\/games\/([1-9]\d{0,19})(?:\/[A-Za-z0-9_-]*)?\/?$/;
 
 export function placeUrl(raw = ROBLOX_PLACE_URL) {
 	if (typeof raw !== 'string') {
@@ -67,11 +68,29 @@ export function footageClips(manifest) {
 	return Object.freeze(FOOTAGE_SHOTS.filter((shot) => byShot.has(shot)).map((shot) => byShot.get(shot)));
 }
 
+// The existing clips of a manifest that is about to be rewritten. Unlike footageClips, which the
+// page uses and which skips what it cannot show, this refuses anything it would have to drop, so
+// adding a clip never silently loses the others. No manifest yet (undefined or null) is empty.
+function existingClips(manifest) {
+	if (manifest === undefined || manifest === null) {
+		return [];
+	}
+	if (typeof manifest !== 'object' || !Array.isArray(manifest.clips)) {
+		throw new Error(`not a valid manifest: expected an object with a clips array, got ${JSON.stringify(manifest)}`);
+	}
+	manifest.clips.forEach((entry, index) => {
+		if (!validClip(entry)) {
+			throw new Error(`not a valid manifest: clips[${index}] is not a valid clip: ${JSON.stringify(entry)}`);
+		}
+	});
+	return footageClips(manifest);
+}
+
 export function withClip(manifest, clip) {
 	const valid = validClip(clip);
 	if (!valid) {
 		throw new Error(`not a valid clip: ${JSON.stringify(clip)}`);
 	}
-	const others = footageClips(manifest).filter((existing) => existing.shot !== valid.shot);
+	const others = existingClips(manifest).filter((existing) => existing.shot !== valid.shot);
 	return { clips: [...footageClips({ clips: [...others, valid] })] };
 }

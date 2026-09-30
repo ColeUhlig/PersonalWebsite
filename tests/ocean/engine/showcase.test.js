@@ -29,6 +29,14 @@ test('anything that is not an experience page URL is refused', () => {
 		'https://www.roblox.com/games/42?privateServerLinkCode=1',
 		'https://www.roblox.com.evil.example/games/42',
 		'javascript:alert(1)',
+		'https://www.roblox.com/games/0',
+		'https://www.roblox.com/games/042',
+		'https://user@roblox.com/games/42',
+		'https://www.roblox.com@evil.example/games/42',
+		'HTTPS://www.roblox.com/games/42',
+		'https://www.roblox.com:443/games/42',
+		'https://www.roblox.com/games/42#play',
+		'https://www.roblox.com/games/42\nhttps://evil.example/games/1',
 	];
 	for (const url of refused) {
 		expect.equal(Showcase.placeUrl(url), null, url);
@@ -67,6 +75,11 @@ test('footageClips keeps the valid clips in shot order', () => {
 	expect.truthy(Object.isFrozen(clips) && Object.isFrozen(clips[0]), 'frozen');
 });
 
+test('a later entry for the same shot wins', () => {
+	const clips = Showcase.footageClips({ clips: [clip('deck', { seconds: 20 }), clip('deck', { seconds: 9 })] });
+	expect.equal(clips.map((c) => `${c.shot}:${c.seconds}`).join(','), 'deck:9', 'the later deck');
+});
+
 test('withClip adds or replaces a shot without touching its input', () => {
 	const first = Showcase.withClip({ clips: [] }, clip('crest'));
 	const second = Showcase.withClip(first, clip('deck'));
@@ -84,4 +97,27 @@ test('withClip refuses an invalid clip', () => {
 		message = error.message;
 	}
 	expect.truthy(message.startsWith('not a valid clip'), `threw: ${message}`);
+});
+
+test('withClip refuses a manifest it cannot read and leaves it as it was', () => {
+	const unreadable = [
+		{ clips: [clip('deck'), clip('crest', { seconds: 0 })] },
+		{ clips: 'deck' },
+		{},
+		[clip('deck')],
+		'text',
+		7,
+	];
+	for (const manifest of unreadable) {
+		const before = JSON.stringify(manifest);
+		let message = '';
+		try {
+			Showcase.withClip(manifest, clip('flyup'));
+		} catch (error) {
+			message = error.message;
+		}
+		expect.truthy(message.startsWith('not a valid manifest:'), `${before} threw: ${message}`);
+		expect.equal(JSON.stringify(manifest), before, `${before} unchanged`);
+	}
+	expect.equal(Showcase.withClip(null, clip('deck')).clips.length, 1, 'null is empty');
 });
