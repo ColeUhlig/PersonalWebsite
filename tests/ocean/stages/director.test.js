@@ -132,11 +132,25 @@ test('frame() returns the look, the shot and the charts of the blended recipe', 
 });
 
 test('on Medium the third layer toggle is unavailable (Review Focus 5)', () => {
-	const { director } = build('?tier=Medium');
+	const { ocean, director } = build('?tier=Medium');
 	director.setStep(10);
 	const available = director.sliders().map((s) => `${s.id}:${s.available}`).join(',');
 	expect.equal(available, 'layer1:true,layer2:true,layer3:false', 'two layers to toggle');
-	director.frame();
+	const out = director.frame();
+	expect.equal(out.recipe.engine.layers.join(','), 'true,true,true', 'the recipe still asks for three');
+	expect.equal(Ocean.status(ocean).layers.length, 2, 'and the engine runs the two it has');
+});
+
+test('on Low only the first layer toggle is available, on High all three', () => {
+	const low = build('?tier=Low').director;
+	low.setStep(10);
+	expect.equal(low.sliders().map((s) => `${s.id}:${s.available}`).join(','), 'layer1:true,layer2:false,layer3:false', 'one layer on Low');
+	low.setStep(3);
+	expect.equal(low.slidersFor(10).map((s) => s.available).join(','), 'true,false,false', 'the same read from another step');
+	expect.equal(low.state().step, 3, 'without moving the story');
+	const high = build('?tier=High').director;
+	high.setStep(10);
+	expect.equal(high.sliders().map((s) => s.available).join(','), 'true,true,true', 'three on High');
 });
 
 test('progress jittering across 0.5 between steps 6 and 7 flips the parts cleanly and keeps the FFT warm (Review Focus 2)', async () => {
@@ -152,4 +166,172 @@ test('progress jittering across 0.5 between steps 6 and 7 flips the parts cleanl
 	await advance(2);
 	expect.equal(Ocean.status(ocean).source, 'fft', 'step 7 shows the FFT');
 	expect.equal(Ocean.status(ocean).layers.join(','), 'true,false,false', 'one layer');
+});
+
+function counted(query = '?tier=Low', extra = {}) {
+	const count = { calls: 0 };
+	const built = build(query, {
+		configure: (ocean, settings) => {
+			count.calls += 1;
+			Ocean.configureStage(ocean, settings);
+		},
+		...extra,
+	});
+	return { ...built, count };
+}
+
+test('reading other steps, by accessor or by a save/flip/restore round trip, never reconfigures', async () => {
+	const { director, advance, count } = counted();
+	director.setStep(7, 0.3);
+	await advance(2);
+	const before = count.calls;
+	await advance(10, () => {
+		const saved = director.state();
+		director.setStep(8, 0);
+		director.sliders();
+		director.setStep(saved.step, saved.progress);
+	});
+	expect.equal(count.calls, before, 'ten round trips over ten frames: no configure');
+	await advance(3, () => {
+		director.slidersFor(8);
+		director.valueOf(2, 'amplitude');
+	});
+	expect.equal(count.calls, before, 'the accessors: no configure either');
+	expect.equal(director.state().step, 7, 'still on step 7');
+	expect.equal(director.state().progress, 0.3, 'at the same progress');
+});
+
+test('slidersFor and valueOf read any step without moving the story', () => {
+	const { director } = build();
+	director.setStep(2);
+	director.setSlider('amplitude', 3);
+	director.setStep(8);
+	expect.equal(director.valueOf(2, 'amplitude'), 3, 'a stored value');
+	expect.equal(director.valueOf(2, 'wavelength'), 40, 'a default');
+	const two = director.slidersFor(2);
+	expect.equal(two.map((s) => s.id).join(','), 'amplitude,wavelength,speed', 'step 2 sliders');
+	expect.equal(two[0].value, 3, 'with values');
+	expect.truthy(Object.isFrozen(two) && Object.isFrozen(two[0]), 'frozen');
+	expect.equal(director.state().step, 8, 'the story stays on step 8');
+	expect.equal(director.sliders()[0].id, 'seed', 'and sliders() is still step 8');
+	let message = '';
+	try {
+		director.valueOf(2, 'wind');
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('wind'), 'an unknown id is refused');
+});
+
+test('a slider set to the value it already has, or a press at the cap, does not reconfigure', async () => {
+	const { director, advance, count } = counted();
+	director.setStep(5);
+	await advance(2);
+	const before = count.calls;
+	expect.equal(director.setSlider('chop', 0.6), 0.6, 'the default');
+	expect.equal(director.setSlider('chop', 0.604), 0.6, 'snaps back to the default');
+	await advance(2);
+	expect.equal(count.calls, before, 'no configure for the default');
+	expect.equal(director.state().values[5], undefined, 'and nothing stored');
+	director.setSlider('chop', 0.2);
+	await advance(1);
+	expect.equal(count.calls, before + 1, 'a real change configures once');
+	director.setSlider('chop', 0.2);
+	await advance(2);
+	expect.equal(count.calls, before + 1, 'the same value again: nothing');
+	director.setStep(8);
+	await advance(1);
+	director.setSlider('seed', 9999);
+	await advance(1);
+	const capped = count.calls;
+	expect.equal(director.press('seed'), 9999, 'the counter stays at its cap');
+	await advance(2);
+	expect.equal(count.calls, capped, 'a press at the cap: no configure');
+});
+
+test('on the last step progress means nothing, so it is kept as 0 and does not reconfigure', async () => {
+	const { director, advance, count } = counted();
+	director.setStep(13);
+	await advance(2);
+	const before = count.calls;
+	director.setStep(13, 0.7);
+	expect.equal(director.state().progress, 0, 'progress kept as 0');
+	await advance(2);
+	expect.equal(count.calls, before, 'no configure');
+});
+
+test('a configure that throws rethrows once, goes back to the last good values, and later frames work', async () => {
+	let boom = false;
+	const { director, advance } = build('?tier=Low', {
+		configure: (ocean, settings) => {
+			if (boom) throw new Error('boom');
+			Ocean.configureStage(ocean, settings);
+		},
+	});
+	director.setStep(2);
+	await advance(1);
+	const shown = director.frame();
+	boom = true;
+	director.setSlider('amplitude', 2);
+	let throws = 0;
+	let last = null;
+	for (let i = 0; i < 3; i++) {
+		try {
+			last = director.frame();
+		} catch {
+			throws += 1;
+		}
+	}
+	expect.equal(throws, 1, 'thrown once, not every frame');
+	expect.equal(last, shown, 'the frame keeps what it showed');
+	expect.equal(director.valueOf(2, 'amplitude'), 1.5, 'the value went back');
+	expect.equal(director.state().values[2], undefined, 'nothing kept');
+	boom = false;
+	director.setStep(2, 0.5);
+	const moved = director.frame();
+	expect.equal(moved.recipe.progress, 0.5, 'a later change configures again');
+	expect.truthy(moved.shot !== shown.shot, 'and the camera moves on');
+	expect.equal(director.setSlider('amplitude', 2), 2, 'the slider works again');
+	director.setStep(2);
+	expect.equal(director.frame().recipe.engine.sine.amplitude, 2, 'and is shown');
+	await advance(2);
+});
+
+test('a slider value the engine would refuse throws at the call site, names the slider, and stores nothing', () => {
+	let calls = 0;
+	const { director } = build('?tier=Low', {
+		configure: (ocean, settings) => {
+			calls += 1;
+			Ocean.configureStage(ocean, settings);
+		},
+		validate: (settings) => {
+			if (settings.sine.amplitude > 3) {
+				throw new RangeError('stage settings: sine amplitude too tall for this test');
+			}
+			return settings;
+		},
+	});
+	director.setStep(2);
+	director.frame();
+	let error = null;
+	try {
+		director.setSlider('amplitude', 3.5);
+	} catch (caught) {
+		error = caught;
+	}
+	expect.truthy(error instanceof RangeError, 'a RangeError');
+	expect.truthy(error.message.includes('slider amplitude') && error.message.includes('too tall'), error.message);
+	expect.equal(director.valueOf(2, 'amplitude'), 1.5, 'nothing stored');
+	director.frame();
+	expect.equal(calls, 1, 'and nothing configured');
+});
+
+test('state() is frozen all the way to the values', () => {
+	const { director } = build();
+	director.setStep(2);
+	director.setSlider('amplitude', 2);
+	const s = director.state();
+	expect.truthy(Object.isFrozen(s), 'the state');
+	expect.truthy(Object.isFrozen(s.values), 'its values');
+	expect.truthy(Object.isFrozen(s.values[2]), 'each step');
 });
