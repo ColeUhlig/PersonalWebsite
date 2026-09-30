@@ -10,7 +10,10 @@ import { LUAU_WEB_VERSION } from '../content/ocean/js/proof/runtime.js';
 const require = createRequire(import.meta.url);
 const packageDir = require.resolve('luau-web/package.json').replace(/package\.json$/, '');
 const files = ['src/index.js', 'src/lib/Luau.Web.JSPI.js', 'src/lib/Luau.Web.Asyncify.js'];
-console.log(`luau-web ${LUAU_WEB_VERSION}, Node ${process.version}, JSPI ${'Suspending' in WebAssembly}`);
+// Labelled with the installed package's own version, so a mismatch with the pinned one shows.
+const installed = JSON.parse(readFileSync(packageDir + 'package.json', 'utf8')).version;
+const jspi = 'Suspending' in WebAssembly && 'promising' in WebAssembly;
+console.log(`luau-web ${installed} installed (runtime.js pins ${LUAU_WEB_VERSION}), Node ${process.version}, JSPI ${jspi}`);
 for (const file of files) {
 	const bytes = statSync(packageDir + file).size;
 	const gzipped = gzipSync(readFileSync(packageDir + file)).length;

@@ -4,15 +4,15 @@
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as expect from '../expect.js';
 import { LuauState } from 'luau-web';
-import { LUAU_WEB_URL, LUAU_WEB_VERSION } from '../../../content/ocean/js/proof/runtime.js';
+import { BUNDLE_URL, LUAU_WEB_URL, LUAU_WEB_VERSION } from '../../../content/ocean/js/proof/runtime.js';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 // One state for every chunk here. Not a state per test: every state lives in the one fixed heap
-// the WebAssembly module shares, and destroying a state breaks the ones created after it
+// the WebAssembly module shares, and destroying a state can break the ones created after it
 // (luau-web 1.4.0), so states are made once and kept.
 const shared = await LuauState.createAsync();
 
@@ -34,9 +34,13 @@ async function rejection(promise) {
 // returns its stdout and stderr. `hideJspi` deletes JSPI first, which is how luau-web sees a
 // browser without it (Safari): it loads its Asyncify build instead. The script must import
 // luau-web with a dynamic `await import`, since a static import would run before the delete.
+// The child must finish within 30 s and exit cleanly.
+const CHILD_TIMEOUT_MS = 30_000;
+
 function child(script, hideJspi = false) {
 	const prefix = hideJspi ? 'delete WebAssembly.Suspending; delete WebAssembly.promising;\n' : '';
-	const result = spawnSync(process.execPath, ['--input-type=module', '-e', prefix + script], { cwd: ROOT, encoding: 'utf8' });
+	const result = spawnSync(process.execPath, ['--input-type=module', '-e', prefix + script], { cwd: ROOT, encoding: 'utf8', timeout: CHILD_TIMEOUT_MS });
+	expect.equal(result.status, 0, `child exit status (signal ${result.signal}, error ${result.error?.message}); stderr: ${result.stderr}`);
 	return { stdout: result.stdout, stderr: result.stderr, status: result.status };
 }
 
@@ -46,6 +50,10 @@ test('the page and the tests run the same pinned luau-web', () => {
 	const installed = JSON.parse(readFileSync(`${ROOT}node_modules/luau-web/package.json`, 'utf8'));
 	expect.equal(installed.version, LUAU_WEB_VERSION, 'installed version');
 	expect.equal(LUAU_WEB_URL, 'https://cdn.jsdelivr.net/npm/luau-web@1.4.0/src/index.js', 'jsDelivr URL, exact version');
+});
+
+test('the bundle URL resolves to content/ocean/luau/ocean-bundle.luau', () => {
+	expect.equal(BUNDLE_URL, pathToFileURL(`${ROOT}content/ocean/luau/ocean-bundle.luau`).href, 'an absolute file: URL in Node');
 });
 
 test('the buffer library writes and reads float32 and bytes', async () => {
@@ -88,25 +96,80 @@ test('numbers cross the bridge exactly both ways, Infinity and NaN included', as
 
 test('strings come back as UTF-8 text, so bytes must travel as hex', async () => {
 	const [raw, hex] = await run('return string.char(65, 128), string.format("%02x%02x", 65, 128)');
-	expect.truthy(raw !== 'A\u0080', 'a byte above 0x7f does not survive the bridge');
+	expect.equal(raw, 'A\uFFFD', 'a byte above 0x7f does not survive the bridge: it comes back as U+FFFD');
 	expect.equal(hex, '4180', 'hex does');
 });
 
-test('a compile error comes back as a message and a runtime error rejects', async () => {
+// The worker (Task 5) treats a WebAssembly.RuntimeError as fatal and throws the runtime away, and
+// anything else as an ordinary error of the Luau being run, so the classes are pinned here.
+function expectLuaError(error, text, label) {
+	expect.truthy(error && error.message.includes(text), `${label}: message (${error?.message})`);
+	expect.equal(error.name, 'LuaError', `${label}: name`);
+	expect.equal(error instanceof WebAssembly.RuntimeError, false, `${label}: not a WebAssembly.RuntimeError`);
+}
+
+test('a compile error comes back as a message or a CompileError, and a runtime error rejects with a LuaError', async () => {
 	const message = shared.loadstring('local = 1', 'bad', false);
 	expect.truthy(typeof message === 'string' && message.includes('Expected identifier'), `compile error (${message})`);
-	const error = await rejection(run('error("broken")'));
-	expect.truthy(error && error.message.includes('broken'), `runtime error (${error?.message})`);
+	let thrown = null;
+	try {
+		shared.loadstring('local = 1', 'bad', true);
+	} catch (error) {
+		thrown = error;
+	}
+	expect.truthy(thrown && thrown.message.includes('Expected identifier'), `thrown compile error (${thrown?.message})`);
+	expect.equal(thrown.name, 'CompileError', 'compile error name');
+	expect.equal(thrown instanceof WebAssembly.RuntimeError, false, 'a compile error is not a WebAssembly.RuntimeError');
+	expectLuaError(await rejection(run('error("broken")')), 'broken', 'error()');
 });
 
-test('known limit of luau-web 1.4.0: an error inside pcall escapes to JavaScript', async () => {
+test('known limit of luau-web 1.4.0: an error inside pcall escapes to JavaScript as a LuaError', async () => {
 	const error = await rejection(run('local ok = pcall(function() error("inside") end) return ok'));
-	expect.truthy(error && error.message.includes('inside'), 'pcall did not catch it; if this fails, the runtime changed: re-check runtime.js');
+	expectLuaError(error, 'inside', 'pcall did not catch it; if this fails, the runtime changed: re-check runtime.js');
 });
 
-// The heap is fixed and a failed allocation aborts instead of collecting, so the collector has to
-// keep up between calls: it does at 3 MB a call (a bundled cascade run makes about 2.5 MB of
-// garbage), and 4 MB calls failed at the ninth call when this was measured.
+test('a returned table is a proxy read with get(key); a missing key reads as null', async () => {
+	const [record] = await run('return { a = 1.5, b = "x", inner = { y = 2 } }');
+	expect.equal(typeof record.get, 'function', 'get is a function');
+	expect.equal(record.get('a'), 1.5, 'number field');
+	expect.equal(record.get('b'), 'x', 'string field');
+	expect.equal(record.get('inner').get('y'), 2, 'nested table is a proxy too');
+	expect.equal(record.get('missing'), null, 'missing key');
+	const [list] = await run('return { 10, 20, 30 }');
+	expect.equal(Array.isArray(list), false, 'a Luau array is not a JavaScript array');
+	expect.equal(`${list.get(1)} ${list.get(3)}`, '10 30', 'array read with get, from 1');
+});
+
+// Recorded so nobody passes tables in: a JavaScript array arrives indexed from 0, and a missing key
+// of a JavaScript object is not nil.
+test('a JavaScript object passed in indexes from 0 and its missing keys are not nil', async () => {
+	const [first, zeroth, kind] = await run('local t = ... return t[1], t[0], type(t)', [5, 6]);
+	expect.equal(`${first} ${zeroth} ${kind}`, '6 5 table', 'array indexes');
+	const [field, missingIsNil] = await run('local t = ... return t.a, t.zz == nil', { a: 3 });
+	expect.equal(field, 3, 'present key');
+	expect.equal(missingIsNil, false, 'missing key is not nil');
+});
+
+test('collectgarbage is not available', async () => {
+	const [kind] = await run('return type(collectgarbage)');
+	expect.equal(kind, 'nil', 'collectgarbage');
+});
+
+// In a child process, since it breaks the module for the rest of the process. Whether a state made
+// after a destroy breaks depends on how many states exist (after two creates it survived, after
+// one or three it did not, measured 2026-09-30), so this pins the simplest case that breaks.
+test('destroying a state can break the states created after it, so destroy is never called', () => {
+	const result = child(`
+		const { LuauState } = await import('luau-web');
+		const doomed = await LuauState.createAsync();
+		doomed.destroy();
+		const state = await LuauState.createAsync();
+		const chunk = state.loadstring('return 2 + 2', 'after', true);
+		console.log(JSON.stringify({ chunk: typeof chunk }));
+	`);
+	expect.equal(JSON.parse(result.stdout).chunk, 'object', 'loadstring on the new state returns a table reference, not a function');
+});
+
 test('garbage from one call is collected before the next: thirty 3 MB calls in one state', async () => {
 	const state = await LuauState.createAsync();
 	const chunk = state.loadstring('local mb = ... local keep = table.create(mb) for i = 1, mb do keep[i] = buffer.create(1048576) end return #keep', 'heap', true);
@@ -136,10 +199,11 @@ test('without JSPI (Safari) the Asyncify build runs the same Luau', () => {
 		const { LuauState } = await import('luau-web');
 		const state = await LuauState.createAsync();
 		const values = await state.loadstring('local b = buffer.create(4) buffer.writef32(b, 0, math.sin(1)) return buffer.readf32(b, 0), bit32.bxor(0xffffffff, 1)', 'p', true)();
-		console.log(JSON.stringify({ jspi: 'Suspending' in WebAssembly, values }));
+		console.log(JSON.stringify({ jspi: 'Suspending' in WebAssembly && 'promising' in WebAssembly, values }));
 	`;
 	const withJspi = JSON.parse(child(script).stdout);
 	const without = JSON.parse(child(script, true).stdout);
+	expect.equal(withJspi.jspi, true, 'the reference run uses the JSPI build (needs a Node with JSPI on, e.g. 25)');
 	expect.equal(without.jspi, false, 'JSPI hidden');
 	expect.equal(JSON.stringify(without.values), JSON.stringify(withJspi.values), 'same results');
 	expect.equal(without.values[0], Math.fround(Math.sin(1)), 'float32 sin(1)');

@@ -2,6 +2,9 @@
 	"name": "personal-website",
 	"private": true,
 	"type": "module",
+	"engines": {
+		"node": ">=25"
+	},
 	"scripts": {
 		"test:ocean": "node --test --experimental-test-coverage --test-coverage-include='content/ocean/js/core/**' --test-coverage-include='content/ocean/js/engine/**' --test-coverage-include='content/ocean/js/workers/**' --test-coverage-include='content/ocean/js/proof/**' --test-coverage-include='content/ocean/js/ui/proofImages.js' --test-coverage-include='content/ocean/js/ui/luauSource.js' 'tests/ocean/core/**/*.test.js' 'tests/ocean/engine/**/*.test.js' 'tests/ocean/proof/**/*.test.js'",
 		"test:ocean:e2e": "playwright test -c playwright.ocean.config.js",

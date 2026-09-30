@@ -14,13 +14,19 @@
 //
 // Known limits of this runtime (measured 2026-09-30, pinned in runtime.test.js):
 // - the heap is fixed at about 16 MB and cannot grow; running out aborts the WebAssembly module
-//   (a WebAssembly.RuntimeError), after which the worker holding it is thrown away;
+//   (a WebAssembly.RuntimeError), after which the worker holding it is thrown away. A Luau error,
+//   pcall's escape included, rejects with an error named 'LuaError' instead, and a compile error
+//   throws a 'CompileError'; neither is a WebAssembly.RuntimeError;
 // - an error inside pcall is not caught by pcall: it escapes to JavaScript. Nothing bundled
 //   calls pcall;
 // - strings cross the bridge as UTF-8 text, so bytes above 0x7f are mangled: binary data comes
 //   back as hex.
 export const LUAU_WEB_VERSION = '1.4.0';
 export const LUAU_WEB_URL = `https://cdn.jsdelivr.net/npm/luau-web@${LUAU_WEB_VERSION}/src/index.js`;
+// Where 0.711 comes from: the package does not name the Luau release. luau-web 1.4 (git tag 1.4,
+// commit c027116ad4, 2026-03-11) was built from luau-interop master (github.com/xNasuni/luau-interop,
+// a fork of luau-lang/luau, head 7be7165613, 2026-03-11), whose last merge from upstream
+// (ecdfa770f1, 2026-03-09) brought in 004d88ff2b "Sync to upstream/release/711 (#2280)".
 export const LUAU_RELEASE = '0.711';
 // The generated Luau bundle, committed under content/ocean/luau/ (written by roblox-ocean's
 // scripts/web_bundle.py). Resolved against this file, which sits two folders below content/ocean/.
