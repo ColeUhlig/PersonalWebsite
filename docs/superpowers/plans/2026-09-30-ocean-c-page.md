@@ -1347,7 +1347,7 @@ Expected: FAIL: the title is `Roblox Ocean`, `#opening` does not exist.
 
 			<section class="block" id="proof-block" aria-labelledby="proof-title">
 				<h3 id="proof-title">This is the actual Roblox code</h3>
-				<p>The panel below runs the ocean's real Luau modules in your browser, compiled to WebAssembly (luau-interop, a fork of Luau 0.711), next to this page's JavaScript version of the same code, and compares what they produce. The Luau takes a few seconds; the JavaScript takes milliseconds.</p>
+				<p>The panel below runs the ocean's real Luau modules in your browser, compiled to WebAssembly (luau-interop, a fork of Luau 0.711), next to this page's JavaScript version of the same code, and compares what they produce. The Luau takes well under a second once it has loaded; the JavaScript takes milliseconds.</p>
 				<p>When I checked six cascades at four seeds, all 196,608 float32 values matched bit for bit, and so did the maps.</p>
 				<div id="proof" data-copy-skip="live"></div>
 			</section>
@@ -4647,7 +4647,7 @@ The finale's working parts: live numbers measured in the visitor's browser (with
 - Test: `tests/ocean/page/liveSummary.test.js`, `tests/ocean/page/renderMode.test.js`, `tests/ocean/e2e/finale.spec.js`
 
 **Interfaces:**
-- Consumes: D `engine/showcase.js` (`placeUrl() -> string | null`, `footageClips(manifest) -> [{ shot, webm, mp4, poster, width, height, seconds }]`, `FOOTAGE_MANIFEST` = `'media/footage.json'`); B `ui/proofLazy.js` `mountProofPanelWhenNear(root) -> { mountNow(), destroy() }` (and `proof.css`, linked in Task 2); A2/A3 `Ocean.status(ocean)` (`frame`, `tier`, `tierReason`, `vertices`, `mode`, `fallbackReason`, `layers`) and `Ocean.report(ocean)` (`writeMs`, `paintMs`, `strengthMs`, `renderMs`, `cascadeMs`, or null before the first 300-frame window); Task 1 `clock` (`playing()`, `play()`, `pause()`) and `startPage`'s insertion lines; Task 2's finale DOM; Task 4 `story.relayout()`; Task 4 test helpers.
+- Consumes: D `engine/showcase.js` (`placeUrl() -> string | null`, `footageClips(manifest) -> [{ shot, webm, mp4, poster, width, height, seconds }]`, `FOOTAGE_MANIFEST` = `'media/footage.json'`); B `ui/proofLazy.js` `mountProofPanelWhenNear(root, { panelDeps: { embedded: true } }) -> { mountNow(), destroy() }` (embedded drops the panel's own h2, lede and glass box; the finale supplies them) (and `proof.css`, linked in Task 2); A2/A3 `Ocean.status(ocean)` (`frame`, `tier`, `tierReason`, `vertices`, `mode`, `fallbackReason`, `layers`) and `Ocean.report(ocean)` (`writeMs`, `paintMs`, `strengthMs`, `renderMs`, `cascadeMs`, or null before the first 300-frame window); Task 1 `clock` (`playing()`, `play()`, `pause()`) and `startPage`'s insertion lines; Task 2's finale DOM; Task 4 `story.relayout()`; Task 4 test helpers.
 - Produces:
   - `page/liveSummary.js`: `summarizeLive({ status, report, fps }) -> { rows: [{ label, value }], phoneRule: boolean }`.
   - `page/renderMode.js`: `RENDER_MODES` (`['roblox', 'unleashed']`), `renderModeControl(handle) -> null | { modes, mode(), choose(mode) }` (the A4 contract: available only when `handle.setRenderMode` is a function).
@@ -5150,7 +5150,7 @@ Directly above `// Features end.` add:
 	// render toggle and the motion button do.
 	mountPlayButton(document.getElementById('play'));
 	mountFootage(document.getElementById('footage'), { onShown: () => story.relayout() });
-	window.__proof = mountProofPanelWhenNear(document.getElementById('proof'));
+	window.__proof = mountProofPanelWhenNear(document.getElementById('proof'), { panelDeps: { embedded: true } });
 	features.push({
 		attachOcean(handle) {
 			mountLiveNumbers(document.getElementById('live'), handle);
