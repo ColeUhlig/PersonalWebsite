@@ -1,5 +1,6 @@
-// The sun as the story's sliders move it (A3; not a twin): azimuth and elevation in degrees, azimuth measured
-// from +x towards +z, and the unit vector towards the sun the renderer and the glow use.
+// The sun as the story's sliders move it (A3; not a twin): azimuth and elevation in degrees,
+// azimuth measured from +x towards +z, and the unit vector towards the sun the renderer and the
+// glow use.
 import { mod } from '../core/luau.js';
 import { SUN_DIRECTION } from '../render/lighting.js';
 

@@ -5,6 +5,7 @@ import * as StageControl from '../../../content/ocean/js/engine/stageControl.js'
 import * as Lighting from '../../../content/ocean/js/render/lighting.js';
 import { getPath } from '../../../content/ocean/js/stages/paths.js';
 import * as Recipes from '../../../content/ocean/js/stages/recipes.js';
+import { PLACE_SUN } from '../../../content/ocean/js/stages/sun.js';
 import { KINDS, clampSlider, sliderById } from '../../../content/ocean/js/stages/sliders.js';
 
 const R = Recipes.RECIPES;
@@ -70,7 +71,10 @@ test('every slider is well formed and its default is the value its binding holds
 				expect.truthy(slider.default >= slider.min && slider.default <= slider.max, `${where} default inside`);
 			}
 			if (slider.kind === 'toggle') expect.equal(typeof slider.default, 'boolean', `${where} boolean`);
-			if (slider.kind === 'counter') expect.truthy(Number.isInteger(slider.default) && slider.default >= slider.min, `${where} counter`);
+			if (slider.kind === 'counter') {
+				expect.truthy(Number.isInteger(slider.default) && slider.default >= slider.min, `${where} counter`);
+				expect.truthy(slider.max === undefined || (Number.isInteger(slider.max) && slider.default <= slider.max), `${where} counter default under its cap`);
+			}
 			if (slider.kind === 'choice') expect.truthy(slider.options.includes(slider.default), `${where} choice`);
 		}
 	}
@@ -113,7 +117,8 @@ test('the seed counter stops at 9999, and the engine refuses a seed past 2^31 - 
 	const seed = sliderById(R[7], 'seed');
 	expect.equal(seed.max, 9999, 'max');
 	expect.equal(clampSlider(seed, 1e305), 9999, '1e305 clamps');
-	StageControl.normalise({ ...R[7].engine, seed: 9999, normals: true, warm: { fft: false, maps: false, layers: [false, false, false] } });
+	const settings = StageControl.normalise({ ...R[7].engine, seed: 9999, normals: true, warm: { fft: false, maps: false, layers: [false, false, false] } });
+	expect.equal(settings.seed, 9999, 'the engine takes the counter at its cap');
 });
 
 test('the fetch slider steps 100 m on its log track and stays inside 5,000 .. 200,000 (fix round 1)', () => {
@@ -122,6 +127,17 @@ test('the fetch slider steps 100 m on its log track and stays inside 5,000 .. 20
 	expect.equal(clampSlider(fetch, 4000), 5000, 'min');
 	expect.equal(clampSlider(fetch, 1e9), 200000, 'max');
 	expect.equal(clampSlider(fetch, 5260), 5300, 'snapped to 100 m');
+});
+
+// Final review I3: over 0 .. 1 the slider barely changed the frame; the engine takes 0 .. 2.
+test("step 5's choppiness slider runs to the engine's 2 and starts well into it", () => {
+	const chop = sliderById(R[4], 'chop');
+	expect.equal(chop.min, 0, 'min');
+	expect.equal(chop.max, 2, 'max: the most StageControl.normalise takes');
+	expect.equal(chop.default, 1.3, 'default');
+	expect.equal(R[4].engine.chop, 1.3, 'the recipe runs the default');
+	const settings = StageControl.normalise({ ...R[4].engine, chop: chop.max, normals: true, warm: { fft: false, maps: false, layers: [false, false, false] } });
+	expect.equal(settings.chop, 2, 'the engine takes the slider at its top');
 });
 
 test("the layer toggles name the High tier's cascade sizes", () => {
@@ -143,7 +159,21 @@ test('step 6 flies the camera up and looks steeply down, so the repetition shows
 
 test("the look's defaults are the page's lighting", () => {
 	expect.equal(R[12].look.fog, Lighting.FOG_DENSITY, 'the A2 fog');
-	expect.equal(R[3].sliders[0].default, R[12].look.sun.azimuth, 'the sun slider starts at the place sun');
+	expect.equal(R[12].look.sun.azimuth, PLACE_SUN.azimuth, "the finale has the place's sun");
+	expect.equal(R[12].look.sun.elevation, PLACE_SUN.elevation, "at the place's height");
+});
+
+// Final review minor 1: the place sun (173 degrees, off to the left of the deck camera) left step
+// 4's default frame without a highlight. The sun must be ahead of the camera to glint in the frame.
+test("step 4's sun starts ahead of the deck camera, so its highlight is on the water in frame", () => {
+	const four = R[3];
+	expect.equal(sliderById(four, 'sunAzimuth').default, four.look.sun.azimuth, 'the slider starts at the recipe sun');
+	const [fx, , fz] = four.shot.target.map((v, i) => v - four.shot.position[i]);
+	const a = (four.look.sun.azimuth * Math.PI) / 180;
+	const off = (Math.acos((fx * Math.cos(a) + fz * Math.sin(a)) / Math.hypot(fx, fz)) * 180) / Math.PI;
+	expect.truthy(off < 60, `the sun is ${off.toFixed(0)} degrees off the line of sight`);
+	expect.equal(R[4].look.sun.azimuth, four.look.sun.azimuth, 'step 5 keeps it, so scrolling on does not swing the sun');
+	expect.equal(R[5].look.sun.azimuth, four.look.sun.azimuth, 'and step 6');
 });
 
 test('recipeFor refuses a step outside 1..13', () => {

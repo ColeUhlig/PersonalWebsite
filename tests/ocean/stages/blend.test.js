@@ -22,7 +22,7 @@ test('progress 0 is the first recipe and 1 the second, number for number', () =>
 
 test('numbers lerp between; fetch and fog on a log scale; the sun the short way round', () => {
 	const rise = blendRecipes(recipeFor(1), recipeFor(2), 0.25);
-	expect.near(rise.engine.sine.amplitude, 0.375, 1e-12, "a quarter of step 2's 1.5");
+	expect.near(rise.engine.sine.amplitude, 0.625, 1e-12, "a quarter of step 2's 2.5");
 	const fetch = blendRecipes(applySliders(recipeFor(7), { fetch: 5000 }), recipeFor(7), 0.5);
 	expect.near(fetch.engine.sea.fetch, Math.sqrt(5000 * 80000), 1e-6, 'geometric midpoint of the fetches');
 	// Steps 1 and 2 have different fogs (0.0015 and A2's 0.0009), so a plain lerp (0.0012) would
@@ -33,7 +33,25 @@ test('numbers lerp between; fetch and fog on a log scale; the sun the short way 
 	const sun = blendRecipes(applySliders(recipeFor(4), { sunAzimuth: 350 }), applySliders(recipeFor(4), { sunAzimuth: 10 }), 0.5);
 	expect.near(sun.look.sun.azimuth, 0, 1e-9, 'through north, not round the long way');
 	const shot = blendRecipes(recipeFor(5), recipeFor(6), 0.5);
-	expect.equal(shot.shot.position.join(','), '0,152.5,57.5', 'the camera halfway up (crest [0, 5, 25], look-down [0, 300, 90])');
+	expect.equal(shot.shot.position.join(','), '0,153,57.5', 'the camera halfway up (crest [0, 6, 25], look-down [0, 300, 90])');
+});
+
+// Task 8 minor: steps 1 and 2 used to carry the hero sea's 32 waves, so the 2 -> 3 lerp met the
+// bank at 20 waves when it snapped in and then took waves away while the visitor scrolled on.
+test("the wave count is step 3's own when the bank snaps in from step 2", () => {
+	for (const p of [0.5, 0.75]) {
+		expect.equal(blendRecipes(recipeFor(2), recipeFor(3), p).engine.bank.count, recipeFor(3).engine.bank.count, `count at ${p}`);
+	}
+});
+
+// Task 8 minor: a hair below 0 mods to exactly 360 in floating point.
+test('a blended sun azimuth stays in 0 .. 360, never 360 itself', () => {
+	const a = applySliders(recipeFor(4), { sunAzimuth: 0 });
+	const b = applySliders(recipeFor(4), { sunAzimuth: 350 });
+	for (const p of [1e-17, 1e-16, 0.5, 1]) {
+		const azimuth = blendRecipes(a, b, p).look.sun.azimuth;
+		expect.truthy(azimuth >= 0 && azimuth < 360, `azimuth at ${p}: ${azimuth}`);
+	}
 });
 
 test('everything discrete snaps at the halfway point', () => {

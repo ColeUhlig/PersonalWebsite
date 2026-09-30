@@ -1,10 +1,15 @@
-// The stage director (A3): the one object piece C drives. It holds which step the story is at,
-// how far the scroll has run towards the next, and the slider values the visitor has set on each
-// step. Each frame it hands the engine the blended recipe's settings -- only when the step, the
-// progress or a slider value actually changed, since the engine keeps what it was last given --
-// and gives back what the renderer needs: the look, the camera shot and the charts, with the
-// recipe itself. Browser-free; the Three.js side (render/stageLook.js, render/cameraRig.js
+// The stage director (A3; not a twin): the one object piece C drives. It holds which step the
+// story is at, how far the scroll has run towards the next, and the slider values the visitor has
+// set on each step. Each frame it hands the engine the blended recipe's settings -- only when the
+// step, the progress or a slider value actually changed, since the engine keeps what it was last
+// given -- and gives back what the renderer needs: the look, the camera shot and the charts, with
+// the recipe itself. Browser-free; the Three.js side (render/stageLook.js, render/cameraRig.js
 // applyShot) applies the look and the shot.
+//
+// For piece C: frame() is the per-frame call and allocates nothing when nothing changed. sliders(),
+// slidersFor(), state() and Ocean.status() build fresh objects on every call (a step with stored
+// values re-binds its whole recipe), so read them when the step or a value changes, not every
+// frame.
 import * as Ocean from '../engine/ocean.js';
 import * as StageControl from '../engine/stageControl.js';
 import { blendRecipes, engineSettings } from './blend.js';
@@ -29,6 +34,8 @@ export function createDirector(ocean, { configure = Ocean.configureStage, valida
 	let values = new Map();
 	let good = values; // the values the engine last took
 	let current = null;
+	// What the last configured (or refused) frame showed: its step and progress, and the stored
+	// values of that step and the next (entries change identity only when a value changes).
 	let lastKey = null;
 
 	const boundIn = (map, n) => applySliders(recipeFor(n), map.get(n) ?? {});
@@ -46,7 +53,11 @@ export function createDirector(ocean, { configure = Ocean.configureStage, valida
 	}
 
 	// Every blend a value of step n takes part in must pass the engine's check before it is kept:
-	// n itself, n at the progress being shown, and the previous step blending into n.
+	// n itself, n at the progress being shown, and the previous step blending into n. That these
+	// few stand for every progress relies on the check being per field with interval bounds
+	// (StageControl.normalise): a lerped number lies between its two ends and a snapped one is one
+	// of them, so a blend passes whenever both of its recipes do, and n's own recipe is the only
+	// new end. A check that is not per field (a bound on a sum of fields) would need every blend.
 	function check(next, id) {
 		const blends = [blendIn(next, step, 0), blendIn(next, step, progress)];
 		if (step > 1) {
@@ -101,13 +112,19 @@ export function createDirector(ocean, { configure = Ocean.configureStage, valida
 	const valueOf = (n, id) => sliderValue(bound(n), id);
 
 	const keyNow = () => ({ step, progress, a: values.get(step), b: values.get(step + 1) });
-	const sameKey = (x, y) => x !== null && x.step === y.step && x.progress === y.progress && x.a === y.a && x.b === y.b;
+	// Compared field by field, so the per-frame check builds no key object.
+	const unchanged = () =>
+		lastKey !== null && lastKey.step === step && lastKey.progress === progress && lastKey.a === values.get(step) && lastKey.b === values.get(step + 1);
 
 	function frame() {
-		const key = keyNow();
-		if (current !== null && sameKey(lastKey, key)) {
+		if (current !== null && unchanged()) {
+			// The engine runs exactly what this key shows, and any value of another step stored
+			// since passed check(), so these values are good: a later refused configure must not
+			// roll them back.
+			good = values;
 			return current;
 		}
+		const key = keyNow();
 		const recipe = blendIn(values, step, progress);
 		try {
 			configure(ocean, engineSettings(recipe));

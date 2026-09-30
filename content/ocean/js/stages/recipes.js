@@ -6,12 +6,21 @@
 // (director.js) binds slider values in, blends two neighbours by the scroll progress (blend.js)
 // and hands the result to the engine and the renderer.
 //
-// Steps 1 to 6 run the Gerstner sum (the `sine` source, then the 32-wave `bank`, through
-// WaveSampler as the original Roblox prototype did); from step 7 the surface is the FFT pipeline,
-// one layer until step 10 brings in all three. Every step starts from the hero sea, the rough
-// default Cole judged in A2 (stageControl.js DEFAULT_SETTINGS), which the finale is unchanged.
-// Steps 4 and 5 sum the 16 tallest bank waves rather than 32: 32 cost about 27 ms a frame over
-// 18,144 vertices in Node (2026-09-30), and waves 17 to 32 are under 0.15 studs tall.
+// Steps 1 to 6 run the Gerstner sum (the `sine` source, then the 32-wave `bank`, 28 of them
+// distinct after the snap to the lattice, through WaveSampler as the original Roblox prototype
+// did); from step 7 the surface is the FFT pipeline, one layer until step 10 brings in all three.
+// Every step starts from the hero sea, the rough default Cole judged in A2 (stageControl.js
+// DEFAULT_SETTINGS), which the finale is unchanged. Steps 4 and 5 sum the 16 tallest bank waves
+// rather than 32: in the browser on Cole's M4 the surface write costs 6.0 ms a frame at 32 waves
+// against 3.4 ms at 16 (final review, 2026-09-30), a phone is several times slower, and waves 17
+// to 32 are under 0.15 studs tall. (Node's figure, about 27 ms at 32, overstates the cost.)
+//
+// The low shots keep their lens clear of the water (tests/ocean/stages/clearance.test.js samples
+// the sea each step shows under every shot and blend): steps 11 and 12 look down from 20 and 18
+// studs, and the finale drifts at FINALE_HEIGHT, where the hero sea's tallest crest on the drift
+// circle (19.4 studs, sampled over every point of it at every time of the loop) stays 1.6 studs
+// under the lens; at A2's deck height of 14 it crossed the lens. The page without ?step keeps A2's
+// deck at 14 (render/cameraRig.js SHOTS).
 //
 // The two high shots (steps 6 and 10) look steeply down on the sea from a few hundred studs, so
 // the frame never reaches the flat horizon plane past the last ring (Task 10 fix round 1: from
@@ -75,12 +84,20 @@ function choice(id, label, bind, options, value) {
 }
 
 // The Gerstner steps: one layer named (so the painter's lists match step 7's while it warms up),
-// no chop until step 5, and no maps, foam or glow.
-const TEACHING = { layers: [true, false, false], chop: 0, maps: false, foam: false, glow: false };
+// no chop until step 5, and no maps, foam or glow. The bank's count is step 3's 8 from step 1, so
+// the 2 -> 3 blend meets the bank at 8 waves when it snaps in rather than the hero sea's 32 lerped
+// halfway down (steps 1 and 2 draw the sine and never sum the bank).
+const TEACHING = { layers: [true, false, false], chop: 0, maps: false, foam: false, glow: false, bank: { count: 8 } };
 const ONE_LAYER = { source: 'fft', layers: [true, false, false], foam: false, glow: false };
 const WHITE = { material: 'white', wireframe: true };
+// The lit Gerstner steps' sun: the place's height, but ahead and to the left of the deck camera
+// (which looks along -z, azimuth 270), so its highlight lies on the water in the frame's left third
+// without the sun's own glare filling the sky (final review minor 1; the place sun at 173 degrees
+// sits out of frame to the left). Steps 5 and 6 keep it, so scrolling on from 4 does not swing it.
+const TEACHING_SUN = { azimuth: 215, elevation: PLACE_SUN.elevation };
 const DECK = { position: [0, 14, 40], target: [0, 2, -120] };
-const CREST = { position: [0, 5, 25], target: [0, 1, -15] };
+const CREST = { position: [0, 6, 25], target: [0, 1, -15] };
+const FINALE_HEIGHT = 21;
 const HIGH = { position: [0, 110, 150], target: [0, 0, -60] };
 
 export const RECIPES = Object.freeze([
@@ -93,11 +110,13 @@ export const RECIPES = Object.freeze([
 		sliders: [toggle('wireframe', 'Wireframe', 'look.wireframe', true)],
 	}),
 	make(2, 'one-sine', 'One sine wave', {
-		engine: { ...TEACHING, source: 'sine' },
+		// 2.5 studs tall (final review I2): with the crests running across the view, the hero sea's
+		// 1.5 read as a faint ripple from 12 studs up; at 2.5 each crest is a line across the frame.
+		engine: { ...TEACHING, source: 'sine', sine: { amplitude: 2.5 } },
 		look: WHITE,
 		shot: { position: [0, 12, 45], target: [0, 0, 0] },
 		sliders: [
-			range('amplitude', 'Height', 'engine.sine.amplitude', { min: 0, max: 4, step: 0.05, value: 1.5, unit: 'studs' }),
+			range('amplitude', 'Height', 'engine.sine.amplitude', { min: 0, max: 4, step: 0.05, value: 2.5, unit: 'studs' }),
 			range('wavelength', 'Length', 'engine.sine.wavelength', { min: 8, max: 120, step: 1, value: 40, unit: 'studs' }),
 			range('speed', 'Speed', 'engine.sine.speed', { min: 0, max: 20, step: 0.1, value: 8, unit: 'studs/s' }),
 		],
@@ -110,22 +129,22 @@ export const RECIPES = Object.freeze([
 	}),
 	make(4, 'light', 'Light', {
 		engine: { ...TEACHING, source: 'bank', bank: { count: 16 } },
-		look: { material: 'sea', shading: true },
+		look: { material: 'sea', shading: true, sun: TEACHING_SUN },
 		shot: DECK,
 		sliders: [
-			range('sunAzimuth', 'Sun direction', 'look.sun.azimuth', { min: 0, max: 360, step: 1, value: PLACE_SUN.azimuth, unit: '°' }),
+			range('sunAzimuth', 'Sun direction', 'look.sun.azimuth', { min: 0, max: 360, step: 1, value: TEACHING_SUN.azimuth, unit: '°' }),
 			toggle('shading', 'Shading', 'look.shading', true),
 		],
 	}),
 	make(5, 'pointy-crests', 'Pointy crests', {
-		engine: { ...TEACHING, source: 'bank', bank: { count: 16 }, chop: 0.6 },
-		look: { material: 'sea' },
+		engine: { ...TEACHING, source: 'bank', bank: { count: 16 }, chop: 1.3 },
+		look: { material: 'sea', sun: TEACHING_SUN },
 		shot: CREST,
-		sliders: [range('chop', 'Choppiness', 'engine.chop', { min: 0, max: 1, step: 0.01, value: 0.6 })],
+		sliders: [range('chop', 'Choppiness', 'engine.chop', { min: 0, max: 2, step: 0.01, value: 1.3 })],
 	}),
 	make(6, 'repetition', 'The repetition problem', {
 		engine: { ...TEACHING, source: 'bank', bank: { count: 4 }, chop: 0.6 },
-		look: { material: 'sea' },
+		look: { material: 'sea', sun: TEACHING_SUN },
 		shot: { position: [0, 300, 90], target: [0, 0, 0] },
 	}),
 	make(7, 'real-data', 'Real ocean data', {
@@ -161,7 +180,7 @@ export const RECIPES = Object.freeze([
 	}),
 	make(11, 'foam', 'Foam', {
 		engine: { glow: false },
-		shot: { position: [0, 8, 30], target: [0, 1, -20] },
+		shot: { position: [0, 20, 45], target: [0, 1, -20] },
 		sliders: [
 			range('whitecap', 'Whitecaps', 'engine.foamKnobs.whitecap', { min: 0, max: 1, step: 0.01, value: DEFAULT_SETTINGS.foamKnobs.whitecap }),
 			range('fade', 'Fade', 'engine.foamKnobs.decay', { min: 0.5, max: 0.97, step: 0.01, value: DEFAULT_SETTINGS.foamKnobs.decay }),
@@ -169,14 +188,14 @@ export const RECIPES = Object.freeze([
 	}),
 	make(12, 'glow', 'Glow', {
 		// Looking towards the sun (azimuth about 173 degrees, towards -x), where the scatter lobe glows.
-		shot: { position: [40, 12, 10], target: [-120, 2, 20] },
+		shot: { position: [40, 18, 10], target: [-120, 2, 20] },
 		sliders: [
 			range('sunHeight', 'Sun height', 'look.sun.elevation', { min: 2, max: 50, step: 0.5, value: PLACE_SUN.elevation, unit: '°' }),
 			range('glow', 'Glow strength', 'engine.glowStrength', { min: 0, max: 60, step: 1, value: DEFAULT_SETTINGS.glowStrength }),
 		],
 	}),
 	make(13, 'finale', 'Finale', {
-		shot: { ...DECK, move: 'drift' },
+		shot: { position: [0, FINALE_HEIGHT, DECK.position[2]], target: DECK.target, move: 'drift' },
 	}),
 ]);
 

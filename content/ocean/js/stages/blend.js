@@ -1,4 +1,4 @@
-// Blending two neighbouring recipes by the scroll progress (A3; spec 4.3 "the engine reads the
+// Blending two neighbouring recipes by the scroll progress (A3; not a twin; spec 4.3 "the engine reads the
 // blended recipe every frame"). What blends and what snaps:
 //   * numbers lerp: the sine, the wave count, chop, wind, the foam and glow knobs, the fog, the
 //     sun, the camera. Fetch and fog, which act multiplicatively, lerp on a log scale; the sun's
@@ -17,10 +17,15 @@ const logLerp = (a, b, p) => {
 	if (p === 1) return b;
 	return a > 0 && b > 0 ? a * (b / a) ** p : a + (b - a) * p;
 };
+// mod gives 360 itself for a hair below 0 (-1e-15 + 360 rounds to 360); keep to [0, 360).
+const wrap360 = (angle) => {
+	const wrapped = mod(angle, 360);
+	return wrapped === 360 ? 0 : wrapped;
+};
 function angleLerp(a, b, p) {
-	if (p === 1) return mod(b, 360);
+	if (p === 1) return wrap360(b);
 	const delta = mod(b - a + 180, 360) - 180;
-	return mod(a + delta * p, 360);
+	return wrap360(a + delta * p);
 }
 const lerp3 = (a, b, p) => [lerp(a[0], b[0], p), lerp(a[1], b[1], p), lerp(a[2], b[2], p)];
 

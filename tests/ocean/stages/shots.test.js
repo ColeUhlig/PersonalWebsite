@@ -181,3 +181,29 @@ test("step 6's frame stays on the rings that resolve every wave it sums", () => 
 		expect.truthy(reach <= ring.halfExtent, `step 6 at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs, past ring ${resolving + 1}'s ${ring.halfExtent}`);
 	}
 });
+
+// Final review I2: a crest runs across the frame when its wave travels towards or away from the
+// camera, so each teaching step's heading must lie along the shot's own line of sight.
+test('the teaching crests run across the view in steps 2 to 5', () => {
+	const STRIDE = WaveSampler.STRIDE;
+	const heading = (bank) => {
+		let x = 0;
+		let z = 0;
+		for (let wave = 0; wave < bank.count; wave++) {
+			const a = bank.packed[wave * STRIDE + 2] * bank.weights[wave];
+			x += a * bank.packed[wave * STRIDE + 4];
+			z += a * bank.packed[wave * STRIDE + 5];
+		}
+		const length = Math.hypot(x, z);
+		return [x / length, z / length];
+	};
+	for (let step = 2; step <= 5; step++) {
+		const recipe = recipeFor(step);
+		const e = recipe.engine;
+		const bank = e.source === 'sine' ? WaveBanks.nextSine(null, e.sine, 0).bank : WaveBanks.withCount(WaveBanks.teachingBank(), e.bank.count);
+		const [hx, hz] = heading(bank);
+		const { forward } = basis(recipe.shot);
+		const along = Math.abs(hx * forward[0] + hz * forward[2]) / Math.hypot(forward[0], forward[2]);
+		expect.truthy(along > 0.9, `step ${step}: the waves travel ${Math.round((Math.acos(Math.min(along, 1)) * 180) / Math.PI)} degrees off the line of sight`);
+	}
+});

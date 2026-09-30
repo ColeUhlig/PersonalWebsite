@@ -36,8 +36,12 @@ test("each step's look reaches the meshes: white under its grid, the lit sea, th
 test("the camera stands where the blended recipe's shot says", async ({ page }) => {
 	await load(page, 'step=5&progress=0.5&freeze=12', 5);
 	const position = await page.evaluate(() => window.__ocean.camera.position.toArray());
-	// Step 5's crest shot [0, 5, 25] and step 6's look-down [0, 300, 90] (fix round 1), halfway.
-	[0, 152.5, 57.5].forEach((value, i) => expect(position[i]).toBeCloseTo(value, 3));
+	// Halfway between step 5's crest shot and step 6's look-down, read from the recipes themselves.
+	const [five, six] = await page.evaluate(async () => {
+		const { recipeFor } = await import('/ocean/js/stages/recipes.js');
+		return [recipeFor(5).shot.position, recipeFor(6).shot.position];
+	});
+	five.forEach((value, i) => expect(position[i]).toBeCloseTo((value + six[i]) / 2, 3));
 });
 
 test('a bad route warns and falls back instead of breaking (Review Focus 3)', async ({ page }) => {

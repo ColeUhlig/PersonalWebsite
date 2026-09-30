@@ -53,9 +53,10 @@ export function createScene(canvas) {
 	// The direction the engine is handed each frame: setSun rewrites it in place, so the caller's
 	// reference follows.
 	const sunArray = sunDirection.toArray();
-	// A test hook for the calibration (tests/ocean/e2e/materials.spec.js): moves the DirectionalLight
-	// and the engine's sun vector to `direction`. The sky and its environment reflections keep the
-	// place's sun; nothing in the shipped page calls this.
+	// Moves the DirectionalLight and the engine's sun vector to `direction`. On its own it is the
+	// calibration's test hook (tests/ocean/e2e/materials.spec.js, through window.__ocean.setSun), and
+	// the sky and its environment reflections keep the place's sun; the stage looks call it through
+	// setStageSun below, which moves the sky's sun as well.
 	function setSun(direction) {
 		const v = new THREE.Vector3(...direction);
 		const length = v.length();

@@ -1,6 +1,6 @@
-// Small pure helpers the stage recipes share (A3; not a twin): reading and writing a value at a dotted path
-// ("engine.sea.windSpeed", "engine.layers.1") without mutating anything, and freezing a recipe all
-// the way down.
+// Small pure helpers the stage recipes share (A3; not a twin): reading and writing a value at a
+// dotted path ("engine.sea.windSpeed", "engine.layers.1") without mutating anything, and freezing a
+// recipe all the way down.
 
 // Whether `key` is a value `node` declares: an object's own key (never an inherited one such as
 // toString or __proto__), or an array's whole-number index below its length (never `length`).

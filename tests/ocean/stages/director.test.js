@@ -36,13 +36,13 @@ function build(query = '?tier=Low', options) {
 
 const finite = (ocean) => ocean.surface.patches.every((p) => p.positions.every(Number.isFinite) && p.normals.every(Number.isFinite));
 
-test('step 2 puts one sine wave on the surface: along x only, nothing sideways', async () => {
+test('step 2 puts one sine wave on the surface: along z only, nothing sideways', async () => {
 	const { ocean, director, advance } = build();
 	director.setStep(2);
 	await advance(3);
 	const probe = probeSurface(ocean.surface);
-	expect.equal(probe.zSpread, 0, 'no change along z');
-	expect.truthy(probe.xSpread > 0.2, `changes along x: ${probe.xSpread}`);
+	expect.equal(probe.xSpread, 0, 'no change along x');
+	expect.truthy(probe.zSpread > 0.2, `changes along z: ${probe.zSpread}`);
 	expect.equal(probe.maxLateral, 0, 'no sideways motion');
 	expect.equal(Ocean.status(ocean).source, 'waves', 'a teaching source');
 });
@@ -125,7 +125,7 @@ test('frame() returns the look, the shot and the charts of the blended recipe', 
 	const { director } = build();
 	director.setStep(5, 0.5);
 	const out = director.frame();
-	expect.equal(out.shot.position.join(','), '0,152.5,57.5', 'halfway between the crest [0, 5, 25] and the look-down [0, 300, 90]');
+	expect.equal(out.shot.position.join(','), '0,153,57.5', 'halfway between the crest [0, 6, 25] and the look-down [0, 300, 90]');
 	expect.equal(out.look.material, 'sea', 'the sea look');
 	expect.equal(out.recipe.from, 5, 'from');
 	expect.equal(out.charts, out.recipe.charts, 'charts');
@@ -228,8 +228,8 @@ test('a slider set to the value it already has, or a press at the cap, does not 
 	director.setStep(5);
 	await advance(2);
 	const before = count.calls;
-	expect.equal(director.setSlider('chop', 0.6), 0.6, 'the default');
-	expect.equal(director.setSlider('chop', 0.604), 0.6, 'snaps back to the default');
+	expect.equal(director.setSlider('chop', 1.3), 1.3, 'the default');
+	expect.equal(director.setSlider('chop', 1.304), 1.3, 'snaps back to the default');
 	await advance(2);
 	expect.equal(count.calls, before, 'no configure for the default');
 	expect.equal(director.state().values[5], undefined, 'and nothing stored');
@@ -284,7 +284,7 @@ test('a configure that throws rethrows once, goes back to the last good values, 
 	}
 	expect.equal(throws, 1, 'thrown once, not every frame');
 	expect.equal(last, shown, 'the frame keeps what it showed');
-	expect.equal(director.valueOf(2, 'amplitude'), 1.5, 'the value went back');
+	expect.equal(director.valueOf(2, 'amplitude'), 2.5, 'the value went back');
 	expect.equal(director.state().values[2], undefined, 'nothing kept');
 	boom = false;
 	director.setStep(2, 0.5);
@@ -295,6 +295,33 @@ test('a configure that throws rethrows once, goes back to the last good values, 
 	director.setStep(2);
 	expect.equal(director.frame().recipe.engine.sine.amplitude, 2, 'and is shown');
 	await advance(2);
+});
+
+// Task 9 minor: a frame served from the cache must still count as the engine having taken the
+// values, or a later refused configure rolls back values an earlier step was given.
+test('a configure refused later keeps a value set on another step while the cache served the frames', async () => {
+	let boom = false;
+	const { director, advance } = build('?tier=Low', {
+		configure: (ocean, settings) => {
+			if (boom) throw new Error('boom');
+			Ocean.configureStage(ocean, settings);
+		},
+	});
+	director.setStep(3);
+	await advance(1);
+	director.setStep(7);
+	director.setSlider('wind', 20);
+	director.setStep(3); // back before any frame: the cache serves step 3's frame unchanged
+	director.frame();
+	boom = true;
+	director.setSlider('waveCount', 12);
+	try {
+		director.frame();
+	} catch {
+		// refused, and rolled back
+	}
+	expect.equal(director.valueOf(3, 'waveCount'), 8, "step 3's refused value went back");
+	expect.equal(director.valueOf(7, 'wind'), 20, "step 7's value, taken earlier, is kept");
 });
 
 test('a slider value the engine would refuse throws at the call site, names the slider, and stores nothing', () => {
@@ -321,7 +348,7 @@ test('a slider value the engine would refuse throws at the call site, names the 
 	}
 	expect.truthy(error instanceof RangeError, 'a RangeError');
 	expect.truthy(error.message.includes('slider amplitude') && error.message.includes('too tall'), error.message);
-	expect.equal(director.valueOf(2, 'amplitude'), 1.5, 'nothing stored');
+	expect.equal(director.valueOf(2, 'amplitude'), 2.5, 'nothing stored');
 	director.frame();
 	expect.equal(calls, 1, 'and nothing configured');
 });
