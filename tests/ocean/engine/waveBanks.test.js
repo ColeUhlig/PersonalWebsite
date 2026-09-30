@@ -117,3 +117,35 @@ test('bankExtent is the summed weighted amplitude: the tallest the bank can stan
 	expect.near(WaveBanks.bankExtent(two), full.packed[2] + 0.5 * full.packed[STRIDE + 2], 1e-12, 'extent');
 	expect.equal(WaveBanks.bankExtent(WaveBanks.withCount(full, 0)), 0, 'silent extent');
 });
+
+test('a speed change so small it rounds the phase to 2 pi keeps the phase in 0 .. 2 pi', () => {
+	const slow = WaveBanks.nextSine(null, { amplitude: 1, wavelength: 30, speed: 4 }, 0);
+	const next = WaveBanks.nextSine(slow, { amplitude: 1, wavelength: 30, speed: 4 - 1e-15 }, 1e-3);
+	expect.truthy(next.phase >= 0 && next.phase < TAU, `phase in 0 .. 2 pi: ${next.phase}`);
+	expect.equal(next.bank.packed[3], next.phase, 'the bank carries the folded phase');
+});
+
+test('a sine at a time the clock cannot hold is refused with a named error', () => {
+	const slow = WaveBanks.nextSine(null, { amplitude: 1, wavelength: 30, speed: 4 }, 0);
+	for (const t of [Number.NaN, Infinity, -Infinity]) {
+		let message = '';
+		try {
+			WaveBanks.nextSine(slow, { amplitude: 1, wavelength: 30, speed: 8 }, t);
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes('time'), `t = ${t}: ${message}`);
+	}
+});
+
+test('a teaching tile that is not a finite positive length is refused with a named error', () => {
+	for (const tile of [0, -256, Number.NaN, Infinity]) {
+		let message = '';
+		try {
+			WaveBanks.teachingBank(undefined, tile);
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes('tile'), `tile = ${tile}: ${message}`);
+	}
+});

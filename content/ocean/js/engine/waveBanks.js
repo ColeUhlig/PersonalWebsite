@@ -76,10 +76,15 @@ export function checkSine(spec) {
  */
 export function nextSine(previous, spec, t) {
 	checkSine(spec);
+	if (!Number.isFinite(t)) {
+		fail('sine time', 'finite', t);
+	}
 	const k = TAU / spec.wavelength;
 	const omega = k * spec.speed;
 	// phase - omega t is what the wave shows at this instant; keep it when omega changes.
-	const phase = previous ? mod(previous.phase + (omega - previous.omega) * t, TAU) : 0;
+	const turned = previous ? mod(previous.phase + (omega - previous.omega) * t, TAU) : 0;
+	// A tiny negative angle mods to exactly TAU in floating point; fold it back so phase < TAU.
+	const phase = turned === TAU ? 0 : turned;
 	const packed = Float64Array.of(k, omega, spec.amplitude, phase, 1, 0);
 	return Object.freeze({ omega, phase, bank: bank(packed, 1, Float64Array.of(1)) });
 }
@@ -100,6 +105,9 @@ function snap(k, dx, dz, unit) {
 }
 
 export function teachingBank(seed = SEED, tile = TEACHING_TILE) {
+	if (!(Number.isFinite(tile) && tile > 0)) {
+		fail('teaching tile', 'finite and above 0', tile);
+	}
 	const source = Jonswap.generateWaves(TEACHING_RECIPE, seed);
 	const count = source.count;
 	const amplitude = (wave) => source.packed[wave * STRIDE + 2];

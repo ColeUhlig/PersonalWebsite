@@ -3,6 +3,8 @@ import { defineConfig } from '@playwright/test';
 // Browser tests for the ocean page. Headless Chromium renders WebGL through SwiftShader, which is
 // slow but deterministic: these tests check behaviour and that pixels appear, never frame rates.
 // OCEAN_PORT picks the test server's port (default 8767), so two worktrees can test side by side.
+// A server already on that port is reused only when OCEAN_REUSE_SERVER=1; otherwise Playwright fails
+// loudly, so a run never tests another tree's content/ by accident.
 const PORT = process.env.OCEAN_PORT || '8767';
 
 export default defineConfig({
@@ -18,7 +20,7 @@ export default defineConfig({
 	webServer: {
 		command: `python3 -m http.server ${PORT} --directory content`,
 		url: `http://localhost:${PORT}/ocean/`,
-		reuseExistingServer: true,
+		reuseExistingServer: process.env.OCEAN_REUSE_SERVER === '1',
 	},
 	projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
 });
