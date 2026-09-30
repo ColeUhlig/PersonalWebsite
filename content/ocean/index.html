@@ -12,7 +12,10 @@
 	{
 		"imports": {
 			"three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
-			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+			"gsap": "https://cdn.jsdelivr.net/npm/gsap@3.15.0/index.js",
+			"gsap/ScrollTrigger": "https://cdn.jsdelivr.net/npm/gsap@3.15.0/ScrollTrigger.js",
+			"katex": "https://cdn.jsdelivr.net/npm/katex@0.18.10/dist/katex.mjs"
 		}
 	}
 	</script>
@@ -21,6 +24,6 @@
 	<canvas id="ocean" aria-label="Live ocean simulation"></canvas>
 	<div id="notice" hidden></div>
 	<pre id="stats" hidden></pre>
-	<script type="module" src="js/main.js"></script>
+	<script type="module" src="js/boot.js"></script>
 </body>
 </html>

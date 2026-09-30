@@ -1,0 +1,66 @@
+// The ocean page's entry module (piece C). Everything it imports statically is local and free of
+// three, GSAP and KaTeX (tests/ocean/page/bootGraph.test.js checks), so the text, the story and the
+// notice work even when a CDN script never arrives. It reads the config and the dev route, starts
+// the page's features, checks WebGL, and only then loads the live ocean with a dynamic import.
+import { readConfig } from './engine/config.js';
+import { createPlayClock } from './engine/playClock.js';
+import { parseStageRoute } from './stages/route.js';
+import { NOTICES } from './page/notices.js';
+import { webglSupported } from './webgl.js';
+import { showNotice } from './ui/notice.js';
+import { startPage } from './ui/page.js';
+
+// The story opens on the deck camera, the view matched against Studio, unless the URL names one.
+// The dev route (?step=N) keeps readConfig's own default.
+function searchFor(search, route) {
+	const query = new URLSearchParams(search);
+	if (!route && !query.has('cam')) {
+		query.set('cam', 'deck');
+	}
+	return query;
+}
+
+const route = parseStageRoute(location.search);
+const config = readConfig(searchFor(location.search, route));
+for (const warning of [...config.warnings, ...(route?.warnings ?? [])]) {
+	console.warn(`[ocean] ${warning}`);
+}
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clock = createPlayClock(() => performance.now() / 1000, { playing: !reducedMotion });
+const page = startPage({ route, reducedMotion, clock });
+
+async function startLiveOcean() {
+	let startOcean;
+	try {
+		({ startOcean } = await import('./main.js'));
+	} catch (error) {
+		// three (or another module of the ocean) did not arrive: the story carries on without it.
+		console.warn('[ocean] the live ocean could not load', error);
+		showNotice(NOTICES.load);
+		page.oceanUnavailable('load');
+		return;
+	}
+	try {
+		const handle = startOcean({
+			config,
+			route,
+			now: clock.now,
+			reducedMotion,
+			onPersistentError: () => showNotice(NOTICES.frames),
+		});
+		page.attachOcean(handle);
+	} catch (error) {
+		// The probe can pass and the renderer's own context still fail (a lost GPU process, a
+		// blocklist that applies to the second context): say so instead of leaving a blank page.
+		console.error('[ocean] could not start', error);
+		showNotice(NOTICES.webgl);
+		page.oceanUnavailable('start');
+	}
+}
+
+if (webglSupported()) {
+	startLiveOcean();
+} else {
+	showNotice(NOTICES.webgl);
+	page.oceanUnavailable('webgl');
+}
