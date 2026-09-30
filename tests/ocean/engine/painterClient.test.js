@@ -230,3 +230,64 @@ test('a worker error event is cancelled so it does not also surface as an uncaug
 	handlers[1]({ message: 'blocked', preventDefault: () => { prevented += 1; } });
 	expect.equal(prevented, 2, 'an error from a replaced worker is cancelled too');
 });
+
+// A painter spawn that records every message type the client posts.
+function recordingSpawn(posted) {
+	return () => {
+		const inner = createInProcessWorker(createPainterWorker);
+		const worker = {
+			onmessage: null,
+			onerror: null,
+			postMessage: (message, transfer) => {
+				posted.push(message.type);
+				inner.postMessage(message, transfer);
+			},
+			terminate: () => inner.terminate(),
+		};
+		inner.onmessage = (event) => worker.onmessage?.(event);
+		inner.onerror = (event) => worker.onerror?.(event);
+		return worker;
+	};
+}
+
+test('update reaches both workers and both kept configs, and puts cleared maps back to rest', async () => {
+	const posted = [];
+	const calls = [];
+	const store = FieldStore.create(N, SIZES);
+	const painter = PainterClient.create({
+		config: mapsConfig(),
+		spawn: recordingSpawn(posted),
+		sink: {
+			uploadColourBand() {},
+			uploadMaskOrNormal() {},
+			uploadRoughness() {},
+			clearNormal: () => calls.push('clearNormal'),
+			resetRoughness: () => calls.push('resetRoughness'),
+		},
+		stage: { paint: 0, upload: 0 },
+		log: { warn() {} },
+	});
+	await flush();
+	painter.coverage[0] = 0.5;
+	PainterClient.update(painter, { chop: 0.3, normalCascades: [], foamEnabled: false });
+	expect.equal(posted.filter((type) => type === 'update').length, 2, 'one update to each worker');
+	expect.equal(posted.filter((type) => type === 'configure').length, 2, 'no Configure beyond the first two');
+	expect.equal(painter.mapsConfig.chop, 0.3, 'the maps config keeps it');
+	expect.equal(painter.colourConfig.chop, 0.3, 'the colour config keeps it');
+	expect.equal(painter.colourConfig.role, 'colour', 'the roles are untouched');
+	expect.equal(painter.paintsNormal, false, 'no normal cascade left');
+	expect.equal(calls.join(','), 'clearNormal,resetRoughness', 'the sink put both maps back to rest');
+	expect.truthy(painter.coverage.every((value) => value === 0), 'the kept coverage cleared');
+	for (let frame = 2; frame <= 9; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(PainterClient.ready(painter), true, 'still painting');
+	let message = '';
+	try {
+		PainterClient.update(painter, { lut: [] });
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('lut'), `refused on this side too: ${message}`);
+});

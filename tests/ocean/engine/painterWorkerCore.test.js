@@ -108,3 +108,74 @@ test('a paint with the wrong number of field buffers or an unknown role is refus
 	}
 	expect.truthy(roleError.includes('role'), `role error: ${roleError}`);
 });
+
+// fieldBuffers with every height scaled.
+function scaledFieldBuffers(scale) {
+	return SIZES.map((size, i) => {
+		const fields = FieldStore.newFields(N, size);
+		for (let c = 0; c < N * N; c++) {
+			fields.height[c] = Math.sin(c * 0.3 + i) * 3 * scale;
+			fields.jxx[c] = Math.cos(c * 0.17) * 0.6;
+		}
+		const packed = new Float32Array(FieldStore.bufferSize(N * N) / 4);
+		FieldStore.pack(fields, packed);
+		return packed.buffer;
+	});
+}
+
+test('an update changes the knobs without resetting the running maximum; a Configure resets it', () => {
+	const coverage = new Float32Array(64 * 64);
+	const viaUpdate = run('maps');
+	viaUpdate.handle({ type: 'paint', turn: MapRotation.MASK, sequence: 1, t: 0, fields: scaledFieldBuffers(1), coverage });
+	const first = viaUpdate.replies[1].message.first;
+	viaUpdate.handle({ type: 'update', settings: { gamma: 0.5, chop: 0.4 } });
+	expect.equal(viaUpdate.replies.length, 2, 'an update sends no reply');
+	viaUpdate.handle({ type: 'paint', turn: MapRotation.MASK, sequence: 2, t: 0, fields: scaledFieldBuffers(0.5), coverage });
+	expect.near(viaUpdate.replies[2].message.first, first * 0.98, 1e-4 * first, 'the running maximum carried on and decayed');
+	const viaConfigure = run('maps');
+	viaConfigure.handle({ type: 'paint', turn: MapRotation.MASK, sequence: 1, t: 0, fields: scaledFieldBuffers(1), coverage });
+	viaConfigure.handle({ type: 'configure', config: config('maps', { gamma: 0.5 }) });
+	viaConfigure.handle({ type: 'paint', turn: MapRotation.MASK, sequence: 2, t: 0, fields: scaledFieldBuffers(0.5), coverage });
+	expect.near(viaConfigure.replies.at(-1).message.first, first / 2, 1e-4 * first, 'a Configure starts the maximum again');
+});
+
+test('an update reaches the colour role: fewer cascades paint a different band, and foam off paints none', () => {
+	const all = run('colour');
+	all.handle({ type: 'paint', turn: 1, sequence: 1, t: 0, fields: fieldBuffers() });
+	const one = run('colour');
+	one.handle({ type: 'update', settings: { colourCascades: [1] } });
+	one.handle({ type: 'paint', turn: 1, sequence: 1, t: 0, fields: fieldBuffers() });
+	const a = all.replies[1].message.pixels;
+	const b = one.replies[1].message.pixels;
+	expect.truthy(a.some((value, i) => value !== b[i]), 'the band differs with cascades 2 and 3 left out');
+	const off = run('colour');
+	off.handle({ type: 'update', settings: { foamEnabled: false } });
+	for (let band = 1; band <= 4; band++) {
+		off.handle({ type: 'paint', turn: band, sequence: band, t: 0, fields: fieldBuffers() });
+	}
+	expect.equal(off.replies[4].message.roughness, undefined, 'foam switched off by update: no roughness');
+});
+
+test('an update may only change what needs no reallocation, and only to valid values', () => {
+	const { handle } = run('colour');
+	const attempt = (settings) => {
+		try {
+			handle({ type: 'update', settings });
+			return 'ok';
+		} catch (error) {
+			return error.message;
+		}
+	};
+	expect.truthy(attempt({ texels: 32 }).includes('texels'), 'texels needs a Configure');
+	expect.truthy(attempt({ colourCascades: [0, 4] }).includes('colourCascades'), 'cascades out of range');
+	expect.truthy(attempt({ chop: Number.NaN }).includes('chop'), 'a NaN chop');
+	expect.truthy(attempt({ foamEnabled: 1 }).includes('foamEnabled'), 'not a boolean');
+	expect.equal(attempt({ chop: 0.5, foamWhitecap: 0.6, maskCascades: [] }), 'ok', 'a valid update is taken');
+	let before = '';
+	try {
+		createPainterWorker(() => {})({ type: 'update', settings: { chop: 1 } });
+	} catch (error) {
+		before = error.message;
+	}
+	expect.truthy(before.includes('update before configure'), before);
+});
