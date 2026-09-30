@@ -1,4 +1,6 @@
+import { execFile } from 'node:child_process';
 import { test } from 'node:test';
+import { promisify } from 'node:util';
 import * as expect from '../expect.js';
 import * as Cascade from '../../../content/ocean/js/core/cascade.js';
 import * as Spectrum from '../../../content/ocean/js/core/spectrum.js';
@@ -19,7 +21,14 @@ test('the spectrum curve is plain arrays over the fixed axis, peaking where JONS
 	const step = curve.omega[1] - curve.omega[0];
 	const peakIndex = curve.physical.indexOf(Math.max(...curve.physical));
 	expect.near(curve.omega[peakIndex], Spectrum.peakOmega(HERO), step, 'the peak where peakOmega is');
-	expect.near(curve.peakWavelength, (2 * Math.PI * 9.81) / Spectrum.peakOmega(HERO) ** 2, 1e-9, 'the deep-water peak wavelength');
+	// The wavelength the engine gives the peak: finite-depth dispersion (omega^2 = g k tanh(k depth)),
+	// not the deep-water 2 pi g / omega^2, which is 2.5% long at the storm extreme.
+	expect.near(Spectrum.omega((2 * Math.PI) / curve.peakWavelength, HERO), Spectrum.peakOmega(HERO), 1e-9, 'the finite-depth peak wavelength');
+	const storm = Charts.spectrumCurve({ ...HERO, windSpeed: 25, fetch: 200000 });
+	expect.near(storm.peakWavelength, 172.9, 0.05, 'the storm peak is 172.9 m on 60 m of water');
+	expect.truthy(storm.peakWavelength < (2 * Math.PI * 9.81) / storm.peakOmega ** 2, 'shorter than the deep-water 177.3 m');
+	const shallow = Charts.spectrumCurve({ ...HERO, depth: 2 });
+	expect.near(Spectrum.omega((2 * Math.PI) / shallow.peakWavelength, { ...HERO, depth: 2 }), shallow.peakOmega, 1e-9, 'and on 2 m of water, far from deep');
 	for (const i of [10, peakIndex, 150]) {
 		const w = curve.omega[i];
 		const boost = w > curve.peakOmega ? (w / curve.peakOmega) ** (2 * HERO.tailBoost) : 1;
@@ -42,6 +51,11 @@ test("the bands are the cascades' wavenumber ranges, in omega too", () => {
 	expect.equal(curve.bands[1].kMin, bands[1].kMin, 'the handover');
 	expect.equal(curve.bands[2].kMax, (Math.PI * 64) / 16, 'the open top capped at Nyquist');
 	expect.near(curve.bands[1].omegaMin, Spectrum.omega(bands[1].kMin, HERO), 1e-12, 'omega of the handover');
+	// Cascade 1's band starts at k = 0, but its lattice's longest wave is one whole wave across the
+	// 256-stud patch: nothing below k = 2 pi / 256 is held, so the chart must not shade it.
+	expect.equal(curve.bands[0].kMin, (2 * Math.PI) / 256, "the 256-stud lattice's longest wave");
+	expect.near(curve.bands[0].omegaMin, Spectrum.omega((2 * Math.PI) / 256, HERO), 1e-12, 'omega of the longest wave');
+	expect.truthy(curve.bands[0].omegaMin > 0.46 && curve.bands[0].omegaMin < 0.47, `about 0.466 rad/s: ${curve.bands[0].omegaMin}`);
 });
 
 test('the spectrum refuses a sea the maths cannot take', () => {
@@ -101,4 +115,40 @@ test('the transform timing measures both ways and proves they agree', () => {
 		}
 		expect.truthy(message.includes('power of two'), `n=${bad} refused: ${message}`);
 	}
+});
+
+test('asking for more arrows than cascade 1 has waves is a RangeError; exactly that many is fine', () => {
+	const band = WaveField.bands([256, 64, 16], 64)[0];
+	const cascade = Cascade.create({ n: 64, size: 256, kMin: band.kMin, kMax: band.kMax, seed: cascadeSeed(7, 1), loopPeriod: 120, params: HERO });
+	let waves = 0;
+	for (let i = 0; i < cascade.cells; i++) {
+		if (cascade.h0Re[i] !== 0 || cascade.h0Im[i] !== 0) waves += 1;
+	}
+	const all = Charts.createPhaseArrows(HERO, { count: waves });
+	expect.equal(all.components.length, waves, 'every wave cascade 1 holds');
+	expect.truthy(all.components.at(-1).amplitude > 0, 'and none of them empty');
+	let error = null;
+	try {
+		Charts.createPhaseArrows(HERO, { count: waves + 1 });
+	} catch (caught) {
+		error = caught;
+	}
+	expect.truthy(error instanceof RangeError, `a RangeError: ${error}`);
+	expect.truthy(error.message.includes(String(waves)), error.message);
+});
+
+// A fresh process, so the JIT has seen neither transform: the very first call must already be
+// warm on both sides. The naive sum does n^4 multiply-adds and the FFT n^2 log2 n butterflies, each
+// dearer than one naive step (bit reversal, the copy, twiddle loads), so a true speedup stays under
+// the operation ratio (21.3 at n = 8). A cold naive sum beside a warm FFT read 43x to 70x here.
+// The 1.5 is headroom for a loaded machine, not for a cold start.
+test('the first measurement in a fresh process is not inflated by a cold JIT', async (t) => {
+	const url = new URL('../../../content/ocean/js/engine/charts.js', import.meta.url).href;
+	const script = `const Charts = await import(${JSON.stringify(url)}); console.log(JSON.stringify(Charts.measureTransforms(8)));`;
+	const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script]);
+	const result = JSON.parse(stdout);
+	const ratio = result.operations.naive / result.operations.fft;
+	t.diagnostic(`fresh n=8: naive ${result.naiveMs} ms, fft ${result.fftMs} ms, speedup ${result.speedup}, op ratio ${ratio}`);
+	expect.truthy(result.speedup <= ratio * 1.5, `first-call speedup ${result.speedup} exceeds 1.5 x the op ratio ${ratio}`);
+	expect.truthy(result.maxDifference < 1e-9, 'and the two still agree');
 });
