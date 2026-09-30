@@ -60,17 +60,41 @@ export function hexToBytes(hex) {
 
 // buffer.writef32 is little-endian, and so is every typed array on the platforms browsers run on.
 function float32s(bytes) {
+	if (bytes.byteLength % 4 !== 0) {
+		throw new Error(`the Luau answer is ${bytes.byteLength} bytes, not a whole number of float32s`);
+	}
 	return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 }
 
-function paramList(params) {
-	return PARAM_ORDER.map((name) => {
-		const value = params[name] ?? (name === 'isotropy' ? 0 : undefined);
-		if (typeof value !== 'number') {
-			throw new Error(`params.${name} must be a number`);
+// A decoded answer must be exactly the size that was asked for: a short or long one means the
+// bundle and this runner disagree about the layout.
+function checkLength(what, array, expected) {
+	if (array.length !== expected) {
+		throw new Error(`the Luau ${what} has ${array.length} values, expected ${expected}`);
+	}
+	return array;
+}
+
+// [name, value] pairs to their values, refusing anything that is not a finite number.
+function finite(named) {
+	return named.map(([name, value]) => {
+		if (!Number.isFinite(value)) {
+			throw new Error(`${name} must be a finite number, got ${value}`);
 		}
 		return value;
 	});
+}
+
+function rgb(name, bytes) {
+	const list = bytes == null ? [] : Array.from(bytes);
+	if (list.length !== 3) {
+		throw new Error(`${name} must be three bytes [r, g, b]; got ${list.length} values`);
+	}
+	return finite(list.map((value, i) => [`${name}[${i}]`, value]));
+}
+
+function paramList(params) {
+	return finite(PARAM_ORDER.map((name) => [`params.${name}`, params?.[name] ?? (name === 'isotropy' ? 0 : undefined)]));
 }
 
 function checkSizes(sizes) {
@@ -114,8 +138,13 @@ export async function createLuauRunner(LuauState, source) {
 		 */
 		cascade: async (o) => {
 			checkSizes(o.sizes);
-			const [hex, ms] = await cascade(o.index, o.seed, o.time, o.n, ...o.sizes, o.loopPeriod, ...paramList(o.params));
-			return { packed: float32s(hexToBytes(hex)), ms };
+			const args = finite([
+				['index', o.index], ['seed', o.seed], ['time', o.time], ['n', o.n],
+				['sizes[0]', o.sizes[0]], ['sizes[1]', o.sizes[1]], ['sizes[2]', o.sizes[2]],
+				['loopPeriod', o.loopPeriod],
+			]);
+			const [hex, ms] = await cascade(...args, ...paramList(o.params));
+			return { packed: checkLength('cascade', float32s(hexToBytes(hex)), 8 * o.n * o.n), ms };
 		},
 		/**
 		 * @param {MapsOptions} o
@@ -123,13 +152,24 @@ export async function createLuauRunner(LuauState, source) {
 		 */
 		maps: async (o) => {
 			checkSizes(o.sizes);
+			const args = finite([
+				['seed', o.seed], ['time', o.time], ['n', o.n],
+				['sizes[0]', o.sizes[0]], ['sizes[1]', o.sizes[1]], ['sizes[2]', o.sizes[2]],
+				['loopPeriod', o.loopPeriod], ['chop', o.chop], ['peak', o.peak], ['tint', o.tint], ['gamma', o.gamma],
+				['foam.whitecap', o.foam?.whitecap], ['foam.grow', o.foam?.grow], ['foam.decay', o.foam?.decay],
+				['foamSteps', o.foamSteps], ['texels', o.texels], ['foamTexels', o.foamTexels],
+			]);
 			const [base, mask, foam, found, ms] = await maps(
-				o.seed, o.time, o.n, ...o.sizes, o.loopPeriod,
-				o.chop, o.peak, o.tint, o.gamma, o.foam.whitecap, o.foam.grow, o.foam.decay,
-				o.foamSteps, o.texels, o.foamTexels, ...o.deep, ...o.subsurface,
-				...paramList(o.params),
+				...args, ...rgb('deep', o.deep), ...rgb('subsurface', o.subsurface), ...paramList(o.params),
 			);
-			return { base: hexToBytes(base), mask: hexToBytes(mask), foam: float32s(hexToBytes(foam)), found, ms };
+			const texels = o.texels * o.texels;
+			return {
+				base: checkLength('base', hexToBytes(base), texels * 3),
+				mask: checkLength('mask', hexToBytes(mask), texels * 4),
+				foam: checkLength('foam', float32s(hexToBytes(foam)), o.foamTexels * o.foamTexels),
+				found,
+				ms,
+			};
 		},
 	});
 }
