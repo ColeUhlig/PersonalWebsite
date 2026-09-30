@@ -1,0 +1,158 @@
+/* The Luau proof panel (js/ui/proofPanel.js) and its standalone dev page (proof.html). Piece C
+   links this file from the ocean page and places the panel in the finale. */
+.proof,
+.proof-placeholder {
+	--proof-ink: #e8eef2;
+	--proof-dim: #9fb3c0;
+	--proof-glass: rgba(8, 20, 30, 0.82);
+	--proof-line: rgba(232, 238, 242, 0.16);
+	--proof-accent: #5fd4c4;
+	--proof-code: rgba(0, 0, 0, 0.35);
+	box-sizing: border-box;
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 20px;
+	background: var(--proof-glass);
+	color: var(--proof-ink);
+	border: 1px solid var(--proof-line);
+	border-radius: 10px;
+	font: 15px/1.5 system-ui, sans-serif;
+}
+.proof *,
+.proof *::before,
+.proof *::after {
+	box-sizing: inherit;
+}
+.proof-title {
+	margin: 0 0 8px;
+	font-size: 1.3rem;
+	line-height: 1.3;
+}
+.proof-lede,
+.proof-note {
+	margin: 0 0 16px;
+	color: var(--proof-dim);
+}
+.proof-note {
+	margin: 16px 0 0;
+	font-size: 0.85rem;
+}
+.proof-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 20px;
+}
+.proof-run,
+.proof-placeholder button {
+	font: inherit;
+	font-weight: 600;
+	padding: 8px 18px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--proof-accent);
+	color: #04201c;
+	cursor: pointer;
+}
+.proof-run:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+.proof-status {
+	min-height: 1.5em;
+	margin: 10px 0;
+}
+.proof-maps {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+.proof-maps figure {
+	margin: 0;
+}
+.proof-maps canvas {
+	display: block;
+	width: 100%;
+	aspect-ratio: 1;
+	image-rendering: pixelated;
+	background: #000;
+	border: 1px solid var(--proof-line);
+}
+.proof-maps figcaption {
+	margin-top: 4px;
+	font-size: 0.8rem;
+	color: var(--proof-dim);
+}
+.proof-numbers {
+	display: grid;
+	gap: 4px;
+	margin: 16px 0 0;
+}
+.proof-numbers div {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	border-bottom: 1px solid var(--proof-line);
+}
+.proof-numbers dt {
+	color: var(--proof-dim);
+}
+.proof-numbers dd {
+	margin: 0;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+.proof-source {
+	min-width: 0;
+}
+.proof-module select {
+	font: inherit;
+	margin-left: 6px;
+}
+.proof-origin {
+	margin: 6px 0;
+	font: 12px/1.4 ui-monospace, monospace;
+	color: var(--proof-dim);
+}
+.proof-source pre {
+	margin: 0;
+	max-height: 480px;
+	overflow: auto;
+	padding: 12px;
+	background: var(--proof-code);
+	border-radius: 6px;
+	font: 12px/1.45 ui-monospace, monospace;
+	tab-size: 4;
+}
+.proof-placeholder p {
+	margin: 0 0 12px;
+	color: var(--proof-dim);
+}
+@media (max-width: 899px) {
+	.proof-body {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.proof,
+	.proof-placeholder {
+		padding: 16px;
+		border-radius: 0;
+	}
+}
+/* The standalone dev page only. */
+.proof-dev {
+	margin: 0;
+	min-height: 100%;
+	background: #0b1a24;
+	color: #e8eef2;
+	font: 15px/1.5 system-ui, sans-serif;
+}
+.proof-dev header {
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 24px 16px;
+}
+.proof-dev-spacer {
+	height: 300vh;
+}
+.proof-dev main {
+	padding: 0 0 48px;
+}
