@@ -15,12 +15,12 @@ export function createPerfReadout(element) {
 		show(status, report) {
 			const fps = times.length;
 			const lines = [
-				`fps ${fps}  frame ${status.frame}  tier ${status.tier}  vertices ${status.vertices}`,
+				`fps ${fps}  frame ${status.frame}  tier ${status.tier} (${status.tierReason === 'phone rule' ? 'phone rule, unmeasured' : status.tierReason})  vertices ${status.vertices}`,
 				`${status.mode === 'workers' ? 'workers' : `main thread (${status.fallbackReason})`}  cascades ready ${status.workersReady}  painter ${status.painterReady ? 'ready' : 'starting'}`,
 			];
 			if (report) {
 				lines.push(
-					`write ${ms(report.writeMs)}  blend ${ms(report.blendMs)} (${report.blend.toFixed(2)})  paint ${ms(report.paintMs)}  copy ${ms(report.uploadMs)}  glow ${ms(report.strengthMs)}  render ${ms(report.renderMs)}`,
+					`write ${ms(report.writeMs)}  blend ${ms(report.blendMs)} (${report.blend == null ? 'off' : report.blend.toFixed(2)})  paint ${ms(report.paintMs)}  copy ${ms(report.uploadMs)}  glow ${ms(report.strengthMs)}  render ${ms(report.renderMs)}`,
 					`workers: cascade ${ms(report.cascadeMs)}  colour ${ms(report.colourMs)}  foam ${ms(report.foamMs)} (cover ${report.foamCover.toFixed(3)})`,
 				);
 			}

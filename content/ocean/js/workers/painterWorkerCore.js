@@ -18,6 +18,12 @@
 // The field buffers arrive transferred and go back transferred on the reply, so one set shuttles
 // per role. The pixels, the coverage and the roughness maps go back as copies, because the worker
 // keeps painting into its own. Browser-free: the Worker entry point is painter.worker.js.
+//
+// `update` (A3; the Luau has none, Studio never moved a slider while the painter ran) changes the
+// knobs a slider or a stage switch moves without a Configure: it merges them into the config and
+// rebuilds the colour role's derived knobs, and reallocates and resets nothing. The foam field,
+// its quarter means, the running maximum and the lace carry on, which is the whole difference: a
+// Configure per slider tick would wipe the foam and stutter the maps.
 import * as FieldStore from '../core/fieldStore.js';
 import * as FoamField from '../core/foamField.js';
 import * as FoamPaint from '../core/foamPaint.js';
@@ -43,6 +49,95 @@ const LACE_FALLOFF = 0.7;
 const ROLE_COLOUR = 'colour';
 const ROLE_MAPS = 'maps';
 
+// What an `update` may change: every knob that no allocation depends on. The sizes, the texels,
+// the tile, the lut, the foam colour and the ring roughness bases still need a Configure.
+export const UPDATABLE = Object.freeze([
+	'chop',
+	'peak',
+	'tint',
+	'gamma',
+	'decay',
+	'maskCascades',
+	'colourCascades',
+	'normalCascades',
+	'foamEnabled',
+	'foamWhitecap',
+	'foamGrow',
+	'foamDecay',
+	'foamThreshold',
+	'foamFeather',
+	'foamLace',
+	'foamOpacity',
+	'foamRoughness',
+]);
+const CASCADE_LISTS = Object.freeze(['maskCascades', 'colourCascades', 'normalCascades']);
+
+// Throws naming the first key that cannot be updated or holds a value the painter cannot use.
+export function checkUpdate(settings, cascadeCount) {
+	for (const [key, value] of Object.entries(settings)) {
+		if (!UPDATABLE.includes(key)) {
+			throw new Error(`painter update: ${key} cannot change without a Configure`);
+		}
+		if (CASCADE_LISTS.includes(key)) {
+			// Each cascade at most once: a repeat would add its field into the sum twice.
+			const valid =
+				Array.isArray(value) &&
+				value.every((c) => Number.isInteger(c) && c >= 1 && c <= cascadeCount) &&
+				new Set(value).size === value.length;
+			if (!valid) {
+				throw new Error(`painter update: ${key} must list distinct cascades 1..${cascadeCount}, got ${JSON.stringify(value)}`);
+			}
+		} else if (key === 'foamEnabled') {
+			if (typeof value !== 'boolean') {
+				throw new Error(`painter update: foamEnabled must be true or false, got ${value}`);
+			}
+		} else if (!Number.isFinite(value)) {
+			throw new Error(`painter update: ${key} must be a finite number, got ${value}`);
+		} else if (key === 'gamma' && value <= 0) {
+			// PeakMask raises the normalised crest to it: at 0 or below the mask is no longer in [0, 1].
+			throw new Error(`painter update: gamma must be above 0, got ${value}`);
+		} else if (key === 'decay' && (value < 0 || value > 1)) {
+			// PeakMask.nextMax multiplies the running maximum by it: above 1 it grows without a crest.
+			throw new Error(`painter update: decay must be in 0..1, got ${value}`);
+		}
+	}
+}
+
+// The config with the settings merged in, as a new object whose cascade lists are its own copies,
+// so neither the caller nor a second config holding the same settings shares an array with it.
+export function mergeUpdate(config, settings) {
+	const merged = { ...config, ...settings };
+	for (const key of CASCADE_LISTS) {
+		if (key in settings) {
+			merged[key] = [...settings[key]];
+		}
+	}
+	return merged;
+}
+
+// The colour role's knobs that come from the config rather than being allocated: worked out by
+// Configure and again by every update.
+function colourKnobs(config) {
+	const [r, g, b] = config.foamColour;
+	return {
+		// Clamped: above 1 WaterColour.base would index past the lut's end.
+		tint: clamp(config.tint, 0, 1),
+		stepParams: { whitecap: config.foamWhitecap, grow: config.foamGrow, decay: config.foamDecay },
+		paintParams: {
+			// With foam off the fade is given a foot no sum reaches, so every texel of every band is
+			// the base colour exactly: the switch as one number rather than a second fill.
+			threshold: config.foamEnabled ? config.foamThreshold : 2,
+			feather: config.foamFeather,
+			laceSoft: config.foamLace,
+			// Clamped as the tint is: over 1 the byte lerp would overshoot the foam colour.
+			opacity: clamp(config.foamOpacity, 0, 1),
+			r,
+			g,
+			b,
+		},
+	};
+}
+
 // Everything the `colour` role paints with. The foam pieces are built whether or not foam is on:
 // what the switch decides is whether anything is painted into them, not what exists.
 function colourState(config) {
@@ -57,27 +152,12 @@ function colourState(config) {
 	const mapBytes = texels * texels * BYTES_PER_TEXEL;
 	// ONE field over the whole tile at its own texels rather than at any cascade's.
 	const field = FoamField.newGrid(config.foamTexels, config.tile);
-	const [r, g, b] = config.foamColour;
 	return {
 		lut: config.lut,
-		// Clamped: above 1 WaterColour.base would index past the lut's end.
-		tint: clamp(config.tint, 0, 1),
+		...colourKnobs(config),
 		field,
 		fieldList: [field],
 		lace: FoamPaint.lace(config.colourTexels, LACE_CELLS, LACE_SEED, LACE_OCTAVES, LACE_FALLOFF),
-		stepParams: { whitecap: config.foamWhitecap, grow: config.foamGrow, decay: config.foamDecay },
-		paintParams: {
-			// With foam off the fade is given a foot no sum reaches, so every texel of every band is
-			// the base colour exactly: the switch as one number rather than a second fill.
-			threshold: config.foamEnabled ? config.foamThreshold : 2,
-			feather: config.foamFeather,
-			laceSoft: config.foamLace,
-			// Clamped as the tint is: over 1 the byte lerp would overshoot the foam colour.
-			opacity: clamp(config.foamOpacity, 0, 1),
-			r,
-			g,
-			b,
-		},
 		quarterRows: idiv(config.foamTexels, MapRotation.BANDS),
 		// One entry per band, zero until each has stepped once.
 		quarterMeans: zeros(MapRotation.BANDS),
@@ -110,7 +190,8 @@ export function createPainterWorker(post) {
 	// The maps role's: what the peak mask normalises by, the tallest crest of the recent fills.
 	let runningMax = 0;
 	// The colour role's: the field's mean over its four quarters, and the milliseconds the quarter
-	// this band stepped took. Zero before the first step, and zero for the session with foam off.
+	// this band stepped took. Zero before the first step, and zero while foam is off: an update that
+	// switches it off zeroes them.
 	let foamCover = 0;
 	let foamMs = 0;
 
@@ -133,6 +214,25 @@ export function createPainterWorker(post) {
 		foamCover = 0;
 		foamMs = 0;
 		post({ type: 'ready' });
+	}
+
+	// A slider's worth of change: see the header. No reply: messages arrive in order, so the next
+	// Paint already sees the new settings, and that Paint's pixels are the answer.
+	function update(settings) {
+		if (!config) {
+			throw new Error('painter worker: update before configure');
+		}
+		checkUpdate(settings, config.sizes.length);
+		config = mergeUpdate(config, settings);
+		if (colour) {
+			Object.assign(colour, colourKnobs(config));
+		}
+		// The field is left as it is (switched back on, the foam carries on from there), but nothing
+		// steps it while foam is off, so the figures reported must not be its last ones.
+		if (!config.foamEnabled) {
+			foamCover = 0;
+			foamMs = 0;
+		}
 	}
 
 	function unpackAll(buffers) {
@@ -285,6 +385,10 @@ export function createPainterWorker(post) {
 		}
 		if (message.type === 'paint') {
 			paint(message);
+			return;
+		}
+		if (message.type === 'update') {
+			update(message.settings);
 			return;
 		}
 		throw new Error(`painter worker: unknown message type ${message.type}`);

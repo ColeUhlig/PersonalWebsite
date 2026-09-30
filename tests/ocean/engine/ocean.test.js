@@ -78,6 +78,12 @@ test('the report carries the render stage the page adds each frame', async () =>
 	expect.near(report.renderMs, 4, 1e-6, 'renderMs is the render time per frame over the window');
 });
 
+test("a calm ?wind sea keeps A2's bounds: the URL can only grow them", () => {
+	const { ocean } = build('?tier=Low&wind=3&fetch=5000');
+	expect.equal(ocean.bounds.lateral, 8 + 6 * 0.8 * 8, "A2's lateral 46.4");
+	expect.equal(ocean.bounds.height, 8 + 4 * 8, "A2's height 40");
+});
+
 test('addStageSeconds refuses a stage the report does not know and a non-finite time', () => {
 	const { ocean } = build();
 	const messages = [];

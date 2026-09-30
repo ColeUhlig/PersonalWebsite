@@ -2,6 +2,10 @@
 // answers `ready`; `evolve` steps it to t, synthesises the eight fields, packs them into the buffer
 // the coordinator lent with the request and sends that buffer back. The coordinator lends it again
 // with the next request, so one buffer shuttles per cascade and nothing is allocated per frame.
+// `retune` (A3; the Luau has no such message, Studio never changed the sea while it ran) rebuilds
+// the cascade from a new config -- the page's wind, fetch or seed -- and answers `retuned` with
+// the time it took. The seed decides the random numbers, so the same seed gives the same waves
+// at new heights; the next `evolve` answers with the new sea.
 // Browser-free: the Worker entry point is cascade.worker.js.
 import * as Cascade from '../core/cascade.js';
 import * as FFT from '../core/fft.js';
@@ -29,6 +33,18 @@ export function createCascadeWorker(post) {
 			FieldStore.pack(cascade, new Float32Array(message.buffer));
 			const ms = performance.now() - started;
 			post({ type: 'fields', index, t: message.t, buffer: message.buffer, ms }, [message.buffer]);
+			return;
+		}
+		if (message.type === 'retune') {
+			if (!cascade) {
+				throw new Error(`cascade worker ${index}: retune before configure`);
+			}
+			const started = performance.now();
+			cascade = Cascade.create(message.config);
+			if (plan.n !== message.config.n) {
+				plan = FFT.plan(message.config.n);
+			}
+			post({ type: 'retuned', index, ms: performance.now() - started });
 			return;
 		}
 		throw new Error(`cascade worker: unknown message type ${message.type}`);
