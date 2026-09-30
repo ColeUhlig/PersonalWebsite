@@ -179,7 +179,8 @@ function onPixels(painter, role, data) {
 	if (fromColour) {
 		uploadColour(painter, data);
 		painter.stage.upload += (performance.now() - started) / 1000;
-		painter.foamCover = data.first;
+		// A band painted before foam went off lands after the update: its cover is the old field's.
+		painter.foamCover = painter.colourConfig.foamEnabled ? data.first : 0;
 		// Every band steps its own quarter of the field, so every band's cost is added.
 		painter.foamSeconds += data.second / 1000;
 		painter.colourSeconds += data.third / 1000;
@@ -373,6 +374,7 @@ export function update(painter, settings) {
 	}
 	if (hadFoam && !painter.mapsConfig.foamEnabled) {
 		painter.coverage.fill(0);
+		painter.foamCover = 0;
 		painter.sink?.resetRoughness?.();
 	}
 }

@@ -7,6 +7,7 @@
 import * as Cascade from '../core/cascade.js';
 import * as FFT from '../core/fft.js';
 import * as FieldStore from '../core/fieldStore.js';
+import * as Spectrum from '../core/spectrum.js';
 import { CONFIGURE_TIMEOUT_FRAMES } from './config.js';
 
 export function createCascades({ count, cells, configFor, spawn, useWorkers, onFields, onReady, log = console }) {
@@ -116,11 +117,23 @@ export function createCascades({ count, cells, configFor, spawn, useWorkers, onF
 
 	// A worker that has not answered its Configure is left alone ('waiting'): the caller keeps the
 	// retune pending and tries again, because a Configure re-sent after a timeout reads configFor
-	// anyway, and a retune posted ahead of a Configure would be refused.
+	// anyway, and a retune posted ahead of a Configure would be refused. The config is checked here
+	// on both paths, before anything is posted or rebuilt, so a sea the maths refuses throws to the
+	// caller the same way whether the cascades run on workers or on this thread (in a worker it
+	// would surface as an error event and move every cascade onto the main thread).
 	function retune(index) {
+		if (!Number.isInteger(index) || index < 1 || index > count) {
+			throw new RangeError(`cascade retune: index must be a cascade 1..${count}, got ${index}`);
+		}
+		const config = configFor(index);
+		Spectrum.validateParams(config.params);
 		if (mode === 'main-thread') {
+			if (config.n !== local.plan.n) {
+				throw new RangeError(`cascade retune: cascade ${index} cannot change n (${local.plan.n} to ${config.n}) without a rebuild`);
+			}
+			// Timed from here: the rebuild alone, not the config lookup above.
 			const started = performance.now();
-			local.cascades[index - 1] = Cascade.create(configFor(index));
+			local.cascades[index - 1] = Cascade.create(config);
 			lastRetuneMs[index - 1] = performance.now() - started;
 			return 'local';
 		}
@@ -128,7 +141,7 @@ export function createCascades({ count, cells, configFor, spawn, useWorkers, onF
 		if (!slot.ready) {
 			return 'waiting';
 		}
-		slot.worker.postMessage({ type: 'retune', index, config: configFor(index) });
+		slot.worker.postMessage({ type: 'retune', index, config });
 		return 'sent';
 	}
 

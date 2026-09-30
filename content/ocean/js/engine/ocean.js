@@ -326,7 +326,8 @@ function evolveStage(ocean, t) {
 }
 
 // The report's `blend` is the first RUNNING layer's fade -- cascade 1's whenever it runs, as in
-// A2 -- over the frames that had one, so a stopped layer's frozen fade is never counted.
+// A2 -- over the frames that had one, so a stopped layer's frozen fade is never counted, nor that
+// of a layer still rejoining (its display holds the fields it froze with until a fresh result).
 function blendStage(ocean) {
 	const store = ocean.store;
 	let counted = false;
@@ -336,7 +337,7 @@ function blendStage(ocean) {
 			continue;
 		}
 		const fraction = OceanClock.fadeFraction(ocean.frame, store.promotedFrame[index - 1], OceanClock.PERIOD);
-		if (!counted) {
+		if (!counted && ocean.rejoin[index - 1] === null) {
 			ocean.blendSum += fraction;
 			ocean.blendFrames += 1;
 			counted = true;
@@ -570,7 +571,10 @@ export function status(ocean) {
 		tierReason: ocean.tierReason,
 		source: ocean.source,
 		parts: ocean.parts,
+		// What the rings sample: a layer switched back on reads false here for the few frames it
+		// is `rejoining` (stageControl.js rejoinRotation), until a fresh result is promoted.
 		layers: ocean.sampled.slice(),
+		rejoining: ocean.rejoin.map((state) => state !== null),
 		evolving: ocean.layerOn.slice(),
 		chop: ocean.live.chop,
 		windSpeed: ocean.live.params.windSpeed,

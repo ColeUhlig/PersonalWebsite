@@ -1,8 +1,8 @@
 // What the surface's finest ring is doing, as numbers a test can check (A3; not a twin): the
 // tallest vertex, the furthest any vertex has moved sideways, and how much the height changes
 // between neighbours along each axis. Read over the INTERIOR of every visible ring-1 patch: ring 1
-// is never faded, and its edge vertices are seam averages that would make a wave running along x
-// look as if it changed along z. `sumY` is a checksum that tells two seas apart.
+// is never faded, and its edge vertices are seam averages that would make a wave running along z
+// (step 2's sine) look as if it changed along x. `sumY` is a checksum that tells two seas apart.
 import * as RingLayout from '../core/ringLayout.js';
 
 export function probeSurface(surface) {

@@ -199,6 +199,34 @@ test('an update refuses duplicate cascades, a gamma that is not positive and a d
 	expect.equal(attempt({ decay: 1 }), 'ok', 'decay 1 is taken');
 });
 
+// Task 4 minor: the foam knobs an update may carry are held to what the foam step and the veil
+// can use, as gamma and decay are.
+test('an update refuses foam knobs outside what the foam maths takes', () => {
+	const { handle } = run('colour');
+	const attempt = (settings) => {
+		try {
+			handle({ type: 'update', settings });
+			return 'ok';
+		} catch (error) {
+			return error.message;
+		}
+	};
+	for (const [key, value] of [
+		['foamDecay', -0.1],
+		['foamDecay', 1.2],
+		['foamGrow', -1],
+		['foamFeather', -0.5],
+		['foamLace', -0.1],
+		['foamOpacity', 1.5],
+		['foamOpacity', -0.1],
+		['foamRoughness', -1],
+	]) {
+		expect.truthy(attempt({ [key]: value }).includes(key), `${key} ${value} refused`);
+	}
+	expect.equal(attempt({ foamDecay: 0.97, foamWhitecap: 0, foamGrow: 0, foamFeather: 0, foamLace: 0, foamOpacity: 1, foamRoughness: 0 }), 'ok', 'the edges are taken');
+	expect.equal(attempt({ foamWhitecap: -0.2 }), 'ok', 'a whitecap below 0 is taken: it only means no foam grows');
+});
+
 test('foam switched off by update reports a foam cover of zero', () => {
 	const { handle, replies } = run('colour');
 	handle({ type: 'paint', turn: 1, sequence: 1, t: 0, fields: fieldBuffers() });

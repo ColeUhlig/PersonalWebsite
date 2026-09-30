@@ -84,7 +84,7 @@ test('a teaching step switches the cascades, the painter and the glow off: they 
 	expect.equal(ocean.stage.paint, paintSeconds, 'no paint time');
 	expect.truthy(ocean.strengths.every((s) => s === 0), 'no glow');
 	const probe = probeSurface(ocean.surface);
-	expect.equal(probe.zSpread, 0, 'one sine along x');
+	expect.equal(probe.xSpread, 0, 'one sine along z');
 	expect.truthy(probe.maxAbsY > 1 && probe.maxAbsY <= 1.5, `amplitude 1.5: ${probe.maxAbsY}`);
 	expect.equal(Ocean.status(ocean).source, 'waves', 'the status says so');
 });
@@ -396,4 +396,188 @@ test('create refuses a device tier that is not a preset (fix round 1)', () => {
 	}
 	expect.truthy(message.includes('deviceTier') && message.includes('Huge'), message);
 	expect.equal(build('', { deviceTier: null, probeMs: 1 }).ocean.tierReason, 'probe', 'null lets the probe decide');
+});
+
+// Task 5 minors (the Task 5 reviewer's scratch test, made a case): replies that take several
+// frames keep a cascade 'busy', so a layer switched back on meets a refused request while its old
+// reply is still out. It must still rejoin, and show fields no older than the steady sea does.
+test('a layer switched back on while its worker is slow still rejoins, with fields no older than steady ones', async () => {
+	const DELAY = 4; // frames a cascade reply takes to arrive
+	for (const off of [1, 3, 8]) {
+		let frame = 0;
+		const queue = [];
+		const slow = () => {
+			const inner = createInProcessWorker(createCascadeWorker);
+			const worker = { onmessage: null, onerror: null, postMessage: (m, t) => inner.postMessage(m, t), terminate: () => inner.terminate() };
+			inner.onmessage = (event) => {
+				if (event.data.type === 'fields') queue.push({ due: frame + DELAY, event, worker });
+				else worker.onmessage?.(event);
+			};
+			return worker;
+		};
+		let clock = 0;
+		const ocean = Ocean.create(readConfig('?tier=High'), {
+			spawnCascade: slow,
+			spawnPainter: () => createInProcessWorker(createPainterWorker),
+			now: () => clock,
+			log: { warn() {} },
+		});
+		Ocean.attachSink(ocean, { uploadColourBand() {}, uploadMaskOrNormal() {}, uploadRoughness() {} });
+		const results = [];
+		const request = ocean.cascades.request;
+		ocean.cascades.request = (...args) => {
+			const result = request(...args);
+			results.push(result);
+			return result;
+		};
+		const advance = async (frames, each) => {
+			for (let i = 0; i < frames; i++) {
+				clock += 1 / 60;
+				frame += 1;
+				for (let k = queue.length - 1; k >= 0; k--) {
+					if (queue[k].due <= frame) {
+						const { event, worker } = queue.splice(k, 1)[0];
+						worker.onmessage?.(event);
+					}
+				}
+				Ocean.step(ocean, 1 / 60, [0, 0], [0, 14, 40], SUN);
+				await flush();
+				each?.();
+			}
+		};
+		await advance(40);
+		let steady = 0;
+		await advance(20, () => {
+			for (const c of [1, 2, 3]) steady = Math.max(steady, displayAge(ocean, c));
+		});
+		Ocean.configureStage(ocean, settings({ layers: [true, false, true] }));
+		await advance(off);
+		Ocean.configureStage(ocean, settings({ layers: [true, true, true] }));
+		results.length = 0;
+		let rejoined = 0;
+		await advance(40, () => {
+			if (ocean.sampled[1]) rejoined = Math.max(rejoined, displayAge(ocean, 2));
+		});
+		expect.truthy(results.includes('busy'), `off ${off}: the busy path was met`);
+		expect.truthy(ocean.sampled[1], `off ${off}: cascade 2 rejoined`);
+		expect.truthy(rejoined <= steady + 1e-9, `off ${off}: rejoined fields ${(rejoined * 60).toFixed(1)} frames old, steady ${(steady * 60).toFixed(1)}`);
+	}
+});
+
+// Task 5 minor: the report's blend is the first running layer's fade, and a layer still rejoining
+// holds its frozen fields, so its fade is not the one to count.
+test("the report's blend skips a cascade 1 that is still rejoining", async () => {
+	const { ocean, advance } = build();
+	await advance(6);
+	Ocean.configureStage(ocean, settings({ layers: [false, true, true] }));
+	await advance(30);
+	Ocean.configureStage(ocean, settings({ layers: [true, true, true] }));
+	let checked = 0;
+	for (let i = 0; i < 12; i++) {
+		const before = ocean.blendSum;
+		await advance(1);
+		if (ocean.rejoin[0] !== null) {
+			const expected = OceanClock.fadeFraction(ocean.frame, ocean.store.promotedFrame[1], OceanClock.PERIOD);
+			expect.near(ocean.blendSum - before, expected, 1e-12, `frame ${i}: cascade 2's fade counted while cascade 1 rejoins`);
+			checked += 1;
+		}
+	}
+	expect.truthy(checked > 0, 'some frames had cascade 1 rejoining');
+});
+
+// Task 5 minor: `layers` is what the rings sample, so a layer switched on reads false for a few
+// frames while it rejoins; `rejoining` says why.
+test('the status names a layer that is rejoining', async () => {
+	const { ocean, advance } = build();
+	await advance(6);
+	Ocean.configureStage(ocean, settings({ layers: [true, false, true] }));
+	await advance(12);
+	Ocean.configureStage(ocean, settings({ layers: [true, true, true] }));
+	const status = Ocean.status(ocean);
+	expect.equal(status.layers.join(','), 'true,false,true', 'not sampled yet');
+	expect.equal(status.rejoining.join(','), 'false,true,false', 'because it is rejoining');
+	await advance(12);
+	expect.equal(Ocean.status(ocean).rejoining.join(','), 'false,false,false', 'rejoined');
+	expect.equal(Ocean.status(ocean).layers.join(','), 'true,true,true', 'and sampled');
+});
+
+// Final fix: the foam knobs are held to what the painter takes before anything changes, so a
+// refused fade leaves the ocean as it was instead of throwing from the painter halfway through.
+test('foam knobs the painter cannot take are refused by normalise, before anything changes', () => {
+	const { ocean } = build('?tier=Low');
+	for (const foamKnobs of [
+		{ whitecap: 0.3, decay: 1.2 },
+		{ whitecap: 0.3, decay: -0.1 },
+	]) {
+		let message = '';
+		try {
+			Ocean.configureStage(ocean, settings({ foamKnobs }));
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes('foamKnobs'), `${JSON.stringify(foamKnobs)}: ${message}`);
+	}
+	expect.equal(ocean.stageSettings, null, 'no settings adopted');
+});
+
+// Final review minor 10: a configure that changes the layers and a knob together sends the
+// painter one update, not one for the lists and another for the knobs.
+test('one configure sends each painter worker at most one update', async () => {
+	const { ocean, painterCounts, advance } = build();
+	await advance(4);
+	const before = { ...painterCounts };
+	Ocean.configureStage(ocean, settings({ layers: [true, false, false], chop: 0.5 }));
+	expect.equal(since(painterCounts, before, 'update'), 2, 'one update to each of the two workers');
+	expect.equal(ocean.painter.mapsConfig.chop, 0.5, 'the knob arrived');
+	expect.equal(ocean.painter.mapsConfig.maskCascades.join(','), '1', 'and the lists');
+});
+
+// Final review minor 9: two layers switched on together. The retune gap held back the second
+// one's pending retune, so it rejoined with the spectrum it froze with and swapped seas a few
+// frames later. A layer rejoining takes its pending retune before its fresh request.
+test('a layer rejoining takes its pending retune first, even inside the retune gap', async () => {
+	const sequences = { 1: [], 2: [], 3: [] };
+	let clock = 0;
+	const ocean = Ocean.create(readConfig('?tier=High'), {
+		spawnCascade: (index) => {
+			const inner = createInProcessWorker(createCascadeWorker);
+			const worker = {
+				onmessage: null,
+				onerror: null,
+				postMessage: (message, transfer) => {
+					sequences[index].push(message.type);
+					inner.postMessage(message, transfer);
+				},
+				terminate: () => inner.terminate(),
+			};
+			inner.onmessage = (event) => worker.onmessage?.(event);
+			inner.onerror = (event) => worker.onerror?.(event);
+			return worker;
+		},
+		spawnPainter: () => createInProcessWorker(createPainterWorker),
+		now: () => clock,
+		log: { warn() {} },
+	});
+	Ocean.attachSink(ocean, { uploadColourBand() {}, uploadMaskOrNormal() {}, uploadRoughness() {} });
+	const advance = async (frames) => {
+		for (let i = 0; i < frames; i++) {
+			clock += 1 / 60;
+			Ocean.step(ocean, 1 / 60, [0, 0], [0, 14, 40], SUN);
+			await flush();
+		}
+	};
+	await advance(6);
+	Ocean.configureStage(ocean, settings({ layers: [true, false, false] }));
+	await advance(12);
+	Ocean.configureStage(ocean, settings({ layers: [true, false, false], sea: { windSpeed: 18, fetch: 80000 } }));
+	await advance(30);
+	expect.equal(ocean.retune.pending.join(','), 'false,true,true', 'the stopped layers keep their retunes pending');
+	for (const c of [2, 3]) sequences[c].length = 0;
+	Ocean.configureStage(ocean, settings({ layers: [true, true, true], sea: { windSpeed: 18, fetch: 80000 } }));
+	await advance(12);
+	for (const c of [2, 3]) {
+		const firstEvolve = sequences[c].indexOf('evolve');
+		expect.truthy(firstEvolve > 0 && sequences[c].slice(0, firstEvolve).includes('retune'), `cascade ${c} retuned before its fresh evolve: ${sequences[c].slice(0, 4).join(',')}`);
+	}
+	expect.equal(ocean.sampled.join(','), 'true,true,true', 'both rejoined');
 });
