@@ -58,8 +58,11 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 	}
 	resize();
 	window.addEventListener('resize', resize);
-	// The canvas changes size without a window resize when the narrow layout's top half changes.
-	new ResizeObserver(resize).observe(canvas);
+	// The canvas changes size without a window resize when the narrow layout's top half changes
+	// (a browser without ResizeObserver still resizes with the window).
+	if (typeof ResizeObserver === 'function') {
+		new ResizeObserver(resize).observe(canvas);
+	}
 	watchPixelRatio(resize);
 	const parts = { ocean, view, rig, meshes, materials, config };
 	const dev = route ? startStageRoute({ route, ...parts }) : null;

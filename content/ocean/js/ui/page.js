@@ -4,7 +4,7 @@
 // (attachOcean) or learn that it will not (oceanUnavailable: 'webgl', 'load' or 'start').
 // body[data-ocean] is 'loading', 'running' or 'unavailable', for the stylesheet and the tests.
 // Feature imports (each later task adds its import directly above the next line).
-import { startStory } from './story.js';
+import { inertStory, startStory } from './story.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -12,7 +12,9 @@ export function startPage({ route, reducedMotion, clock }) {
 	const context = Object.freeze({ route, reducedMotion, clock });
 	// Features (each later task adds its lines directly above the next line, so they run in task order).
 	// Task 4: the scroll story. In story mode the ocean's stage follows every reading.
-	const story = startStory({ reducedMotion });
+	// A story that cannot start (no ResizeObserver, a DOM it did not expect) is logged and replaced by
+	// an inert one that stays at the opening, so the ocean and the other features still start.
+	const story = startSafely(() => startStory({ reducedMotion }));
 	window.__page = Object.freeze({ reading: () => story.reading(), scrollEngine: () => story.engine() });
 	features.push({
 		attachOcean(handle) {
@@ -35,6 +37,15 @@ export function startPage({ route, reducedMotion, clock }) {
 			tellFeatures(features, 'oceanUnavailable', reason);
 		},
 	});
+}
+
+function startSafely(start) {
+	try {
+		return start();
+	} catch (error) {
+		console.error('[ocean] the scroll story could not start', error);
+		return inertStory();
+	}
 }
 
 // Each feature is told on its own: one that throws is logged and the rest are still told, so a

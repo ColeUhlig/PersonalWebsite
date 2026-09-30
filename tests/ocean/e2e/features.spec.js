@@ -94,3 +94,47 @@ test('a scroll story listener that throws is logged once, and the others still h
 	expect(consoleErrors.filter((text) => text.includes('scroll story listener failed')).length).toBe(1);
 	expect(pageErrors).toEqual([]);
 });
+
+// The scroll story failing to start (no ResizeObserver, a DOM it did not expect) is the story's
+// problem: the page logs it, carries on with an inert story that reads the opening, and the ocean
+// still runs.
+test('a scroll story that throws as it starts leaves the ocean running on an inert story', async ({ page }) => {
+	const { pageErrors, consoleErrors } = watch(page);
+	await page.route('**/ocean/js/ui/story.js', async (route) => {
+		const response = await route.fetch();
+		const source = await response.text();
+		const anchor = /export function startStory\([^)]*\) \{\n/;
+		if (!anchor.test(source)) {
+			throw new Error('ui/story.js lost the line this test splices at');
+		}
+		const body = source.replace(anchor, (line) => `${line}\tthrow new Error('injected story fault');\n`);
+		await route.fulfill({ response, body });
+	});
+	await page.goto('/ocean/');
+	await page.waitForFunction(() => (window.__ocean?.status().frame ?? 0) > 5, null, { timeout: 90_000 });
+	await waitFrames(page, 5);
+	await expect(page.locator('body')).toHaveAttribute('data-ocean', 'running');
+	expect(await page.evaluate(() => window.__page.scrollEngine())).toBe('failed');
+	expect(await page.evaluate(() => window.__page.reading().phase)).toBe('opening');
+	expect(consoleErrors.some((text) => text.includes('[ocean] the scroll story could not start'))).toBe(true);
+	expect(pageErrors).toEqual([]);
+});
+
+// An older browser without ResizeObserver: the story re-measures on a window resize instead, and
+// the ocean still starts.
+test('without ResizeObserver the story and the ocean still start, and a resize re-measures', async ({ page }) => {
+	const { pageErrors } = watch(page);
+	await page.addInitScript(() => {
+		delete window.ResizeObserver;
+	});
+	await page.goto('/ocean/');
+	await page.waitForFunction(() => (window.__ocean?.status().frame ?? 0) > 5, null, { timeout: 90_000 });
+	await expect(page.locator('body')).toHaveAttribute('data-ocean', 'running');
+	expect(await page.evaluate(() => typeof window.ResizeObserver)).toBe('undefined');
+	expect(await page.evaluate(() => window.__page.scrollEngine())).not.toBe('failed');
+	await page.setViewportSize({ width: 1000, height: 700 });
+	await page.waitForTimeout(500);
+	await scrollToStep(page, 5, 0.4);
+	await expect.poll(() => page.evaluate(() => window.__page.reading().progress), { timeout: 5_000 }).toBeCloseTo(0.4, 2);
+	expect(pageErrors).toEqual([]);
+});
