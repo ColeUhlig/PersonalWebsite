@@ -15,7 +15,7 @@ export function createPerfReadout(element) {
 		show(status, report) {
 			const fps = times.length;
 			const lines = [
-				`fps ${fps}  frame ${status.frame}  tier ${status.tier}  vertices ${status.vertices}`,
+				`fps ${fps}  frame ${status.frame}  tier ${status.tier} (${status.tierReason === 'phone rule' ? 'phone rule, unmeasured' : status.tierReason})  vertices ${status.vertices}`,
 				`${status.mode === 'workers' ? 'workers' : `main thread (${status.fallbackReason})`}  cascades ready ${status.workersReady}  painter ${status.painterReady ? 'ready' : 'starting'}`,
 			];
 			if (report) {

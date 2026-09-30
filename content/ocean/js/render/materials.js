@@ -39,11 +39,15 @@ export function createMaterials(ocean, renderer) {
 	const normal = dataTexture(NORMAL_IMAGE_TEXELS, [128, 128, 255], THREE.NoColorSpace, anisotropy);
 	const coverage = new Float32Array(MAP_TEXELS * MAP_TEXELS);
 	const ringCount = preset.rings.length;
-	const roughness = Array.from({ length: ringCount }, (_, i) => {
+	// A ring's roughness at rest: its base everywhere, as no foam leaves it.
+	const restRoughness = (texture, i) => {
 		const base = config.roughness[Math.min(i + 1, config.roughness.length) - 1];
-		const texture = dataTexture(MAP_TEXELS, [0, 0, 0], THREE.NoColorSpace, anisotropy);
 		FoamRoughness.fill(texture.image.data, MAP_TEXELS, coverage, base, base);
 		texture.needsUpdate = true;
+	};
+	const roughness = Array.from({ length: ringCount }, (_, i) => {
+		const texture = dataTexture(MAP_TEXELS, [0, 0, 0], THREE.NoColorSpace, anisotropy);
+		restRoughness(texture, i);
 		return texture;
 	});
 	const emissive = new THREE.Color().setRGB(config.subsurface[0] / 255, config.subsurface[1] / 255, config.subsurface[2] / 255, THREE.SRGBColorSpace);
@@ -113,6 +117,22 @@ export function createMaterials(ocean, renderer) {
 			roughness[ring - 1].image.data.set(pixels);
 			roughness[ring - 1].needsUpdate = true;
 			counts.roughness += 1;
+		},
+		// A3 (PainterClient.update): the painter has no cascade left for the normal map, so the last
+		// ripples must not stay on the water: back to flat.
+		clearNormal() {
+			const data = normal.image.data;
+			for (let i = 0; i < data.length; i += 4) {
+				data[i] = 128;
+				data[i + 1] = 128;
+				data[i + 2] = 255;
+				data[i + 3] = 255;
+			}
+			normal.needsUpdate = true;
+		},
+		// A3: the foam was switched off, so every ring's roughness goes back to its base.
+		resetRoughness() {
+			roughness.forEach(restRoughness);
 		},
 	};
 

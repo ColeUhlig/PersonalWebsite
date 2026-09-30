@@ -3,6 +3,7 @@
 // write each frame is the whole vertex path (Roblox mode: no displacement shader). A mesh's
 // vertices move every frame, so each gets an explicit bounding sphere large enough for the
 // worst displacement the bounds allow, in place of the Roblox template's corner push-out.
+// When a slider raises the sea the engine grows the bounds (A3); sync refits every sphere then.
 import * as THREE from 'three';
 import * as HorizonState from '../engine/horizonState.js';
 
@@ -34,14 +35,19 @@ export function createOceanMeshes(scene, ocean, materials) {
 	const group = new THREE.Group();
 	scene.add(group);
 
+	const sphereRadius = (state) => {
+		const reach = state.half + surface.bounds.lateral;
+		return Math.hypot(reach, reach, surface.bounds.height);
+	};
+	let boundsVersion = surface.boundsVersion;
+
 	const patchMeshes = surface.patches.map((state, i) => {
 		const geometry = new THREE.BufferGeometry();
 		geometry.setIndex(indices);
 		geometry.setAttribute('position', dynamic(state.positions, 3));
 		geometry.setAttribute('normal', dynamic(state.normals, 3));
 		geometry.setAttribute('uv', dynamic(state.uvs, 2));
-		const reach = state.half + surface.bounds.lateral;
-		geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Math.hypot(reach, reach, surface.bounds.height));
+		geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), sphereRadius(state));
 		const mesh = new THREE.Mesh(geometry, materials.patchMaterials[i]);
 		mesh.position.set(state.worldX, 0, state.worldZ);
 		group.add(mesh);
@@ -64,6 +70,12 @@ export function createOceanMeshes(scene, ocean, materials) {
 	});
 
 	function sync() {
+		if (surface.boundsVersion !== boundsVersion) {
+			surface.patches.forEach((state, i) => {
+				patchMeshes[i].geometry.boundingSphere.radius = sphereRadius(state);
+			});
+			boundsVersion = surface.boundsVersion;
+		}
 		const flat = surface.flatNormals;
 		const patches = surface.patches;
 		for (let i = 0; i < patches.length; i++) {
