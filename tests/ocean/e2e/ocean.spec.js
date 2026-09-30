@@ -101,12 +101,13 @@ test.describe('on a device pixel ratio 3 screen', () => {
 		expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3);
 		await page.setViewportSize({ width: 390, height: 844 });
 		// resize() sets the camera aspect and the canvas size together: wait for it to have run.
-		await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 390 / 844) < 1e-3);
+		// Piece C: below 900 px the ocean is the top half of the screen (50svh = 422 of 844).
+		await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 390 / 422) < 1e-3);
 		const size = await page.evaluate(() => {
 			const canvas = document.getElementById('ocean');
 			return [canvas.width, canvas.height];
 		});
-		expect(size).toEqual([390 * 2, 844 * 2]);
+		expect(size).toEqual([390 * 2, 422 * 2]);
 	});
 });
 
