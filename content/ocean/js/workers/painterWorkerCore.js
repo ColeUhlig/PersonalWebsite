@@ -99,9 +99,28 @@ export function checkUpdate(settings, cascadeCount) {
 		} else if (key === 'decay' && (value < 0 || value > 1)) {
 			// PeakMask.nextMax multiplies the running maximum by it: above 1 it grows without a crest.
 			throw new Error(`painter update: decay must be in 0..1, got ${value}`);
+		} else if (Object.hasOwn(FOAM_RANGES, key)) {
+			const [low, high] = FOAM_RANGES[key];
+			if (value < low || value > high) {
+				throw new Error(`painter update: ${key} must be in ${low}..${high}, got ${value}`);
+			}
 		}
 	}
 }
+
+// The foam knobs' usable ranges (FoamField.stepRows, FoamPaint.band, FoamRoughness.fill): decay is
+// what a texel keeps of itself per step (above 1 the foam would grow on calm water); grow, the
+// feather and the lace's soft band are amounts that mean nothing below 0; opacity is a fraction of
+// the water it covers, and the foam's roughness a material roughness, 0 to 1. The whitecap is a threshold on the Jacobian and any finite
+// one is usable (below 0 no foam grows).
+const FOAM_RANGES = Object.freeze({
+	foamDecay: Object.freeze([0, 1]),
+	foamGrow: Object.freeze([0, Infinity]),
+	foamFeather: Object.freeze([0, Infinity]),
+	foamLace: Object.freeze([0, Infinity]),
+	foamOpacity: Object.freeze([0, 1]),
+	foamRoughness: Object.freeze([0, 1]),
+});
 
 // The config with the settings merged in, as a new object whose cascade lists are its own copies,
 // so neither the caller nor a second config holding the same settings shares an array with it.

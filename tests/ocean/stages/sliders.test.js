@@ -34,6 +34,17 @@ test('clampSlider keeps a range inside its ends and on its step (Review Focus 3)
 	}
 });
 
+// Task 8 minor: "got 12" for the text '12' read as if a number had been refused.
+test('a refused value that is text is shown quoted, so it does not read as a number', () => {
+	let message = '';
+	try {
+		clampSlider(RANGE, '12');
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('"12"'), message);
+});
+
 test('toggles take only booleans, counters whole numbers from their minimum, choices the nearest option', () => {
 	expect.equal(clampSlider(TOGGLE, false), false, 'boolean kept');
 	let message = '';

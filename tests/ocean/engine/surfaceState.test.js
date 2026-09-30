@@ -153,15 +153,15 @@ test('setRingCascades drops a cascade from every ring, and the write follows', (
 	expect.equal(probeSurface(surface).maxAbsY, 0, 'cascade 2 gone from the surface');
 });
 
-test('with no cascades the swells slot carries a teaching bank: one sine is z-invariant', () => {
+test('with no cascades the swells slot carries a teaching bank: one sine is x-invariant', () => {
 	const { layout, store } = setup();
 	const surface = SurfaceState.create(layout, BOUNDS, false);
 	SurfaceState.setRingCascades(surface, [false, false, false]);
 	const { bank } = WaveBanks.nextSine(null, { amplitude: 2, wavelength: 24, speed: 5 }, 0);
 	SurfaceState.write(surface, store, bank, 1.5, 0);
 	const probe = probeSurface(surface);
-	expect.equal(probe.zSpread, 0, 'nothing changes along z');
-	expect.truthy(probe.xSpread > 0.5, `the wave changes along x: ${probe.xSpread}`);
+	expect.equal(probe.xSpread, 0, 'nothing changes along x');
+	expect.truthy(probe.zSpread > 0.5, `the wave changes along z (it travels along +z): ${probe.zSpread}`);
 	expect.equal(probe.maxLateral, 0, 'chop 0: no sideways motion');
 	expect.truthy(probe.maxAbsY <= 2 && probe.maxAbsY > 1.5, `height within the amplitude: ${probe.maxAbsY}`);
 });

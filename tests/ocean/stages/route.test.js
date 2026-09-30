@@ -48,3 +48,53 @@ test("slider values are resolved against the step's own sliders, with a warning 
 	expect.equal(garbled.values.wind, undefined, 'not a number');
 	expect.truthy(garbled.warnings[0].includes('s.wind'), 'said');
 });
+
+// Task 8 minors: keys that are not ordinary names, camera switches that are neither 0 nor 1,
+// repeated keys, and a raw value set that is not an object.
+test('odd route keys and values are said, never silently dropped', () => {
+	const route = parseStageRoute('?step=3&s.__proto__=5&s.constructor=1');
+	expect.equal(route.sliders.__proto__, '5', 'kept as a slider name like any other');
+	const resolved = resolveSliderValues(recipeFor(3), route.sliders);
+	expect.truthy(resolved.warnings.some((w) => w.includes('s.__proto__')), `the __proto__ key said: ${resolved.warnings}`);
+	expect.truthy(resolved.warnings.some((w) => w.includes('s.constructor')), 'the constructor key said');
+	const shot = parseStageRoute('?step=3&shot=maybe');
+	expect.equal(shot.shots, true, 'anything but 0 keeps the recipe camera');
+	expect.truthy(shot.warnings.some((w) => w.includes('shot=maybe')), 'and says so');
+	const twice = parseStageRoute('?step=3&step=5&s.waveCount=4&s.waveCount=9');
+	expect.equal(twice.step, 3, 'the first step given');
+	expect.equal(twice.sliders.waveCount, '4', 'the first slider value given');
+	expect.truthy(twice.warnings.some((w) => w.includes('step')), 'the repeated step said');
+	expect.truthy(twice.warnings.some((w) => w.includes('s.waveCount')), 'the repeated slider said');
+});
+
+test('resolveSliderValues refuses raw values that are not an object of texts', () => {
+	for (const bad of [null, undefined, 'wind=3', ['3']]) {
+		let message = '';
+		try {
+			resolveSliderValues(recipeFor(7), bad);
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes('slider values'), `${JSON.stringify(bad)}: ${message}`);
+	}
+	let message = '';
+	try {
+		resolveSliderValues(recipeFor(7), { wind: 20 });
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('s.wind'), `a raw value that is not text is named: ${message}`);
+});
+
+// Final fix: the capture script and the browser tests pin the finale's drift to a point of its
+// circle, since a frozen clock never turns it.
+test('drift pins the finale camera to a point of its circle, in seconds of the drift', () => {
+	expect.equal(parseStageRoute('?step=13').drift, null, 'the drift runs by default');
+	expect.equal(parseStageRoute('?step=13&drift=120').drift, 120, 'pinned at 120 s');
+	const bad = parseStageRoute('?step=13&drift=soon');
+	expect.equal(bad.drift, null, 'a non-number leaves it running');
+	expect.truthy(bad.warnings.some((w) => w.includes('drift=soon')), 'and says so');
+	const negative = parseStageRoute('?step=13&drift=-5');
+	expect.equal(negative.drift, 0, 'clamped to 0');
+	expect.truthy(negative.warnings.some((w) => w.includes('drift=-5')), 'and says so');
+});

@@ -154,6 +154,7 @@ export function createPhaseArrows(params, { seed = SEED, count = 8, sizes = Tier
 }
 
 // Each arrow at time t: h0 e^{-i omega t} (Euler's formula), the phasor the cascade's evolve turns.
+// Builds `count` small objects per call (8 by default): cheap, but call it once a frame at most.
 export function phaseArrowsAt(arrows, t) {
 	check(Number.isFinite(t), `t must be finite, got ${t}`);
 	return arrows.components.map((c) => {
@@ -245,10 +246,11 @@ function timeBoth(naive, fft) {
  * butterflies for the FFT. The FFT time includes copying its input (it works in place). Both are
  * warmed up untimed on the first call, then timed in alternating batches, and each time is its
  * median batch; `batches` says how many each took (the naive sum at n = 64 takes one, see
- * SINGLE_NAIVE_MS). Runs on the calling thread: about 20 ms per call up to n = 32 (the batches;
- * the first call adds the 21 ms warm-up) and about 40 ms at n = 64, so call it on a slider change,
- * never per frame. One naive sample at n = 64 is at the mercy of the machine's load: a busy
- * moment can move that speedup by a factor of two either way, where the smaller n take medians.
+ * SINGLE_NAIVE_MS). Runs on the calling thread: about 25 to 30 ms per call up to n = 32 (the
+ * batches; the first call adds the 21 ms warm-up) and about 40 ms at n = 64, so call it on a
+ * slider change, never per frame. One naive sample at n = 64 is at the mercy of the machine's
+ * load, where the smaller n take medians: under load spikes it read speedups from 64x to 1,729x
+ * against an operation ratio of 683, so piece C re-measures a figure that lands far off the ratio.
  */
 export function measureTransforms(n, { seed = 1 } = {}) {
 	check(

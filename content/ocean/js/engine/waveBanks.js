@@ -7,13 +7,15 @@
 // and the vertex normals are the bank's analytic ones.
 //
 // Two sources:
-//   * one sine wave (step 2) travelling along +x, from the panel's height, length and speed.
+//   * one sine wave (step 2) travelling along +z, towards the story's cameras (which look along
+//     -z), so its crests run across the view; from the panel's height, length and speed.
 //     Changing the speed keeps the wave's phase where it was at that instant, so a slider drag
 //     slows or quickens the wave instead of jumping it;
 //   * the teaching bank (steps 3 to 6): the prototype's 32 JONSWAP waves, sorted tallest first so
 //     the wave-count slider adds waves that show, with every wavevector snapped to the 256-stud
 //     lattice. A sum of waves whose wavevectors sit on a 2 pi / 256 lattice repeats exactly every
-//     256 studs, which is the repetition step 6 shows and the one an FFT patch has too.
+//     256 studs, which is the repetition step 6 shows and the one an FFT patch has too. It rolls
+//     along +z like the sine, so its crests also cross the view in steps 3 to 5.
 import * as Jonswap from '../core/jonswap.js';
 import * as WaveSampler from '../core/waveSampler.js';
 import { clamp, mod, round } from '../core/luau.js';
@@ -23,8 +25,9 @@ const TAU = 2 * Math.PI;
 const STRIDE = WaveSampler.STRIDE;
 
 // howhow2315/JONSWAP-Ocean's recipe as the Roblox A/B builds it (OceanClient.client.luau), except
-// the spread: the A/B's absent spread drew headings over the whole circle from a second generator;
-// 45 degrees either side of +x keeps the teaching sea rolling one way.
+// the heading and the spread: the A/B's absent spread drew headings over the whole circle from a
+// second generator; 45 degrees either side of +z (windDirection 90, Jonswap measures from +x towards
+// +z) keeps the teaching sea rolling one way, towards the cameras, as the sine does.
 export const TEACHING_RECIPE = Object.freeze({
 	count: 32,
 	firstFrequency: 0.02,
@@ -33,7 +36,7 @@ export const TEACHING_RECIPE = Object.freeze({
 	alpha: 0.0081,
 	gamma: 3.3,
 	scale: 2.6,
-	windDirection: 0,
+	windDirection: 90,
 	spread: 45,
 	tailBoost: 0,
 });
@@ -68,8 +71,9 @@ export function checkSine(spec) {
 }
 
 /**
- * The single sine wave of step 2, y = A sin(k x - omega t + phase), with k = 2 pi / wavelength and
- * omega = k * speed (the visitor sets the speed; the wave need not obey dispersion).
+ * The single sine wave of step 2, y = A sin(k z - omega t + phase), with k = 2 pi / wavelength and
+ * omega = k * speed (the visitor sets the speed; the wave need not obey dispersion). The panel's
+ * y = A sin(kx - omega t) names the direction of travel x; here that is +z.
  * @param {{ omega: number, phase: number } | null} previous the last sine, or null for the first
  * @param {{ amplitude: number, wavelength: number, speed: number }} spec
  * @param {number} t the teaching clock now
@@ -83,9 +87,11 @@ export function nextSine(previous, spec, t) {
 	const omega = k * spec.speed;
 	// phase - omega t is what the wave shows at this instant; keep it when omega changes.
 	const turned = previous ? mod(previous.phase + (omega - previous.omega) * t, TAU) : 0;
-	// A tiny negative angle mods to exactly TAU in floating point; fold it back so phase < TAU.
-	const phase = turned === TAU ? 0 : turned;
-	const packed = Float64Array.of(k, omega, spec.amplitude, phase, 1, 0);
+	// Floating point can leave mod a hair outside [0, TAU): exactly TAU for a tiny negative angle,
+	// and a tiny negative number just under a whole number of turns (a / TAU rounds up to it).
+	// Fold both back so 0 <= phase < TAU.
+	const phase = turned >= TAU || turned < 0 ? 0 : turned;
+	const packed = Float64Array.of(k, omega, spec.amplitude, phase, 0, 1);
 	return Object.freeze({ omega, phase, bank: bank(packed, 1, Float64Array.of(1)) });
 }
 

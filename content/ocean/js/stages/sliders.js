@@ -1,14 +1,16 @@
-// The story panels' sliders as data (A3; not a twin): what kinds there are, how a raw value is brought inside a
-// slider (clamped, snapped, or refused when it is the wrong type), and how slider values are bound
-// into a recipe through each slider's dotted `bind` path. Piece C draws the widgets; this decides
-// what a value means.
+// The story panels' sliders as data (A3; not a twin): what kinds there are, how a raw value is
+// brought inside a slider (clamped, snapped, or refused when it is the wrong type), and how slider
+// values are bound into a recipe through each slider's dotted `bind` path. Piece C draws the
+// widgets; this decides what a value means.
 import { clamp } from '../core/luau.js';
 import { deepFreeze, getPath, setPath } from './paths.js';
 
 export const KINDS = Object.freeze(['range', 'toggle', 'counter', 'choice']);
 
+// Text is shown quoted, so the text '12' refused as not a number does not read as the number 12.
 function refuse(slider, rule, value) {
-	throw new RangeError(`slider ${slider.id} needs ${rule}, got ${String(value)}`);
+	const shown = typeof value === 'string' ? JSON.stringify(value) : String(value);
+	throw new RangeError(`slider ${slider.id} needs ${rule}, got ${shown}`);
 }
 
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);

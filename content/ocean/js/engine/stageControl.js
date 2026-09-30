@@ -107,8 +107,11 @@ export function normalise(s) {
 			fail(name, 'true or false', s[name]);
 		}
 	}
-	if (!finite(s.foamKnobs?.whitecap) || !finite(s.foamKnobs?.decay)) {
-		fail('foamKnobs', 'a finite whitecap and decay', s.foamKnobs);
+	// The decay is what a foam texel keeps of itself per step (the painter refuses one outside
+	// 0 .. 1, painterWorkerCore.js checkUpdate); checked here so it is refused before anything
+	// changes rather than by the painter halfway through a configure.
+	if (!finite(s.foamKnobs?.whitecap) || !finite(s.foamKnobs?.decay) || s.foamKnobs.decay < 0 || s.foamKnobs.decay > 1) {
+		fail('foamKnobs', 'a finite whitecap and a decay in 0 .. 1', s.foamKnobs);
 	}
 	if (!finite(s.glowStrength) || s.glowStrength < 0) {
 		fail('glowStrength', 'a finite number >= 0', s.glowStrength);
@@ -158,7 +161,7 @@ function applySource(ocean, s, before) {
 	ocean.source = s.source === 'fft' ? 'fft' : 'waves';
 }
 
-function applyLayers(ocean, s) {
+function applyLayers(ocean, s, painter) {
 	const count = ocean.preset.sizes.length;
 	const shown = Array.from({ length: count }, (_, i) => s.layers[i] === true);
 	const fft = s.source === 'fft';
@@ -175,12 +178,13 @@ function applyLayers(ocean, s) {
 	ocean.layerOn = layerOn;
 	ocean.shown = shown;
 	ocean.fftShown = fft;
-	refreshSampling(ocean);
+	refreshSampling(ocean, painter);
 }
 
 // Which cascades the rings sample and the painter reads: the layers shown, less any still
-// rejoining; the rings only while the FFT is what shows. Sent on only when they change.
-function refreshSampling(ocean) {
+// rejoining; the rings only while the FFT is what shows. Sent on only when they change: into
+// `painter`, the update a configure gathers and sends once, or straight to the painter.
+function refreshSampling(ocean, painter = null) {
 	const usable = ocean.shown.map((on, i) => on && ocean.rejoin[i] === null);
 	const sampled = usable.map((on) => ocean.fftShown && on);
 	if (!sameFlags(sampled, ocean.sampled)) {
@@ -190,18 +194,21 @@ function refreshSampling(ocean) {
 	const lists = cascadeLists(usable);
 	if (!sameLists(lists, ocean.painterLists)) {
 		ocean.painterLists = lists;
-		const update = { maskCascades: lists.mask, colourCascades: lists.colour };
+		const update = painter ?? {};
+		update.maskCascades = lists.mask;
+		update.colourCascades = lists.colour;
 		// The calibration views set their own normal map (ocean.js painterConfigFor); leave it.
 		if (!ocean.config.calibrate) {
 			update.normalCascades = lists.normal;
 		}
-		PainterClient.update(ocean.painter, update);
+		if (painter === null) {
+			PainterClient.update(ocean.painter, update);
+		}
 	}
 }
 
-function applyKnobs(ocean, s, before, params) {
+function applyKnobs(ocean, s, before, params, painter) {
 	const live = ocean.live;
-	const painter = {};
 	if (s.chop !== live.chop) {
 		live.chop = s.chop;
 		painter.chop = s.chop;
@@ -220,9 +227,6 @@ function applyKnobs(ocean, s, before, params) {
 		painter.foamEnabled = s.foam;
 		painter.foamWhitecap = s.foamKnobs.whitecap;
 		painter.foamDecay = s.foamKnobs.decay;
-	}
-	if (Object.keys(painter).length > 0) {
-		PainterClient.update(ocean.painter, painter);
 	}
 	if (s.glowStrength !== live.scatter.strength) {
 		live.scatter = Object.freeze({ ...live.scatter, strength: s.glowStrength });
@@ -266,9 +270,14 @@ export function configure(ocean, settings) {
 	// Checked before anything changes, like the rest: a refused sea leaves the ocean as it was.
 	const params = Spectrum.validateParams({ ...ocean.live.params, windSpeed: s.sea.windSpeed, fetch: s.sea.fetch });
 	const before = ocean.stageSettings;
+	// Everything this configure tells the painter, sent as one update to each worker.
+	const painter = {};
 	applySource(ocean, s, before);
-	applyLayers(ocean, s);
-	applyKnobs(ocean, s, before, params);
+	applyLayers(ocean, s, painter);
+	applyKnobs(ocean, s, before, params, painter);
+	if (Object.keys(painter).length > 0) {
+		PainterClient.update(ocean.painter, painter);
+	}
 	applyBounds(ocean);
 	applyParts(ocean, s);
 	SurfaceState.setFlatNormals(ocean.surface, !s.normals || ocean.config.flatNormals);
@@ -309,6 +318,13 @@ export function rejoinRotation(ocean, index, t) {
 	const i = index - 1;
 	const store = ocean.store;
 	if (ocean.rejoin[i] === 'request') {
+		// A retune still pending (the sea changed while the layer was off, and retuneDue held it
+		// inside the gap) goes out first, whatever the gap: the gap throttles a dragged slider,
+		// and a layer rejoining with its old spectrum would swap seas a few frames after it shows.
+		if (ocean.retune.pending[i] && ocean.cascades.retune(index) !== 'waiting') {
+			ocean.retune.pending[i] = false;
+			ocean.retune.lastFrame = ocean.frame;
+		}
 		store.waiting[i].filled = false;
 		const sent = ocean.cascades.request(index, t, ocean.frame);
 		if (sent === 'sent' || sent === 'local') {

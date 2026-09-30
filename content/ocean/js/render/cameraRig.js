@@ -3,7 +3,7 @@
 // Camera.Focus; focus=origin pins that point to (0, 0) the way the Edit-mode preview does.
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MAX_POLAR, STORY_MAX_DISTANCE } from '../page/orbitLimits.js';
-import { resolveShot } from '../page/shotControl.js';
+import { shotPosition } from '../stages/drift.js';
 
 export const SHOTS = Object.freeze({
 	orbit: Object.freeze({ position: [0, 30, 60], target: [0, 0, 0] }),
@@ -27,6 +27,8 @@ export function createCameraRig(camera, dom, config) {
 	controls.minDistance = 4;
 	controls.maxDistance = 2500;
 	controls.update();
+	// Where applyShot puts the camera, kept across frames (the shot is applied every frame).
+	const placed = [0, 0, 0];
 	return {
 		update: () => controls.update(),
 		focus(out) {
@@ -42,14 +44,14 @@ export function createCameraRig(camera, dom, config) {
 		},
 		// A3: puts the camera where a stage recipe's shot says (its target is what the rings
 		// follow). Damping is turned off so no leftover orbit momentum carries the camera off the
-		// shot; piece C decides when the visitor may orbit freely between steps.
-		// The finale's `drift` circles the shot's target once every four minutes (page/shotControl.js
-		// resolveShot, which the story uses too).
+		// shot; piece C decides when the visitor may orbit freely between steps. The finale's
+		// `drift` circles the shot's target once every four minutes (stages/drift.js).
 		applyShot(shot, seconds) {
-			const { position, target } = resolveShot(shot, seconds);
+			shotPosition(shot, seconds, placed);
+			const target = shot.target;
 			controls.enableDamping = false;
-			camera.position.set(...position);
-			controls.target.set(...target);
+			camera.position.set(placed[0], placed[1], placed[2]);
+			controls.target.set(target[0], target[1], target[2]);
 			controls.update();
 		},
 		// Piece C: where the camera is and what it looks at; the story eases back to a shot from here.

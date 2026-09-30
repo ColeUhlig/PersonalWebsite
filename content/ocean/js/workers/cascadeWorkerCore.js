@@ -25,7 +25,7 @@ export function createCascadeWorker(post) {
 		}
 		if (message.type === 'evolve') {
 			if (!cascade) {
-				throw new Error(`cascade worker ${index}: evolve before configure`);
+				throw new Error('cascade worker: evolve before configure');
 			}
 			const started = performance.now();
 			Cascade.evolve(cascade, message.t);
@@ -36,14 +36,17 @@ export function createCascadeWorker(post) {
 			return;
 		}
 		if (message.type === 'retune') {
+			// Named by the message: before a Configure this worker has no index of its own.
+			const named = message.index ?? index;
 			if (!cascade) {
-				throw new Error(`cascade worker ${index}: retune before configure`);
+				throw new Error(`cascade worker ${named}: retune before configure`);
+			}
+			// The lent buffer and the FFT plan are sized by n: a new lattice needs a Configure.
+			if (message.config.n !== plan.n) {
+				throw new Error(`cascade worker ${named}: a retune cannot change n (${plan.n} to ${message.config.n}); send a configure`);
 			}
 			const started = performance.now();
 			cascade = Cascade.create(message.config);
-			if (plan.n !== message.config.n) {
-				plan = FFT.plan(message.config.n);
-			}
 			post({ type: 'retuned', index, ms: performance.now() - started });
 			return;
 		}

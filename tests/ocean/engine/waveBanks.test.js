@@ -7,21 +7,40 @@ const STRIDE = WaveSampler.STRIDE;
 const TAU = 2 * Math.PI;
 const heightAt = (bank, t, x, z, chop = 0) => WaveSampler.sample(bank.packed, bank.count, t, x, z, chop, bank.weights, 0, new Float64Array(7))[1];
 
-test("one sine wave travels along +x with the panel's height, length and speed", () => {
+// Final review I2: the story's cameras look along -z, so the sine travels along +z, towards them,
+// and its crests (lines of constant z) run across the view.
+test("one sine wave travels along +z with the panel's height, length and speed", () => {
 	const { bank, omega, phase } = WaveBanks.nextSine(null, { amplitude: 1.5, wavelength: 40, speed: 8 }, 0);
 	expect.equal(bank.count, 1, 'one wave');
 	expect.near(bank.packed[0], TAU / 40, 1e-12, 'k');
 	expect.near(omega, (TAU / 40) * 8, 1e-12, 'omega = k c');
 	expect.equal(bank.packed[2], 1.5, 'amplitude');
 	expect.equal(phase, 0, 'starts at phase 0');
-	expect.equal(bank.packed[4], 1, 'dx');
-	expect.equal(bank.packed[5], 0, 'dz');
+	expect.equal(bank.packed[4], 0, 'dx');
+	expect.equal(bank.packed[5], 1, 'dz');
 	expect.equal(bank.silent, false, 'not silent');
-	for (const x of [-37.5, 0, 12.25, 300]) {
-		const h = heightAt(bank, 3, x, 0);
-		expect.equal(heightAt(bank, 3, x, 91.5), h, `no change along z at x=${x}`);
-		expect.near(h, 1.5 * Math.sin((TAU / 40) * x - omega * 3), 1e-12, `y = A sin(kx - wt) at x=${x}`);
+	for (const z of [-37.5, 0, 12.25, 300]) {
+		const h = heightAt(bank, 3, 0, z);
+		expect.equal(heightAt(bank, 3, 91.5, z), h, `no change along x at z=${z}`);
+		expect.near(h, 1.5 * Math.sin((TAU / 40) * z - omega * 3), 1e-12, `y = A sin(kz - wt) at z=${z}`);
 	}
+});
+
+test('the teaching bank rolls along +z, so its crests too run across the view (final review I2)', () => {
+	const bank = WaveBanks.teachingBank();
+	expect.equal(WaveBanks.TEACHING_RECIPE.windDirection, 90, 'the wind blows along +z');
+	let sx = 0;
+	let sz = 0;
+	let total = 0;
+	for (let wave = 0; wave < bank.count; wave++) {
+		const o = wave * STRIDE;
+		sx += bank.packed[o + 2] * bank.packed[o + 4];
+		sz += bank.packed[o + 2] * bank.packed[o + 5];
+		total += bank.packed[o + 2];
+		expect.truthy(bank.packed[o + 5] > 0, `wave ${wave} heads towards +z`);
+	}
+	expect.truthy(sz / total > 0.8, `the amplitude-weighted heading is along +z: ${(sz / total).toFixed(3)}`);
+	expect.truthy(Math.abs(sx / total) < 0.3, `and not along x: ${(sx / total).toFixed(3)}`);
 });
 
 test('an amplitude of zero is a silent bank: the flat plane', () => {
@@ -91,6 +110,19 @@ test('every teaching wavevector sits on the 256-stud lattice, so the sum repeats
 	}
 });
 
+// The copy note for piece C: the snap lands some waves on the same lattice point, so the slider's
+// top waves add height to a wave already there rather than a new one.
+test('after the snap the 32 waves hold 28 distinct wavevectors', () => {
+	const bank = WaveBanks.teachingBank();
+	const unit = TAU / WaveBanks.TEACHING_TILE;
+	const points = new Set();
+	for (let wave = 0; wave < bank.count; wave++) {
+		const o = wave * STRIDE;
+		points.add(`${Math.round((bank.packed[o] * bank.packed[o + 4]) / unit)},${Math.round((bank.packed[o] * bank.packed[o + 5]) / unit)}`);
+	}
+	expect.equal(points.size, 28, 'distinct wavevectors');
+});
+
 test('withCount sums only the first waves, fading the last one in by the fraction', () => {
 	const full = WaveBanks.teachingBank();
 	const one = WaveBanks.withCount(full, 1);
@@ -123,6 +155,13 @@ test('a speed change so small it rounds the phase to 2 pi keeps the phase in 0 .
 	const next = WaveBanks.nextSine(slow, { amplitude: 1, wavelength: 30, speed: 4 - 1e-15 }, 1e-3);
 	expect.truthy(next.phase >= 0 && next.phase < TAU, `phase in 0 .. 2 pi: ${next.phase}`);
 	expect.equal(next.bank.packed[3], next.phase, 'the bank carries the folded phase');
+});
+
+test('an angle mod leaves a hair below a whole turn is folded back into 0 .. 2 pi (Task 1 minor)', () => {
+	// 17 turns less one ulp: luau.mod gives -1.4e-14 here, since a / b rounds up to exactly 17.
+	const previous = { omega: 0.5, phase: 106.81415022205296 };
+	const next = WaveBanks.nextSine(previous, { amplitude: 1, wavelength: 30, speed: 4 }, 0);
+	expect.truthy(next.phase >= 0 && next.phase < TAU, `phase in 0 .. 2 pi: ${next.phase}`);
 });
 
 test('a sine at a time the clock cannot hold is refused with a named error', () => {

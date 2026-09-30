@@ -341,3 +341,38 @@ test('update keeps its own copies of the cascade lists', async () => {
 	expect.truthy(painter.mapsConfig.normalCascades !== painter.colourConfig.normalCascades, 'the two configs share no array');
 	expect.truthy(painter.mapsConfig.maskCascades !== painter.colourConfig.maskCascades, 'nor the mask list');
 });
+
+// Task 4 minor: a colour reply painted before foam was switched off lands after the update; its
+// foam cover is the old field's and must not show while nothing steps the foam.
+test('a colour reply in flight when foam goes off does not bring back the old foam cover', async () => {
+	const store = FieldStore.create(N, SIZES);
+	// Every colour reply reports a foam cover of 0.25, as one painted over live foam does.
+	const foamy = () => {
+		const inner = createInProcessWorker(createPainterWorker);
+		const worker = { onmessage: null, onerror: null, postMessage: (m, t) => inner.postMessage(m, t), terminate: () => inner.terminate() };
+		inner.onmessage = (event) => {
+			const data = event.data.type === 'pixels' && event.data.slot === MapRotation.COLOUR ? { ...event.data, first: 0.25 } : event.data;
+			worker.onmessage?.({ data });
+		};
+		inner.onerror = (event) => worker.onerror?.(event);
+		return worker;
+	};
+	const painter = PainterClient.create({
+		config: mapsConfig(),
+		spawn: foamy,
+		sink: { uploadColourBand() {}, uploadMaskOrNormal() {}, uploadRoughness() {}, clearNormal() {}, resetRoughness() {} },
+		stage: { paint: 0, upload: 0 },
+		log: { warn() {} },
+	});
+	await flush();
+	for (let frame = 1; frame <= 4; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(painter.foamCover, 0.25, 'the foam cover the replies carry');
+	PainterClient.step(painter, 5, 0, store); // a colour band in flight
+	PainterClient.update(painter, { foamEnabled: false });
+	expect.equal(painter.foamCover, 0, 'zeroed when foam goes off');
+	await flush();
+	expect.equal(painter.foamCover, 0, 'and the reply in flight does not bring a cover back');
+});

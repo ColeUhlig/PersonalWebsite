@@ -123,9 +123,13 @@ test("the world's edge is out of frame or under fog in every shot and blend (fix
 	for (const { name, blended } of everyFrame()) {
 		for (const aspect of ASPECTS) {
 			const fog = edgeFog(blended.shot, blended.look.fog, aspect, WORLD_HALF, LAST.spacing);
-			// A2's own fog in this same frame: at an ultrawide frame the sides see the world's side
-			// edge at about 1,830 studs (3,064 / tan 59 degrees), where A2's fog is 93%. The finale
-			// keeps A2's fog, so no shot is held to more than A2 itself gives there.
+			// The floor is A2's fog density applied to this same frame, not the number A2's own deck
+			// shot gets. At an ultrawide frame the sides see the world's side edge at about 1,830
+			// studs (3,064 / tan 59 degrees); from the deck shot that edge is 93% fogged. Other
+			// frames meet the edge nearer: the 11 -> 12 blends at 2.4 get 0.863 to 0.889 between
+			// progress 0.1 and 0.5, under HIDDEN and under the deck's 0.93. They pass because they
+			// keep A2's density, so a steps-11-to-12 frame shows as much edge as A2's density would
+			// show from that camera, and no more.
 			const a2 = edgeFog(blended.shot, FOG_DENSITY, aspect, WORLD_HALF, LAST.spacing);
 			if (fog < Math.min(HIDDEN, a2)) {
 				failures.push(`${name} at ${aspect.toFixed(2)}: ${fog.toFixed(3)}`);
@@ -175,5 +179,31 @@ test("step 6's frame stays on the rings that resolve every wave it sums", () => 
 	for (const aspect of [0.9, 16 / 9]) {
 		const reach = groundReach(recipe.shot, aspect, ring.spacing);
 		expect.truthy(reach <= ring.halfExtent, `step 6 at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs, past ring ${resolving + 1}'s ${ring.halfExtent}`);
+	}
+});
+
+// Final review I2: a crest runs across the frame when its wave travels towards or away from the
+// camera, so each teaching step's heading must lie along the shot's own line of sight.
+test('the teaching crests run across the view in steps 2 to 5', () => {
+	const STRIDE = WaveSampler.STRIDE;
+	const heading = (bank) => {
+		let x = 0;
+		let z = 0;
+		for (let wave = 0; wave < bank.count; wave++) {
+			const a = bank.packed[wave * STRIDE + 2] * bank.weights[wave];
+			x += a * bank.packed[wave * STRIDE + 4];
+			z += a * bank.packed[wave * STRIDE + 5];
+		}
+		const length = Math.hypot(x, z);
+		return [x / length, z / length];
+	};
+	for (let step = 2; step <= 5; step++) {
+		const recipe = recipeFor(step);
+		const e = recipe.engine;
+		const bank = e.source === 'sine' ? WaveBanks.nextSine(null, e.sine, 0).bank : WaveBanks.withCount(WaveBanks.teachingBank(), e.bank.count);
+		const [hx, hz] = heading(bank);
+		const { forward } = basis(recipe.shot);
+		const along = Math.abs(hx * forward[0] + hz * forward[2]) / Math.hypot(forward[0], forward[2]);
+		expect.truthy(along > 0.9, `step ${step}: the waves travel ${Math.round((Math.acos(Math.min(along, 1)) * 180) / Math.PI)} degrees off the line of sight`);
 	}
 });

@@ -43,3 +43,32 @@ test('a retune before configure is refused', () => {
 	}
 	expect.truthy(message.includes('retune before configure'), message);
 });
+
+// Task 3 minors: a retune keeps the lattice (a new n needs a new buffer, so a Configure), and an
+// error before any Configure names the cascade the message was for, not "cascade 0".
+test('a retune that changes n is refused, and the cascade keeps its sea', () => {
+	const replies = [];
+	const handle = createCascadeWorker((message) => replies.push(message));
+	handle({ type: 'configure', index: 3, config: config(4) });
+	const before = evolveAt(handle, replies, 9);
+	let message = '';
+	try {
+		handle({ type: 'retune', index: 3, config: { ...config(8), n: 32 } });
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('cascade worker 3') && message.includes('n'), message);
+	const after = evolveAt(handle, replies, 9);
+	expect.equal(after.join(','), before.join(','), 'the old sea still runs');
+});
+
+test('a message before configure names the cascade it was for', () => {
+	const handle = createCascadeWorker(() => {});
+	let message = '';
+	try {
+		handle({ type: 'retune', index: 2, config: config(8) });
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('cascade worker 2'), message);
+});

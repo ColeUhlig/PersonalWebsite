@@ -1,6 +1,6 @@
-// The dev route in the page (A3): with ?step=N&progress=P the stage director drives the ocean
-// straight from the URL, applying each frame's look and camera shot, so every step can be loaded,
-// tested and screenshotted without the story. Piece C replaces the URL with the scroll story and
+// The dev route in the page (A3; not a twin): with ?step=N&progress=P the stage director drives
+// the ocean straight from the URL, applying each frame's look and camera shot, so every step can be
+// loaded, tested and screenshotted without the story. Piece C replaces the URL with the scroll story and
 // keeps the director; the hooks on window.__ocean.stage stay for the browser tests.
 import * as Charts from '../engine/charts.js';
 import * as Ocean from '../engine/ocean.js';
@@ -29,12 +29,16 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	const look = createStageLook({ view, meshes, materials, config });
 
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so
-	// the camera does not jump at the snap into step 13 however long the page has been open.
+	// the camera does not jump at the snap into step 13 however long the page has been open. The
+	// route's `drift` pins it to one point of the circle instead (captures, tests).
 	let driftStart = null;
 	function shotSeconds(shot) {
 		if (shot.move !== 'drift') {
 			driftStart = null;
 			return 0;
+		}
+		if (route.drift !== null) {
+			return route.drift;
 		}
 		const now = Ocean.teachTime(ocean);
 		driftStart ??= now;

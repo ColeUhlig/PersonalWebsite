@@ -200,3 +200,83 @@ test('on the main thread a retune rebuilds the local cascade at once', () => {
 	doubled(received[1], received[0]);
 	expect.truthy(Number.isFinite(cascades.lastRetuneMs[0]), 'the rebuild time is kept');
 });
+
+// Task 3 minors: a refused sea is refused the same way on both paths, before anything is posted
+// or rebuilt, and an index outside the cascades is refused.
+test('a retune the maths cannot take throws on either path and leaves the transport as it was', async () => {
+	for (const useWorkers of [true, false]) {
+		const { cascades, state } = retuneHarness(useWorkers);
+		await flush();
+		state.scale = Number.NaN;
+		let message = '';
+		try {
+			cascades.retune(1);
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes('scale'), `workers=${useWorkers}: ${message}`);
+		await flush();
+		expect.equal(cascades.mode(), useWorkers ? 'workers' : 'main-thread', 'no fallback');
+		state.scale = 1;
+		expect.equal(cascades.retune(1), useWorkers ? 'sent' : 'local', 'a good retune still goes');
+	}
+});
+
+test('a retune names a cascade the transport has, on either path', async () => {
+	for (const useWorkers of [true, false]) {
+		const { cascades } = retuneHarness(useWorkers);
+		await flush();
+		for (const bad of [0, 2, 1.5, Number.NaN]) {
+			let message = '';
+			try {
+				cascades.retune(bad);
+			} catch (error) {
+				message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+			}
+			expect.truthy(message.includes('cascade'), `workers=${useWorkers}, index ${bad}: ${message}`);
+		}
+	}
+});
+
+// Task 3 minor: a retune sent while an evolve is in flight. The reply in flight is the old sea
+// (the worker handles messages in order: the evolve went first); the next request is the new one.
+test('a retune sent while an evolve is in flight lands after it: the reply in flight is the old sea', async () => {
+	const { cascades, received, state } = retuneHarness(true);
+	await flush();
+	cascades.request(1, 4, 1);
+	await flush();
+	expect.equal(cascades.request(1, 4, 2), 'sent', 'an evolve in flight');
+	state.scale = 2;
+	expect.equal(cascades.retune(1), 'sent', 'the retune goes out behind it');
+	await flush();
+	expect.equal(received.length, 2, 'the evolve in flight answered');
+	expect.equal(received[1].join(','), received[0].join(','), 'with the old sea');
+	cascades.request(1, 4, 3);
+	await flush();
+	doubled(received[2], received[0]);
+});
+
+test('the main-thread retune times the rebuild, not the config lookup', () => {
+	let slow = false;
+	const cascades = createCascades({
+		count: 1,
+		cells: CELLS,
+		configFor: (index) => {
+			if (slow) {
+				const until = performance.now() + 30;
+				while (performance.now() < until) {
+					// a config lookup that takes 30 ms
+				}
+			}
+			return configFor(index);
+		},
+		spawn: () => createInProcessWorker(createCascadeWorker),
+		useWorkers: false,
+		onFields: () => {},
+		onReady: () => {},
+		log: { warn() {} },
+	});
+	slow = true;
+	cascades.retune(1);
+	expect.truthy(cascades.lastRetuneMs[0] < 25, `the rebuild alone: ${cascades.lastRetuneMs[0].toFixed(1)} ms`);
+});

@@ -61,7 +61,9 @@ export function createStageLook({ view, meshes, materials, config }) {
 	let mode = 'painted';
 	let wires = null;
 	let wireframe = false;
-	let sunKey = '';
+	// The sun last handed to the view, compared as numbers so the per-frame check allocates nothing.
+	let sunAzimuth = Number.NaN;
+	let sunElevation = Number.NaN;
 
 	function setMode(next) {
 		if (next === mode) {
@@ -98,10 +100,11 @@ export function createStageLook({ view, meshes, materials, config }) {
 		setMode(modeOf(look));
 		setWireframe(look.wireframe);
 		view.setFog(look.fog);
-		const key = `${look.sun.azimuth}|${look.sun.elevation}`;
-		if (key !== sunKey) {
-			view.setStageSun(sunDirection(look.sun));
-			sunKey = key;
+		const sun = look.sun;
+		if (sun.azimuth !== sunAzimuth || sun.elevation !== sunElevation) {
+			view.setStageSun(sunDirection(sun));
+			sunAzimuth = sun.azimuth;
+			sunElevation = sun.elevation;
 		}
 	}
 
