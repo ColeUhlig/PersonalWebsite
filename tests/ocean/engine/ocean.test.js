@@ -64,6 +64,37 @@ test('the cross-fade settles at a mean of two thirds when every result arrives i
 	expect.truthy(report.writeMs > 0 && Number.isFinite(report.cascadeMs), 'stage timings present');
 });
 
+test('the report carries the render stage the page adds each frame', async () => {
+	const { ocean } = build();
+	let clock = 0;
+	for (let i = 0; i < Ocean.REPORT_WINDOW * 2; i++) {
+		clock += 1 / 60;
+		Ocean.step(ocean, 1 / 60, [0, 0], [0, 14, 40], SUN);
+		// As main.js does after view.render(): 4 ms of render charged to every frame.
+		Ocean.addStageSeconds(ocean, 'render', 0.004);
+		await flush();
+	}
+	const report = Ocean.report(ocean);
+	expect.near(report.renderMs, 4, 1e-6, 'renderMs is the render time per frame over the window');
+});
+
+test('addStageSeconds refuses a stage the report does not know and a non-finite time', () => {
+	const { ocean } = build();
+	const messages = [];
+	try { Ocean.addStageSeconds(ocean, 'rendr', 0.001); } catch (error) { messages.push(error.message); }
+	try { Ocean.addStageSeconds(ocean, 'render', Number.NaN); } catch (error) { messages.push(error.message); }
+	expect.equal(messages.length, 2, 'both refused');
+	expect.truthy(messages.every((m) => m.startsWith('addStageSeconds')), `named errors: ${messages.join(' | ')}`);
+});
+
+test('cascadeMs is null until a worker reply has been measured', async () => {
+	const silent = () => ({ onmessage: null, onerror: null, terminate() {}, postMessage() {} });
+	const { ocean, advance } = build('?tier=Low', { spawnCascade: silent });
+	await advance(Ocean.REPORT_WINDOW);
+	expect.equal(Ocean.status(ocean).workersReady, 0, 'no cascade worker ever answered');
+	expect.equal(Ocean.report(ocean).cascadeMs, null, 'no reply measured: null, not 0');
+});
+
 test('the painter fills every map through the sink', async () => {
 	const { ocean, sink, advance } = build();
 	await advance(30);
@@ -87,6 +118,8 @@ test('workers off runs everything on the main thread (Review Focus 1)', async ()
 	expect.equal(status.mode, 'main-thread', 'main thread');
 	expect.truthy(status.fallbackReason.includes('workers=0'), 'reason');
 	expect.truthy(everyPositionFinite(ocean), 'finite');
+	await advance(Ocean.REPORT_WINDOW);
+	expect.equal(Ocean.report(ocean).cascadeMs, null, 'no cascade workers: cascadeMs is null, not 0');
 });
 
 test('a frozen clock evolves every cascade at the frozen time', async () => {

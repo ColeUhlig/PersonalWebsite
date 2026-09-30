@@ -13,7 +13,11 @@ import { createPerfReadout } from './ui/perfReadout.js';
 export function webglSupported() {
 	try {
 		const probe = document.createElement('canvas');
-		return Boolean(probe.getContext('webgl2'));
+		const gl = probe.getContext('webgl2');
+		// Give the probe's context back now rather than at garbage collection: browsers cap live
+		// contexts, and the renderer's own is next.
+		gl?.getExtension('WEBGL_lose_context')?.loseContext();
+		return Boolean(gl);
 	} catch {
 		return false;
 	}
@@ -62,7 +66,10 @@ function start(config) {
 		Ocean.step(ocean, dt, rig.focus(focus), rig.eye(eye), view.sunDirection);
 		materials.applyStrengths(ocean.strengths);
 		meshes.sync();
+		view.follow();
+		const renderStarted = performance.now();
 		view.render();
+		Ocean.addStageSeconds(ocean, 'render', (performance.now() - renderStarted) / 1000);
 		readout.frame(now);
 		if (config.stats) readout.show(Ocean.status(ocean), Ocean.report(ocean));
 		requestAnimationFrame(frame);

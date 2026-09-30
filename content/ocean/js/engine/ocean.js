@@ -54,7 +54,8 @@ export const REPORT_WINDOW = REPORT_EVERY_FRAMES;
 // Which fields the per-frame blend has to produce: all eight, since the painter's foam reads the
 // Jacobian fields.
 const BLEND_FIELDS = FieldStore.FIELD_NAMES;
-const STAGES = Object.freeze(['evolve', 'blend', 'snap', 'write', 'horizon', 'paint', 'upload', 'strength']);
+// `render` is the page's own: main.js times view.render() and charges it with addStageSeconds.
+const STAGES = Object.freeze(['evolve', 'blend', 'snap', 'write', 'horizon', 'paint', 'upload', 'strength', 'render']);
 
 // The tier probe. What it replaces in the Luau: 60 frames of the empty scene, which measured
 // nothing -- with no ocean to draw every machine sits on the frame cap, so every device was called
@@ -369,16 +370,41 @@ export function step(ocean, dtSeconds, focus, eye, sun) {
 	}
 }
 
+/**
+ * Charges time spent outside step() to a stage, in seconds like the rest; the report averages it
+ * over the same window. The page charges `render` (view.render()) once a frame.
+ * @param {string} name one of the stages
+ * @param {number} seconds a finite, non-negative wall time
+ */
+export function addStageSeconds(ocean, name, seconds) {
+	if (!STAGES.includes(name)) {
+		throw new Error(`addStageSeconds: unknown stage ${JSON.stringify(name)}`);
+	}
+	if (!Number.isFinite(seconds) || seconds < 0) {
+		throw new Error(`addStageSeconds: ${name} needs a finite non-negative time, got ${seconds}`);
+	}
+	ocean.stage[name] += seconds;
+}
+
 function stageDeltaMs(ocean, name, frames) {
 	return ((ocean.stage[name] - ocean.last.stage[name]) / frames) * 1000;
 }
 
+// The mean worker time over the cascades whose replies have been measured; null when the cascades
+// are not on workers or none has replied yet, so a missing figure never reads as 0 ms.
 function meanCascadeMs(cascades) {
-	let sum = 0;
-	for (const ms of cascades.lastMs) {
-		sum += ms;
+	if (cascades.mode() !== 'workers') {
+		return null;
 	}
-	return sum / Math.max(cascades.lastMs.length, 1);
+	let sum = 0;
+	let measured = 0;
+	for (let i = 0; i < cascades.lastMs.length; i++) {
+		if (cascades.replied[i]) {
+			sum += cascades.lastMs[i];
+			measured += 1;
+		}
+	}
+	return measured > 0 ? sum / measured : null;
 }
 
 // Cascade 1's height at (10, 10) and every cascade's current result time: the Luau line's
@@ -391,6 +417,8 @@ function fieldProbe(store) {
 // The Luau report line as numbers, over the window since the last one. `snapMs` is per ring shift
 // (a ring shifts on a minority of frames); `blend` is cascade 1's mean fade fraction, 0.67 when
 // every result is promoted on its own rotation and climbing towards 1 when promotions are missed.
+// Not in the Luau line: `renderMs`, the page's view.render() a frame (charged after step, so the
+// first window holds one render fewer), and `cascadeMs` is null until a worker reply is measured.
 // Reading the painter's report closes its window too.
 function buildReport(ocean) {
 	const frames = REPORT_EVERY_FRAMES;
@@ -409,8 +437,11 @@ function buildReport(ocean) {
 		writeMs: stageDeltaMs(ocean, 'write', frames),
 		horizonMs: stageDeltaMs(ocean, 'horizon', frames),
 		paintMs: paint.paintMs,
+		// The CPU copy of the painters' pixels into the texture arrays as they land (the readout
+		// labels it `copy`); the GPU upload happens inside render. Name kept for compatibility.
 		uploadMs: paint.uploadMs,
 		strengthMs: stageDeltaMs(ocean, 'strength', frames),
+		renderMs: stageDeltaMs(ocean, 'render', frames),
 		paintSkipped: paint.skipped,
 		paintStale: paint.stale,
 		paintDropped: paint.dropped,

@@ -69,6 +69,13 @@ export function createScene(canvas) {
 		scene.environment = enabled ? environment : null;
 	}
 
+	// The dome is 8000 across around its own position and the camera's far plane is 9000: left at
+	// the origin, a camera panned a few thousand studs away sees past its edge into black. Centred
+	// on the camera every frame, it is always the whole sky. Call after the camera moves.
+	function follow() {
+		sky.position.copy(camera.position);
+	}
+
 	function resize() {
 		const width = canvas.clientWidth;
 		const height = canvas.clientHeight;
@@ -86,6 +93,7 @@ export function createScene(canvas) {
 		setSun,
 		setEnvironment,
 		resize,
+		follow,
 		render: () => renderer.render(scene, camera),
 	};
 }

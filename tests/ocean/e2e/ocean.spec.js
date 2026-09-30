@@ -116,6 +116,13 @@ test('stats=1 shows the live numbers', async ({ page }) => {
 	await expect(page.locator('#stats')).toBeVisible();
 	await expect(page.locator('#stats')).toContainText('fps');
 	await expect(page.locator('#stats')).toContainText('workers');
+	// The report lines appear once the first 300-frame window closes; slow under SwiftShader.
+	test.setTimeout(240_000);
+	await page.waitForFunction(() => window.__ocean.report() !== null, null, { timeout: 200_000 });
+	await expect(page.locator('#stats')).toContainText('render');
+	await expect(page.locator('#stats')).toContainText('copy');
+	const renderMs = await page.evaluate(() => window.__ocean.report().renderMs);
+	expect(Number.isFinite(renderMs) && renderMs > 0).toBe(true);
 });
 
 test('the camera shots place the camera where the Studio captures stand', async ({ page }) => {

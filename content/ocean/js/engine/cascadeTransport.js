@@ -9,6 +9,8 @@ import { CONFIGURE_TIMEOUT_FRAMES } from './config.js';
 export function createCascades({ count, cells, configFor, spawn, useWorkers, onFields, onReady, log = console }) {
 	const bytes = FieldStore.bufferSize(cells);
 	const lastMs = new Float64Array(count);
+	// 1 once cascade i+1's worker has replied, so lastMs[i] is a measurement and not the initial 0.
+	const replied = new Uint8Array(count);
 	const slots = [];
 	let mode = 'workers';
 	let reason = null;
@@ -18,16 +20,19 @@ export function createCascades({ count, cells, configFor, spawn, useWorkers, onF
 		if (mode === 'main-thread') {
 			return;
 		}
+		// Built before anything changes: if it throws, the transport stays as it was (still on its
+		// workers) and the error goes to the caller, rather than 'main-thread' with no cascades.
+		const built = {
+			cascades: Array.from({ length: count }, (_, i) => Cascade.create(configFor(i + 1))),
+			plan: FFT.plan(configFor(1).n),
+			scratch: new Float32Array(bytes / 4),
+		};
+		local = built;
 		mode = 'main-thread';
 		reason = why;
 		for (const slot of slots) {
 			slot.worker?.terminate();
 		}
-		local = {
-			cascades: Array.from({ length: count }, (_, i) => Cascade.create(configFor(i + 1))),
-			plan: FFT.plan(configFor(1).n),
-			scratch: new Float32Array(bytes / 4),
-		};
 		log.warn(`[ocean] cascades on the main thread: ${why}`);
 	}
 
@@ -51,10 +56,16 @@ export function createCascades({ count, cells, configFor, spawn, useWorkers, onF
 						slot.buffer = data.buffer;
 						slot.pending = false;
 						lastMs[index - 1] = data.ms;
+						replied[index - 1] = 1;
 						onFields(index, new Float32Array(data.buffer), data.t);
 					}
 				};
-				worker.onerror = (event) => toMainThread(`cascade worker ${index} failed: ${event?.message ?? 'unknown error'}`);
+				worker.onerror = (event) => {
+					// Handled here: cancelled so the page does not also report it as uncaught. `||`, not
+					// `??`: a worker that fails to load reports an empty message.
+					event?.preventDefault?.();
+					toMainThread(`cascade worker ${index} failed: ${event?.message || 'unknown error'}`);
+				};
 			}
 			for (let index = 1; index <= count; index++) {
 				configure(index);
@@ -102,6 +113,7 @@ export function createCascades({ count, cells, configFor, spawn, useWorkers, onF
 		fallbackReason: () => reason,
 		readyCount: () => (mode === 'main-thread' ? count : slots.filter((s) => s.ready).length),
 		lastMs,
+		replied,
 		terminate() {
 			for (const slot of slots) {
 				slot.worker?.terminate();

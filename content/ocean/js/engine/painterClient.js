@@ -116,6 +116,9 @@ function wire(painter, spawn) {
 			}
 		};
 		worker.onerror = (event) => {
+			// Handled (or deliberately ignored) here, so cancelled either way: the page must not
+			// also report it as an uncaught error.
+			event?.preventDefault?.();
 			if (painter.workers[role] === worker) {
 				onError(painter, role, event);
 			}

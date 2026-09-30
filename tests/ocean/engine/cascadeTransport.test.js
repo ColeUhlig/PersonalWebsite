@@ -112,3 +112,40 @@ test('a silent worker gets its configure re-sent once after the timeout', async 
 	expect.equal(posted.filter((t) => t === 'configure').length, 3, 'two initial configures plus one re-send');
 	expect.equal(warnings.length, 1, 'warned once');
 });
+
+function fakeWorker() {
+	return { onmessage: null, onerror: null, terminate() {}, postMessage() {} };
+}
+
+test('a worker error event is cancelled so it does not also surface as an uncaught page error', () => {
+	const spawned = [];
+	const { cascades } = harness({ spawn: () => { const w = fakeWorker(); spawned.push(w); return w; } });
+	let prevented = 0;
+	spawned[0].onerror({ message: '', preventDefault: () => { prevented += 1; } });
+	expect.equal(prevented, 1, 'preventDefault called');
+	expect.equal(cascades.mode(), 'main-thread', 'fell back');
+	expect.equal(cascades.fallbackReason(), 'cascade worker 1 failed: unknown error', 'an empty message still names a reason');
+	spawned[1].onerror({ message: 'late', preventDefault: () => { prevented += 1; } });
+	expect.equal(prevented, 2, 'a later error after the fallback is cancelled too');
+});
+
+test('a fallback whose build throws leaves the transport as it was (no main-thread mode without cascades)', () => {
+	const spawned = [];
+	let broken = false;
+	const throwingConfigFor = (index) => {
+		if (broken) throw new Error('config unavailable');
+		return configFor(index);
+	};
+	const { cascades } = harness({ configFor: throwingConfigFor, spawn: () => { const w = fakeWorker(); spawned.push(w); return w; } });
+	broken = true;
+	let caught = null;
+	try {
+		spawned[0].onerror({ message: 'worker crashed' });
+	} catch (error) {
+		caught = error;
+	}
+	expect.truthy(caught !== null && caught.message === 'config unavailable', `the build error propagates: ${caught?.message}`);
+	expect.equal(cascades.mode(), 'workers', 'mode unchanged');
+	expect.equal(cascades.fallbackReason(), null, 'no reason recorded');
+	expect.equal(cascades.request(1, 0, 1), 'waiting', 'a later request is answered, not a TypeError');
+});

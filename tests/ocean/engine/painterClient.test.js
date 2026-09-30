@@ -213,3 +213,20 @@ test('with no sink the pixels are dropped and counted', async () => {
 	expect.equal(PainterClient.report(painter).dropped, 8, 'four colour and four maps replies dropped');
 	expect.equal(PainterClient.report(painter).dropped, 0, 'per window');
 });
+
+test('a worker error event is cancelled so it does not also surface as an uncaught page error', () => {
+	const spawned = [];
+	const fake = () => {
+		const worker = { onmessage: null, onerror: null, postMessage() {}, terminate() {} };
+		spawned.push(worker);
+		return worker;
+	};
+	const { painter } = harness(fake);
+	let prevented = 0;
+	const handlers = spawned.map((worker) => worker.onerror);
+	handlers[0]({ message: 'blocked', preventDefault: () => { prevented += 1; } });
+	expect.equal(prevented, 1, 'preventDefault called');
+	expect.equal(PainterClient.mode(painter), 'main-thread', 'fell back');
+	handlers[1]({ message: 'blocked', preventDefault: () => { prevented += 1; } });
+	expect.equal(prevented, 2, 'an error from a replaced worker is cancelled too');
+});
