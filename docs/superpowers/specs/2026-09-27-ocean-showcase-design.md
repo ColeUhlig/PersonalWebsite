@@ -9,6 +9,7 @@ cascades 3.8 ms, surface fill 3.8 ms; a warm second fill measured about 1.2 ms.
 **Lives at:** `content/ocean/` → `https://coleuhlig.com/ocean/`
 **Source project:** `~/Projects/roblox-ocean` (GitHub `ColeUhlig/tessendorf-ocean-roblox`, private), the
 Sea of Thieves-style FFT ocean Cole built in Roblox.
+**A2 (Roblox mode on screen):** done on 2026-09-29 at commit `7ad7cd4`: the live ocean at `content/ocean/` with cascade and painter workers (main-thread fallback), CPU-written surface, painted textures and 232 glowing materials; 234 unit and 12 browser tests. Look matched against the Studio deck and high captures in three lighting rounds. Cole's verdict in motion (2026-09-29): "looks pretty good". Not yet measured: frame rate on a real GPU and on a phone (the tier probe's thresholds need a phone measurement before piece C ships). Known look gaps: triangle faceting on near crests, a whiter sky near the horizon than Roblox's, faint far tiling.
 
 ## 1. Purpose
 
