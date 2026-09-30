@@ -291,3 +291,53 @@ test('update reaches both workers and both kept configs, and puts cleared maps b
 	}
 	expect.truthy(message.includes('lut'), `refused on this side too: ${message}`);
 });
+
+test('a Paint in flight when an update clears the maps does not upload them again', async () => {
+	const uploads = [];
+	const store = FieldStore.create(N, SIZES);
+	const painter = PainterClient.create({
+		config: mapsConfig(),
+		spawn: () => createInProcessWorker(createPainterWorker),
+		sink: {
+			uploadColourBand() {},
+			uploadMaskOrNormal: (slot) => uploads.push(slot === MapRotation.NORMAL ? 'normal' : 'mask'),
+			uploadRoughness: (ring) => uploads.push(`rough${ring}`),
+			clearNormal: () => uploads.push('clearNormal'),
+			resetRoughness: () => uploads.push('resetRoughness'),
+		},
+		stage: { paint: 0, upload: 0 },
+		log: { warn() {} },
+	});
+	await flush();
+	for (let frame = 1; frame <= 3; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	// Frame 4 sends colour band 4 and the maps worker's normal slot; both are still in flight.
+	PainterClient.step(painter, 4, 0, store);
+	PainterClient.update(painter, { normalCascades: [], foamEnabled: false });
+	await flush();
+	const after = uploads.slice(uploads.indexOf('resetRoughness') + 1);
+	expect.equal(uploads.indexOf('clearNormal') >= 0, true, 'the normal map was cleared');
+	expect.equal(after.filter((name) => name === 'normal' || name.startsWith('rough')).length, 0, `nothing stale after the clear: ${after.join(',')}`);
+	expect.truthy(painter.coverage.every((value) => value === 0), 'the stale coverage was not kept');
+	expect.equal(painter.pendingColour || painter.pendingMaps, false, 'both replies still cleared their pending flags');
+	for (let frame = 5; frame <= 8; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(uploads.slice(uploads.indexOf('resetRoughness') + 1).filter((name) => name === 'normal' || name.startsWith('rough')).length, 0, 'and none later');
+	expect.truthy(uploads.at(-1) === 'mask', 'the mask keeps painting');
+});
+
+test('update keeps its own copies of the cascade lists', async () => {
+	const { painter } = harness();
+	await flush();
+	const list = [2];
+	PainterClient.update(painter, { normalCascades: list, maskCascades: [1, 2] });
+	list.push(3);
+	expect.equal(painter.mapsConfig.normalCascades.join(','), '2', 'the caller changing its array changes nothing kept');
+	expect.equal(painter.colourConfig.normalCascades.join(','), '2', 'nor in the colour config');
+	expect.truthy(painter.mapsConfig.normalCascades !== painter.colourConfig.normalCascades, 'the two configs share no array');
+	expect.truthy(painter.mapsConfig.maskCascades !== painter.colourConfig.maskCascades, 'nor the mask list');
+});

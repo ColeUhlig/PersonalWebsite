@@ -79,9 +79,13 @@ export function checkUpdate(settings, cascadeCount) {
 			throw new Error(`painter update: ${key} cannot change without a Configure`);
 		}
 		if (CASCADE_LISTS.includes(key)) {
-			const valid = Array.isArray(value) && value.every((c) => Number.isInteger(c) && c >= 1 && c <= cascadeCount);
+			// Each cascade at most once: a repeat would add its field into the sum twice.
+			const valid =
+				Array.isArray(value) &&
+				value.every((c) => Number.isInteger(c) && c >= 1 && c <= cascadeCount) &&
+				new Set(value).size === value.length;
 			if (!valid) {
-				throw new Error(`painter update: ${key} must list cascades 1..${cascadeCount}, got ${JSON.stringify(value)}`);
+				throw new Error(`painter update: ${key} must list distinct cascades 1..${cascadeCount}, got ${JSON.stringify(value)}`);
 			}
 		} else if (key === 'foamEnabled') {
 			if (typeof value !== 'boolean') {
@@ -89,8 +93,26 @@ export function checkUpdate(settings, cascadeCount) {
 			}
 		} else if (!Number.isFinite(value)) {
 			throw new Error(`painter update: ${key} must be a finite number, got ${value}`);
+		} else if (key === 'gamma' && value <= 0) {
+			// PeakMask raises the normalised crest to it: at 0 or below the mask is no longer in [0, 1].
+			throw new Error(`painter update: gamma must be above 0, got ${value}`);
+		} else if (key === 'decay' && (value < 0 || value > 1)) {
+			// PeakMask.nextMax multiplies the running maximum by it: above 1 it grows without a crest.
+			throw new Error(`painter update: decay must be in 0..1, got ${value}`);
 		}
 	}
+}
+
+// The config with the settings merged in, as a new object whose cascade lists are its own copies,
+// so neither the caller nor a second config holding the same settings shares an array with it.
+export function mergeUpdate(config, settings) {
+	const merged = { ...config, ...settings };
+	for (const key of CASCADE_LISTS) {
+		if (key in settings) {
+			merged[key] = [...settings[key]];
+		}
+	}
+	return merged;
 }
 
 // The colour role's knobs that come from the config rather than being allocated: worked out by
@@ -168,7 +190,8 @@ export function createPainterWorker(post) {
 	// The maps role's: what the peak mask normalises by, the tallest crest of the recent fills.
 	let runningMax = 0;
 	// The colour role's: the field's mean over its four quarters, and the milliseconds the quarter
-	// this band stepped took. Zero before the first step, and zero for the session with foam off.
+	// this band stepped took. Zero before the first step, and zero while foam is off: an update that
+	// switches it off zeroes them.
 	let foamCover = 0;
 	let foamMs = 0;
 
@@ -200,9 +223,15 @@ export function createPainterWorker(post) {
 			throw new Error('painter worker: update before configure');
 		}
 		checkUpdate(settings, config.sizes.length);
-		config = { ...config, ...settings };
+		config = mergeUpdate(config, settings);
 		if (colour) {
 			Object.assign(colour, colourKnobs(config));
+		}
+		// The field is left as it is (switched back on, the foam carries on from there), but nothing
+		// steps it while foam is off, so the figures reported must not be its last ones.
+		if (!config.foamEnabled) {
+			foamCover = 0;
+			foamMs = 0;
 		}
 	}
 

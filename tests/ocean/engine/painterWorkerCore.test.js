@@ -179,3 +179,49 @@ test('an update may only change what needs no reallocation, and only to valid va
 	}
 	expect.truthy(before.includes('update before configure'), before);
 });
+
+test('an update refuses duplicate cascades, a gamma that is not positive and a decay outside 0..1', () => {
+	const { handle } = run('maps');
+	const attempt = (settings) => {
+		try {
+			handle({ type: 'update', settings });
+			return 'ok';
+		} catch (error) {
+			return error.message;
+		}
+	};
+	expect.truthy(attempt({ maskCascades: [1, 1] }).includes('maskCascades'), 'a cascade listed twice');
+	expect.truthy(attempt({ gamma: 0 }).includes('gamma'), 'gamma 0');
+	expect.truthy(attempt({ gamma: -0.5 }).includes('gamma'), 'a negative gamma');
+	expect.truthy(attempt({ decay: -0.1 }).includes('decay'), 'decay below 0');
+	expect.truthy(attempt({ decay: 1.5 }).includes('decay'), 'decay above 1');
+	expect.equal(attempt({ decay: 0, gamma: 0.1, normalCascades: [1, 2] }), 'ok', 'the edges and cascade 1 in the normal list are taken');
+	expect.equal(attempt({ decay: 1 }), 'ok', 'decay 1 is taken');
+});
+
+test('foam switched off by update reports a foam cover of zero', () => {
+	const { handle, replies } = run('colour');
+	handle({ type: 'paint', turn: 1, sequence: 1, t: 0, fields: fieldBuffers() });
+	expect.truthy(replies[1].message.first > 0, `some foam first: ${replies[1].message.first}`);
+	handle({ type: 'update', settings: { foamEnabled: false } });
+	handle({ type: 'paint', turn: 2, sequence: 2, t: 0, fields: fieldBuffers() });
+	expect.equal(replies[2].message.first, 0, 'no foam cover with foam off');
+});
+
+test('the foam field and its quarter means carry over an update; a Configure starts them again', () => {
+	const cover = (between) => {
+		const { handle, replies } = run('colour');
+		for (let band = 1; band <= 4; band++) {
+			handle({ type: 'paint', turn: band, sequence: band, t: 0, fields: fieldBuffers() });
+		}
+		between(handle);
+		handle({ type: 'paint', turn: 1, sequence: 5, t: 0, fields: fieldBuffers() });
+		return replies.at(-1).message.first;
+	};
+	const plain = cover(() => {});
+	// The opacity only changes the paint, not the step, so the foam must be exactly as without it.
+	const updated = cover((handle) => handle({ type: 'update', settings: { foamOpacity: 0.4 } }));
+	const configured = cover((handle) => handle({ type: 'configure', config: config('colour', { foamOpacity: 0.4 }) }));
+	expect.equal(updated, plain, 'the field and the four quarter means carried on');
+	expect.truthy(configured !== plain, `a Configure resets them: ${configured} vs ${plain}`);
+});

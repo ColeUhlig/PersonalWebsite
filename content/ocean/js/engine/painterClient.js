@@ -25,7 +25,7 @@
 import * as FieldStore from '../core/fieldStore.js';
 import * as MapRotation from '../core/mapRotation.js';
 import { createInProcessWorker } from './inProcessWorker.js';
-import { checkUpdate, createPainterWorker } from '../workers/painterWorkerCore.js';
+import { checkUpdate, createPainterWorker, mergeUpdate } from '../workers/painterWorkerCore.js';
 import { CONFIGURE_TIMEOUT_FRAMES, PAINT_TIMEOUT_FRAMES } from './config.js';
 
 const ROLE_COLOUR = 'colour';
@@ -145,8 +145,10 @@ function uploadColour(painter, data) {
 		sink.uploadColourBand(data.band, data.pixels);
 	}
 	// The last band brings the finished coverage and one roughness map per ring painted from it.
-	// The coverage is copied whatever the sink: every maps Paint until the next cycle reads it.
-	if (data.coverage) {
+	// The coverage is copied whatever the sink: every maps Paint until the next cycle reads it. A
+	// band 4 painted before an update switched the foam off lands after the reset, so with foam off
+	// now neither is kept: the roughness would stay on the water with nothing to repaint it.
+	if (data.coverage && painter.mapsConfig.foamEnabled) {
 		painter.coverage.set(data.coverage);
 		if (sink) {
 			data.roughness.forEach((pixels, index) => sink.uploadRoughness(index + 1, pixels));
@@ -184,7 +186,11 @@ function onPixels(painter, role, data) {
 		painter.pendingColour = false;
 		painter.cycleColour = Math.max(painter.cycleColour, painter.frame - painter.sentColourFrame);
 	} else {
-		painter.sink?.uploadMaskOrNormal(data.slot, data.pixels);
+		// A normal map painted before an update took the last normal cascade away lands after the
+		// clear: uploaded, it would stay on the water with nothing to repaint it.
+		if (data.slot !== MapRotation.NORMAL || painter.paintsNormal) {
+			painter.sink?.uploadMaskOrNormal(data.slot, data.pixels);
+		}
 		painter.stage.upload += (performance.now() - started) / 1000;
 		painter.maskMax = data.first;
 		painter.pendingMaps = false;
@@ -356,8 +362,8 @@ export function update(painter, settings) {
 	checkUpdate(settings, painter.count);
 	const hadNormal = painter.paintsNormal;
 	const hadFoam = painter.mapsConfig.foamEnabled;
-	painter.mapsConfig = { ...painter.mapsConfig, ...settings };
-	painter.colourConfig = { ...painter.colourConfig, ...settings };
+	painter.mapsConfig = mergeUpdate(painter.mapsConfig, settings);
+	painter.colourConfig = mergeUpdate(painter.colourConfig, settings);
 	painter.paintsNormal = painter.mapsConfig.normalCascades.length > 0;
 	for (const role of ROLES) {
 		painter.workers[role]?.postMessage({ type: 'update', settings });
