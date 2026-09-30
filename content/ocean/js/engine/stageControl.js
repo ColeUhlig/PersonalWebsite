@@ -7,7 +7,10 @@
 //     part a recipe switches off costs nothing: no evolve request, no Paint, no glow pass, and a
 //     still surface is not rewritten. A part the neighbouring recipe needs keeps running while
 //     the scroll is between the two (`warm`), so it is ready by the time it shows;
-//   * which cascade layers run and which the rings sample (step 10), and the painter's lists;
+//   * which cascade layers run and which the rings sample (step 10), and the painter's lists. A
+//     layer that comes back on REJOINS: it stays out of the rings and the painter until a result
+//     requested after it came back has been promoted (rejoinRotation), so nothing ever shows the
+//     fields it froze with;
 //   * live knobs without restarting anything: chop and the foam sliders reach the painter as an
 //     `update` (painterWorkerCore); a wind, fetch or seed change marks every cascade for a
 //     retune, which the frame loop sends one cascade at a time, on that cascade's own rotation
@@ -15,6 +18,7 @@
 //     every frame costs at most one spectrum rebuild in seven frames, the cascades in turn;
 //   * the patch bounds, which only grow (bounds.js), and whether the vertex normals are written.
 // Settings are checked whole before anything changes, so a refused set leaves the ocean as it was.
+import * as FieldStore from '../core/fieldStore.js';
 import * as Spectrum from '../core/spectrum.js';
 import * as Swells from '../core/swells.js';
 import { bankBounds, boundsFor, grow } from './bounds.js';
@@ -29,9 +33,16 @@ import * as WaveBanks from './waveBanks.js';
 // next cascade each time, so they take turns.
 export const RETUNE_GAP_FRAMES = 7;
 export const SOURCES = Object.freeze(['sine', 'bank', 'fft']);
+// The most wind and fetch the engine takes. The sliders stop at 25 m/s and 200,000 m and clamp
+// (recipes.js); these ceilings only refuse a value no slider can make, before the spectrum and the
+// bounds (which only grow) see it. 40 m/s is past hurricane force at the fetch law's edge.
+export const SEA_LIMITS = Object.freeze({ windSpeed: 40, fetch: 1e6 });
 
 // The hero sea as settings: the rough default Cole judged in A2 (config.js's defaults), every
-// part on, the FFT shown. What the ocean runs before any stage is configured.
+// part on, the FFT shown. What the ocean runs before any stage is configured. Built from the
+// SHIPPED constants (Look.luau, Spectrum.NORMAL), not from the URL: a page opened with ?wind=20 or
+// ?scatter=.. and then handed these settings goes back to the shipped sea. With ?step the stage
+// settings replace the URL's sea overrides the same way.
 export const DEFAULT_SETTINGS = Object.freeze({
 	source: 'fft',
 	sine: Object.freeze({ amplitude: 1.5, wavelength: 40, speed: 8 }),
@@ -74,8 +85,11 @@ export function normalise(s) {
 	if (!finite(s.chop) || s.chop < 0 || s.chop > 2) {
 		fail('chop', 'a number in 0 .. 2', s.chop);
 	}
-	if (!finite(s.sea?.windSpeed) || !finite(s.sea?.fetch)) {
-		fail('sea', 'a finite windSpeed and fetch', s.sea);
+	for (const name of ['windSpeed', 'fetch']) {
+		const value = s.sea?.[name];
+		if (!finite(value) || value <= 0 || value > SEA_LIMITS[name]) {
+			fail(`sea.${name}`, `a number above 0 and at most ${SEA_LIMITS[name]}`, value);
+		}
 	}
 	if (!Number.isInteger(s.seed)) {
 		fail('seed', 'an integer', s.seed);
@@ -145,14 +159,30 @@ function applyLayers(ocean, s) {
 	const fft = s.source === 'fft';
 	const running = fft || s.warm.fft;
 	// What runs: the layers shown, and the ones the neighbouring recipe needs while between.
-	ocean.layerOn = shown.map((on, i) => running && (on || s.warm.layers[i] === true));
-	// What the rings sample: the layers shown, and only while the FFT is what shows.
-	const sampled = shown.map((on) => fft && on);
+	const layerOn = shown.map((on, i) => running && (on || s.warm.layers[i] === true));
+	// A layer coming back on rejoins: its store froze when it stopped, and a reply that was in
+	// flight then may still sit in its waiting slot.
+	layerOn.forEach((on, i) => {
+		if (on && !ocean.layerOn[i]) {
+			ocean.rejoin[i] = 'request';
+		}
+	});
+	ocean.layerOn = layerOn;
+	ocean.shown = shown;
+	ocean.fftShown = fft;
+	refreshSampling(ocean);
+}
+
+// Which cascades the rings sample and the painter reads: the layers shown, less any still
+// rejoining; the rings only while the FFT is what shows. Sent on only when they change.
+function refreshSampling(ocean) {
+	const usable = ocean.shown.map((on, i) => on && ocean.rejoin[i] === null);
+	const sampled = usable.map((on) => ocean.fftShown && on);
 	if (!sameFlags(sampled, ocean.sampled)) {
 		ocean.sampled = sampled;
 		SurfaceState.setRingCascades(ocean.surface, sampled);
 	}
-	const lists = cascadeLists(shown);
+	const lists = cascadeLists(usable);
 	if (!sameLists(lists, ocean.painterLists)) {
 		ocean.painterLists = lists;
 		const update = { maskCascades: lists.mask, colourCascades: lists.colour };
@@ -208,7 +238,8 @@ function applyBounds(ocean) {
 
 function applyParts(ocean, s) {
 	const wasGlowing = ocean.parts.glow;
-	const still = s.source === 'fft' ? !ocean.sampled.some(Boolean) && Swells.isSilent(ocean.swells) : ocean.waves.silent;
+	// From the layers SHOWN, not the ones sampled: a layer still rejoining is about to move the sea.
+	const still = s.source === 'fft' ? !ocean.shown.some(Boolean) && Swells.isSilent(ocean.swells) : ocean.waves.silent;
 	ocean.parts = Object.freeze({
 		cascades: ocean.layerOn.some(Boolean),
 		painter: s.maps || s.warm.maps,
@@ -256,4 +287,34 @@ export function retuneDue(ocean, index) {
 	retune.pending[index - 1] = false;
 	retune.lastFrame = ocean.frame;
 	return true;
+}
+
+/**
+ * One rotation of a layer that has come back on, in place of the usual promote and request
+ * (ocean.js evolveStage). Until a result requested AFTER it came back is on its way, whatever sits
+ * in its waiting slot is from before -- the reply that was in flight when it stopped, or one still
+ * out when this request was refused as busy -- so it is dropped and nothing is promoted. Once that
+ * fresh result is promoted it is shown alone (nothing to fade from), and the layer rejoins the rings
+ * and the painter on this same frame, before the blend and the write.
+ * @param {object} ocean
+ * @param {number} index Luau cascade number
+ * @param {number} t the clock the request is made at
+ */
+export function rejoinRotation(ocean, index, t) {
+	const i = index - 1;
+	const store = ocean.store;
+	if (ocean.rejoin[i] === 'request') {
+		store.waiting[i].filled = false;
+		const sent = ocean.cascades.request(index, t, ocean.frame);
+		if (sent === 'sent' || sent === 'local') {
+			ocean.rejoin[i] = 'promote';
+		}
+		return;
+	}
+	if (FieldStore.promote(store, index, ocean.frame)) {
+		store.previous[i].filled = false;
+		ocean.rejoin[i] = null;
+		refreshSampling(ocean);
+	}
+	ocean.cascades.request(index, t, ocean.frame);
 }

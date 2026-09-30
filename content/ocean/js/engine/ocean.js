@@ -209,6 +209,9 @@ export function create(config, { spawnCascade, spawnPainter, now, probeMs, devic
 	// every cascade Configure and retune, the surface write and the glow.
 	const live = { params: config.params, chop: config.chop, seed: SEED, scatter: config.scatter };
 	const bounds = pageBounds({ params: config.params, chop: config.chop, swellScale: config.swellScale });
+	if (deviceTier !== null && !Object.hasOwn(Tier.presets, deviceTier)) {
+		throw new RangeError(`Ocean.create: deviceTier must be null or one of ${Object.keys(Tier.presets).join(', ')}, got ${deviceTier}`);
+	}
 	// The URL's tier first, then the phone rule, then the probe.
 	const forced = config.tier ?? deviceTier;
 	const measured = forced ? null : (probeMs ?? probeCascadeMs());
@@ -262,7 +265,8 @@ export function create(config, { spawnCascade, spawnPainter, now, probeMs, devic
 		elapsed: 0,
 		snapCount: 0,
 		blendSum: 0,
-		last: { stage: { ...stage }, elapsed: 0, snapCount: 0, blendSum: 0 },
+		blendFrames: 0, // frames on which a running layer's fade was counted
+		last: { stage: { ...stage }, elapsed: 0, snapCount: 0, blendSum: 0, blendFrames: 0 },
 		lastReport: null,
 		quadCentre: new Float64Array(2),
 		live,
@@ -275,6 +279,11 @@ export function create(config, { spawnCascade, spawnPainter, now, probeMs, devic
 		teachingBank: null, // the 32-wave bank, built the first time a step asks for it
 		layerOn: preset.sizes.map(() => true), // which cascades evolve and blend
 		sampled: preset.sizes.map(() => true), // which cascades the rings sample
+		shown: preset.sizes.map(() => true), // which layers the stage asks to show
+		fftShown: true, // whether the FFT is what shows
+		// Per cascade: null, or where a layer that came back on is in rejoining (stageControl.js
+		// rejoinRotation): 'request' until a fresh result is asked for, then 'promote'.
+		rejoin: preset.sizes.map(() => null),
 		painterLists: PainterClient.cascades(preset.sizes.length),
 		retune: { pending: preset.sizes.map(() => false), lastFrame: -Infinity },
 		startedAt: now(),
@@ -308,21 +317,31 @@ function evolveStage(ocean, t) {
 		return;
 	}
 	StageControl.retuneDue(ocean, index);
+	if (ocean.rejoin[index - 1] !== null) {
+		StageControl.rejoinRotation(ocean, index, t);
+		return;
+	}
 	FieldStore.promote(ocean.store, index, ocean.frame);
 	ocean.cascades.request(index, t, ocean.frame);
 }
 
+// The report's `blend` is the first RUNNING layer's fade -- cascade 1's whenever it runs, as in
+// A2 -- over the frames that had one, so a stopped layer's frozen fade is never counted.
 function blendStage(ocean) {
 	const store = ocean.store;
+	let counted = false;
 	for (let index = 1; index <= store.count; index++) {
-		const fraction = OceanClock.fadeFraction(ocean.frame, store.promotedFrame[index - 1], OceanClock.PERIOD);
-		if (index === 1) {
-			ocean.blendSum += fraction;
-		}
 		// A layer switched off keeps whatever its display last held; nothing samples it meanwhile.
-		if (ocean.layerOn[index - 1]) {
-			FieldStore.blend(store, index, fraction, BLEND_FIELDS);
+		if (!ocean.layerOn[index - 1]) {
+			continue;
 		}
+		const fraction = OceanClock.fadeFraction(ocean.frame, store.promotedFrame[index - 1], OceanClock.PERIOD);
+		if (!counted) {
+			ocean.blendSum += fraction;
+			ocean.blendFrames += 1;
+			counted = true;
+		}
+		FieldStore.blend(store, index, fraction, BLEND_FIELDS);
 	}
 }
 
@@ -478,13 +497,15 @@ function fieldProbe(store) {
 
 // The Luau report line as numbers, over the window since the last one. `snapMs` is per ring shift
 // (a ring shifts on a minority of frames); `blend` is cascade 1's mean fade fraction, 0.67 when
-// every result is promoted on its own rotation and climbing towards 1 when promotions are missed.
+// every result is promoted on its own rotation and climbing towards 1 when promotions are missed
+// (A3: the first running layer's, over the frames it ran; null when none ran -- see blendStage).
 // Not in the Luau line: `renderMs`, the page's view.render() a frame (charged after step, so the
 // first window holds one render fewer), and `cascadeMs` is null until a worker reply is measured.
 // Reading the painter's report closes its window too.
 function buildReport(ocean) {
 	const frames = REPORT_EVERY_FRAMES;
 	const snaps = ocean.snapCount - ocean.last.snapCount;
+	const blendFrames = ocean.blendFrames - ocean.last.blendFrames;
 	const [maxY, maxLateral] = SurfaceState.takeExtremes(ocean.surface);
 	const paint = PainterClient.report(ocean.painter);
 	const report = {
@@ -492,7 +513,8 @@ function buildReport(ocean) {
 		t: ocean.t,
 		evolveMs: stageDeltaMs(ocean, 'evolve', frames),
 		blendMs: stageDeltaMs(ocean, 'blend', frames),
-		blend: (ocean.blendSum - ocean.last.blendSum) / frames,
+		// null when no layer ran all window (a teaching source with the cascades off).
+		blend: blendFrames > 0 ? (ocean.blendSum - ocean.last.blendSum) / blendFrames : null,
 		snapMs: stageDeltaMs(ocean, 'snap', Math.max(snaps, 1)),
 		snaps,
 		snapsPerSec: snaps / Math.max(ocean.elapsed - ocean.last.elapsed, 1e-6),
@@ -517,7 +539,13 @@ function buildReport(ocean) {
 		cascadeMs: meanCascadeMs(ocean.cascades),
 		...fieldProbe(ocean.store),
 	};
-	ocean.last = { stage: { ...ocean.stage }, elapsed: ocean.elapsed, snapCount: ocean.snapCount, blendSum: ocean.blendSum };
+	ocean.last = {
+		stage: { ...ocean.stage },
+		elapsed: ocean.elapsed,
+		snapCount: ocean.snapCount,
+		blendSum: ocean.blendSum,
+		blendFrames: ocean.blendFrames,
+	};
 	return report;
 }
 

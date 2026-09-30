@@ -4,6 +4,7 @@ import { readConfig } from '../../../content/ocean/js/engine/config.js';
 import { createInProcessWorker } from '../../../content/ocean/js/engine/inProcessWorker.js';
 import { createCascadeWorker } from '../../../content/ocean/js/workers/cascadeWorkerCore.js';
 import { createPainterWorker } from '../../../content/ocean/js/workers/painterWorkerCore.js';
+import * as OceanClock from '../../../content/ocean/js/core/oceanClock.js';
 import * as Ocean from '../../../content/ocean/js/engine/ocean.js';
 import * as StageControl from '../../../content/ocean/js/engine/stageControl.js';
 import * as SurfaceState from '../../../content/ocean/js/engine/surfaceState.js';
@@ -249,4 +250,144 @@ test('a Medium ocean takes three-layer settings without complaint (Review Focus 
 	await advance(6);
 	expect.equal(ocean.layerOn.length, 2, 'two cascades');
 	expect.equal(Ocean.status(ocean).layers.join(','), 'true,true', 'both sampled');
+});
+
+// How old, in seconds of the ocean clock, the fields the display holds for cascade c are: the
+// fade's weighted mix of its previous and current results' request times. Steady state is five
+// frames (a result requested one rotation before its promotion, faded in over the next two).
+function displayAge(ocean, c) {
+	const store = ocean.store;
+	const current = store.current[c - 1];
+	const previous = store.previous[c - 1];
+	const fraction = OceanClock.fadeFraction(ocean.frame, store.promotedFrame[c - 1], OceanClock.PERIOD);
+	const time = previous.filled ? previous.time + (current.time - previous.time) * fraction : current.time;
+	return ocean.t - time;
+}
+
+// Every cascade a ring samples or the painter reads.
+function readCascades(ocean) {
+	const read = new Set(ocean.painter.mapsConfig.colourCascades);
+	for (const spec of ocean.surface.ringSpecs) {
+		for (const c of spec.cascades) read.add(c);
+	}
+	return [...read];
+}
+
+test('a layer switched back on shows fresh fields, never the ones it froze with (fix round 1)', async () => {
+	// Two rotations: the steady five frames of latency, and a frame of slack.
+	const most = (2 * OceanClock.PERIOD) / 60 + 1e-9;
+	for (const [query, rest] of [
+		['?tier=High', 600],
+		['?tier=High', 4],
+		['?tier=High&workers=0', 30],
+	]) {
+		const { ocean, advance } = build(query);
+		await advance(6);
+		Ocean.configureStage(ocean, settings({ layers: [true, false, true] }));
+		await advance(rest);
+		Ocean.configureStage(ocean, settings({ layers: [true, true, true] }));
+		expect.equal(ocean.sampled[1], false, `${query} ${rest}: not sampled until a fresh result is promoted`);
+		expect.truthy(!ocean.painter.mapsConfig.colourCascades.includes(2), `${query} ${rest}: nor painted`);
+		for (let frame = 1; frame <= 12; frame++) {
+			await advance(1);
+			for (const c of readCascades(ocean)) {
+				const age = displayAge(ocean, c);
+				expect.truthy(age >= 0 && age <= most, `${query} ${rest}: frame ${frame}, cascade ${c} shows fields ${age.toFixed(3)} s old`);
+			}
+		}
+		expect.equal(ocean.sampled.join(','), 'true,true,true', `${query} ${rest}: rejoined the rings`);
+		expect.equal(ocean.painter.mapsConfig.colourCascades.join(','), '1,2,3', `${query} ${rest}: and the painter`);
+	}
+});
+
+test('the sea has a floor and a ceiling; the sliders and the shipped sea sit inside them (fix round 1)', () => {
+	for (const [sea, name] of [
+		[{ windSpeed: -1, fetch: 80000 }, 'sea.windSpeed'],
+		[{ windSpeed: 40.5, fetch: 80000 }, 'sea.windSpeed'],
+		[{ windSpeed: 12, fetch: 0 }, 'sea.fetch'],
+		[{ windSpeed: 12, fetch: 1.5e6 }, 'sea.fetch'],
+		[{ windSpeed: 12, fetch: Number.POSITIVE_INFINITY }, 'sea.fetch'],
+	]) {
+		let message = '';
+		try {
+			StageControl.normalise(settings({ sea }));
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes(name), `${JSON.stringify(sea)}: ${message}`);
+	}
+	expect.equal(StageControl.SEA_LIMITS.windSpeed, 40, '40 m/s');
+	expect.equal(StageControl.SEA_LIMITS.fetch, 1e6, '1,000,000 m');
+	// The shipped sea, the sliders' corners (recipes.js: wind 3 .. 25, fetch 5,000 .. 200,000) and the ceilings themselves.
+	for (const sea of [
+		StageControl.DEFAULT_SETTINGS.sea,
+		{ windSpeed: 3, fetch: 5000 },
+		{ windSpeed: 25, fetch: 200000 },
+		{ windSpeed: 40, fetch: 1e6 },
+	]) {
+		const s = settings({ sea });
+		expect.equal(StageControl.normalise(s), s, `${sea.windSpeed} m/s at ${sea.fetch} m is taken`);
+	}
+});
+
+test('normalise names every field it refuses (fix round 1)', () => {
+	for (const [bad, name] of [
+		[null, 'settings'],
+		['fft', 'settings'],
+		[settings({ seed: 1.5 }), 'seed'],
+		[settings({ maps: 'yes' }), 'maps'],
+		[settings({ foam: 1 }), 'foam'],
+		[settings({ glow: null }), 'glow'],
+		[settings({ normals: undefined }), 'normals'],
+		[settings({ foamKnobs: { whitecap: Number.NaN, decay: 0.8 } }), 'foamKnobs'],
+		[settings({ foamKnobs: null }), 'foamKnobs'],
+		[settings({ glowStrength: -1 }), 'glowStrength'],
+	]) {
+		let message = '';
+		try {
+			StageControl.normalise(bad);
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes(name), `${name}: ${message}`);
+	}
+});
+
+test('the status says what evolves and the live sea (fix round 1)', async () => {
+	const { ocean, advance } = build();
+	await advance(6);
+	Ocean.configureStage(ocean, settings({ chop: 0.5, sea: { windSpeed: 20, fetch: 100000 }, layers: [true, false, true] }));
+	await advance(12);
+	const status = Ocean.status(ocean);
+	expect.equal(status.evolving.join(','), 'true,false,true', 'evolving');
+	expect.equal(status.chop, 0.5, 'chop');
+	expect.equal(status.windSpeed, 20, 'wind');
+	expect.equal(status.fetch, 100000, 'fetch');
+	expect.equal(status.seed, 7, 'seed');
+	expect.truthy(Number.isFinite(status.foamCover) && status.foamCover === ocean.painter.foamCover, `foam cover ${status.foamCover}`);
+	status.evolving[0] = false;
+	expect.equal(ocean.layerOn[0], true, 'a copy: the caller cannot switch a layer off through it');
+});
+
+test("the report's blend counts only running layers, and says off when none ran (fix round 1)", async () => {
+	const off = build('?tier=Low');
+	Ocean.configureStage(off.ocean, settings({ ...TEACHING, source: 'sine' }));
+	await off.advance(300);
+	expect.equal(Ocean.report(off.ocean).blend, null, 'no layer ran: off, not a misleading 0');
+	const first = build();
+	await first.advance(3);
+	Ocean.configureStage(first.ocean, settings({ layers: [false, true, true] }));
+	await first.advance(297);
+	expect.near(Ocean.report(first.ocean).blend, 0.67, 0.02, "cascade 1 stopped: cascade 2's fade, not cascade 1's frozen 1");
+});
+
+test('create refuses a device tier that is not a preset (fix round 1)', () => {
+	let message = '';
+	try {
+		build('', { deviceTier: 'Huge' });
+	} catch (error) {
+		message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+	}
+	expect.truthy(message.includes('deviceTier') && message.includes('Huge'), message);
+	expect.equal(build('', { deviceTier: null, probeMs: 1 }).ocean.tierReason, 'probe', 'null lets the probe decide');
 });

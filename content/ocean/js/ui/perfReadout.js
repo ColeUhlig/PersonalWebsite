@@ -20,7 +20,7 @@ export function createPerfReadout(element) {
 			];
 			if (report) {
 				lines.push(
-					`write ${ms(report.writeMs)}  blend ${ms(report.blendMs)} (${report.blend.toFixed(2)})  paint ${ms(report.paintMs)}  copy ${ms(report.uploadMs)}  glow ${ms(report.strengthMs)}  render ${ms(report.renderMs)}`,
+					`write ${ms(report.writeMs)}  blend ${ms(report.blendMs)} (${report.blend == null ? 'off' : report.blend.toFixed(2)})  paint ${ms(report.paintMs)}  copy ${ms(report.uploadMs)}  glow ${ms(report.strengthMs)}  render ${ms(report.renderMs)}`,
 					`workers: cascade ${ms(report.cascadeMs)}  colour ${ms(report.colourMs)}  foam ${ms(report.foamMs)} (cover ${report.foamCover.toFixed(3)})`,
 				);
 			}
