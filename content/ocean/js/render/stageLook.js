@@ -5,7 +5,8 @@
 // change swaps the meshes' material references; nothing is rebuilt, and the painted materials keep
 // their textures and glow for when they come back. The wireframe is one extra mesh per patch,
 // sharing the patch's geometry as its child (so it moves and hides with it), built the first time
-// it is asked for and hidden, not removed, when it is switched off. The horizon quads get the
+// it is asked for and hidden, not removed, when it is switched off; it fades out with view depth
+// (WIRE_FADE) so the far grid does not crowd into moire. The horizon quads get the
 // material but no wireframe: two triangles 2,048 studs wide would draw one huge diagonal.
 import * as THREE from 'three';
 import { sunDirection } from '../stages/sun.js';
@@ -13,6 +14,10 @@ import { sunDirection } from '../stages/sun.js';
 const WHITE = Object.freeze([0.95, 0.95, 0.94]);
 const WIRE = Object.freeze([0.11, 0.17, 0.21]);
 const WIRE_OPACITY = 0.55;
+// View depths (studs) over which the wireframe fades out (fix round 1). Past a few hundred studs the
+// grid's lines crowd into grey moire bands that read as swells on step 1's flat plane; the fade keeps
+// the 8-stud ring's grid readable (its far edge sits about 300 studs from step 1's camera).
+const WIRE_FADE = Object.freeze([120, 360]);
 // The lit sea's roughness: shiny enough for the sun's highlight and the sky's Fresnel to read on
 // the Gerstner waves of steps 4 to 6.
 const SEA_ROUGHNESS = 0.3;
@@ -44,6 +49,15 @@ export function createStageLook({ view, meshes, materials, config }) {
 		'sea-flat': new THREE.MeshBasicMaterial({ color: sea }),
 	};
 	const wireMaterial = new THREE.MeshBasicMaterial({ color: srgb(WIRE), wireframe: true, transparent: true, opacity: WIRE_OPACITY, toneMapped: false });
+	wireMaterial.onBeforeCompile = (shader) => {
+		shader.uniforms.wireFade = { value: new THREE.Vector2(WIRE_FADE[0], WIRE_FADE[1]) };
+		shader.vertexShader = shader.vertexShader
+			.replace('#include <common>', '#include <common>\nvarying float vWireDepth;')
+			.replace('#include <project_vertex>', '#include <project_vertex>\n\tvWireDepth = -mvPosition.z;');
+		shader.fragmentShader = shader.fragmentShader
+			.replace('#include <common>', '#include <common>\nuniform vec2 wireFade;\nvarying float vWireDepth;')
+			.replace('#include <opaque_fragment>', 'diffuseColor.a *= 1.0 - smoothstep(wireFade.x, wireFade.y, vWireDepth);\n\t#include <opaque_fragment>');
+	};
 	let mode = 'painted';
 	let wires = null;
 	let wireframe = false;
@@ -91,8 +105,35 @@ export function createStageLook({ view, meshes, materials, config }) {
 		}
 	}
 
+	// What the meshes actually wear, read from them rather than from what apply last asked for:
+	// 'mixed' if the patches and quads disagree.
+	function meshMode() {
+		const wearing = (mesh, i, painted) => {
+			const found = MODES.find((name) => name !== 'painted' && mesh.material === shared[name]);
+			return found ?? (mesh.material === painted[i] ? 'painted' : 'unknown');
+		};
+		const seen = new Set([
+			...meshes.patchMeshes.map((mesh, i) => wearing(mesh, i, materials.patchMaterials)),
+			...meshes.quadMeshes.map((mesh, i) => wearing(mesh, i, materials.quadMaterials)),
+		]);
+		return seen.size === 1 ? [...seen][0] : 'mixed';
+	}
+
+	// The wireframe meshes that are showing: attached to their patch and visible.
+	function visibleWires() {
+		return (wires ?? []).filter((wire, i) => wire.visible && wire.parent === meshes.patchMeshes[i]).length;
+	}
+
 	function probe() {
-		return { mode, wireframe, fog: view.scene.fog.density, sun: [...view.sunDirection], wireMeshes: wires ? wires.length : 0 };
+		const showing = visibleWires();
+		return {
+			mode: meshMode(),
+			wireframe: showing === meshes.patchMeshes.length,
+			wireMeshes: showing,
+			fog: view.scene.fog.density,
+			sun: [...view.sunDirection],
+			environment: view.environmentState(),
+		};
 	}
 
 	return { apply, probe };

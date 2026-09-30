@@ -131,10 +131,14 @@ test("the layer toggles name the High tier's cascade sizes", () => {
 	});
 });
 
-test('step 6 flies the camera up and thins the fog so the repetition shows', () => {
+// Task 10 fix round 1: the high shots look steeply down under A2's fog instead of out across a
+// thinned one, which showed the world's edge and the flat horizon plane (shots.test.js).
+test('step 6 flies the camera up and looks steeply down, so the repetition shows', () => {
 	expect.truthy(R[5].shot.position[1] > 5 * R[4].shot.position[1], 'far higher than step 5');
-	expect.truthy(R[5].look.fog < Lighting.FOG_DENSITY / 4, 'thin fog');
-	expect.truthy(R[9].look.fog < Lighting.FOG_DENSITY, 'thinner fog again for the layers');
+	const [x, y, z] = R[5].shot.position.map((v, i) => v - R[5].shot.target[i]);
+	expect.truthy(Math.atan2(y, Math.hypot(x, z)) > (60 * Math.PI) / 180, 'looking down at more than 60 degrees');
+	expect.equal(R[5].look.fog, Lighting.FOG_DENSITY, "A2's fog");
+	expect.equal(R[9].look.fog, Lighting.FOG_DENSITY, "A2's fog for the layers too");
 });
 
 test("the look's defaults are the page's lighting", () => {

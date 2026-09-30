@@ -30,7 +30,7 @@ test('numbers lerp between; fetch and fog on a log scale; the sun the short way 
 	const sun = blendRecipes(applySliders(recipeFor(4), { sunAzimuth: 350 }), applySliders(recipeFor(4), { sunAzimuth: 10 }), 0.5);
 	expect.near(sun.look.sun.azimuth, 0, 1e-9, 'through north, not round the long way');
 	const shot = blendRecipes(recipeFor(5), recipeFor(6), 0.5);
-	expect.equal(shot.shot.position.join(','), '0,352.5,272.5', 'the camera halfway up');
+	expect.equal(shot.shot.position.join(','), '0,152.5,57.5', 'the camera halfway up (crest [0, 5, 25], look-down [0, 300, 90])');
 });
 
 test('everything discrete snaps at the halfway point', () => {

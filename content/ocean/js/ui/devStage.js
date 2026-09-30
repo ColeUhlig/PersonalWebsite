@@ -28,6 +28,22 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	}
 	const look = createStageLook({ view, meshes, materials, config });
 
+	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so
+	// the camera does not jump at the snap into step 13 however long the page has been open.
+	let driftStart = null;
+	function shotSeconds(shot) {
+		if (shot.move !== 'drift') {
+			driftStart = null;
+			return 0;
+		}
+		const now = Ocean.teachTime(ocean);
+		driftStart ??= now;
+		return now - driftStart;
+	}
+
+	// A refused frame is reported once per distinct error, not on every frame it repeats on.
+	const reported = new Set();
+
 	// The phase arrows are built once per sea (a cascade build) and turned every call.
 	let arrows = null;
 	let arrowsKey = '';
@@ -45,18 +61,22 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 		// Before Ocean.step: the recipe's settings reach the engine and its look and shot the scene,
 		// so the rings follow the shot's target in the same frame.
 		// A frame the engine refuses (the director has already gone back to the values it last took)
-		// is reported and skipped, so the page's frame loop keeps running.
+		// is reported (once per distinct error) and skipped, so the page's frame loop keeps running.
 		beforeStep() {
 			let out;
 			try {
 				out = director.frame();
 			} catch (error) {
-				console.error('[ocean] the stage frame was refused', error);
+				if (!reported.has(error.message)) {
+					reported.add(error.message);
+					console.error('[ocean] the stage frame was refused', error);
+				}
 				return;
 			}
 			look.apply(out.look);
+			const seconds = shotSeconds(out.shot);
 			if (route.shots) {
-				rig.applyShot(out.shot, Ocean.teachTime(ocean));
+				rig.applyShot(out.shot, seconds);
 			}
 		},
 		afterStep() {

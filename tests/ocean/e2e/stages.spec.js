@@ -36,8 +36,8 @@ test("each step's look reaches the meshes: white under its grid, the lit sea, th
 test("the camera stands where the blended recipe's shot says", async ({ page }) => {
 	await load(page, 'step=5&progress=0.5&freeze=12', 5);
 	const position = await page.evaluate(() => window.__ocean.camera.position.toArray());
-	// Step 5's crest shot [0, 5, 25] and step 6's fly-up [0, 700, 520], halfway.
-	[0, 352.5, 272.5].forEach((value, i) => expect(position[i]).toBeCloseTo(value, 3));
+	// Step 5's crest shot [0, 5, 25] and step 6's look-down [0, 300, 90] (fix round 1), halfway.
+	[0, 152.5, 57.5].forEach((value, i) => expect(position[i]).toBeCloseTo(value, 3));
 });
 
 test('a bad route warns and falls back instead of breaking (Review Focus 3)', async ({ page }) => {
@@ -50,5 +50,47 @@ test('a bad route warns and falls back instead of breaking (Review Focus 3)', as
 	expect(warnings.some((w) => w.includes('step=99'))).toBe(true);
 	expect(warnings.some((w) => w.includes('progress=-1'))).toBe(true);
 	expect(warnings.some((w) => w.includes('s.wind'))).toBe(true);
+	expect(errors).toEqual([]);
+});
+
+// Fix round 1: the look probe reads the meshes themselves, and says whether the environment
+// reflections have caught up with a moved sun (they wait for it to hold still 20 frames).
+test('a moved sun reaches the light, and the reflections follow once it holds still', async ({ page }) => {
+	test.setTimeout(180_000);
+	const errors = await load(page, 'step=4&freeze=12&s.sunAzimuth=90', 5);
+	const look = await page.evaluate(() => window.__ocean.stage.look());
+	expect(look.mode).toBe('sea-lit');
+	[0, 0.2822, 0.9594].forEach((value, i) => expect(look.sun[i]).toBeCloseTo(value, 3));
+	await page.waitForFunction(() => window.__ocean.stage.look().environment.settled, null, { timeout: 120_000 });
+	const settled = await page.evaluate(() => window.__ocean.stage.look());
+	settled.environment.sun.forEach((value, i) => expect(value).toBeCloseTo(settled.sun[i], 6));
+	expect(errors).toEqual([]);
+});
+
+// Fix round 1: the drift turns from the moment the move becomes 'drift', not from page start, so
+// the camera does not jump at the 12 -> 13 snap however long the page has been open.
+test('the finale drifts on from where the snap left the camera', async ({ page }) => {
+	test.setTimeout(180_000);
+	const errors = await load(page, 'step=12', 5);
+	// Long enough that a drift timed from page start would have swung the camera 40 studs or more.
+	await page.waitForTimeout(12_000);
+	const position = async () => page.evaluate(() => window.__ocean.camera.position.toArray());
+	const frames = (n) => page.evaluate((count) => new Promise((resolve) => {
+		const start = window.__ocean.status().frame;
+		const tick = () => (window.__ocean.status().frame >= start + count ? resolve() : requestAnimationFrame(tick));
+		tick();
+	}), n);
+	await page.evaluate(() => window.__ocean.stage.set(12, 0.45));
+	await frames(2);
+	const before = await position();
+	await page.evaluate(() => window.__ocean.stage.set(12, 0.55));
+	await frames(2);
+	const after = await position();
+	// 0.1 of the way from step 12's shot to step 13's is about 5 studs; a jump would be tens.
+	expect(Math.hypot(...after.map((v, i) => v - before[i]))).toBeLessThan(10);
+	await page.evaluate(() => window.__ocean.stage.set(13, 0));
+	await frames(2);
+	const deck = await position();
+	expect(Math.hypot(deck[0] - 0, deck[1] - 14, deck[2] - 40)).toBeLessThan(10);
 	expect(errors).toEqual([]);
 });

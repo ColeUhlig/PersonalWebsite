@@ -113,7 +113,14 @@ export function createScene(canvas) {
 		environmentStale = false;
 	}
 
-	// A3: the fog a stage recipe asks for (step 6 thins it so the repetition shows).
+	// A3: whether the environment reflections have caught up with the stage sun, and the sun they
+	// were last built for (the stage look's probe reports it).
+	function environmentState() {
+		const built = environmentSky.material.uniforms.sunPosition.value;
+		return { settled: !environmentStale, sun: [built.x, built.y, built.z] };
+	}
+
+	// A3: the fog a stage recipe asks for (step 1 thickens it over the far grid).
 	function setFog(density) {
 		if (!(Number.isFinite(density) && density >= 0)) {
 			throw new Error(`setFog needs a finite density of at least 0, got ${density}`);
@@ -146,6 +153,7 @@ export function createScene(canvas) {
 		setEnvironment,
 		setStageSun,
 		settleEnvironment,
+		environmentState,
 		setFog,
 		resize,
 		follow,
