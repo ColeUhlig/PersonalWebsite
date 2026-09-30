@@ -79,6 +79,17 @@ function patchState(patch) {
 	};
 }
 
+function checkBounds(bounds) {
+	check(
+		bounds.height > SKIRT_MARGIN && bounds.lateral > 0,
+		`patch bounds must be positive, got lateral=${bounds.lateral} height=${bounds.height}: the skirt hangs ${SKIRT_MARGIN} studs above the bottom of the bounds`,
+	);
+}
+
+function contextsFor(specs) {
+	return Object.freeze(specs.map((spec, i) => SurfaceSampler.ringContext(spec, specs[i + 1])));
+}
+
 /**
  * @param {import('../core/ringLayout.js').Layout} layout
  * @param {{ height: number, lateral: number }} bounds studs above and below sea level, and past
@@ -86,10 +97,7 @@ function patchState(patch) {
  * @param {boolean} flatNormals normals stay up and are never rewritten
  */
 export function create(layout, bounds, flatNormals) {
-	check(
-		bounds.height > SKIRT_MARGIN && bounds.lateral > 0,
-		`patch bounds must be positive, got lateral=${bounds.lateral} height=${bounds.height}: they are fixed when the parts are made and cannot be widened later, so the shape settings have to be known first`,
-	);
+	checkBounds(bounds);
 	const ringCount = layout.spec.rings.length;
 	const byRing = [];
 	const centres = [];
@@ -126,6 +134,17 @@ export function create(layout, bounds, flatNormals) {
 		// Seconds the last snapAndWrite spent moving patches (0 when no ring moved): the Luau
 		// returns it as snapAndWrite's second value, and the coordinator charges it to `snap`.
 		snapSeconds: 0,
+		// The cascades each ring samples, filtered by setRingCascades (all of them until then), and
+		// the sampler's per-ring working for those lists, worked out once per change rather than once
+		// per ring per frame.
+		ringSpecs: layout.spec.rings,
+		contexts: contextsFor(layout.spec.rings),
+		// Set by a change the next write must cover whole: new ring lists, bounds or normals.
+		stale: false,
+		// Bumped by setBounds, so the renderer knows to refit its bounding spheres.
+		boundsVersion: 0,
+		// True when the last snapAndWrite had nothing to do: a still surface whose windows held.
+		skipped: false,
 	};
 	snap(surface, 0, 0);
 	return surface;
@@ -241,10 +260,12 @@ function scanExtremes(surface, state) {
 
 // One ring's patches through the sampler, with the hidden transitions.
 function writeRing(surface, ring, store, swells, t, chop) {
-	const rings = surface.layout.spec.rings;
+	// The FILTERED ring specs (setRingCascades): the same spacing and reach as the layout's, with
+	// only the cascades that are switched on, and their contexts worked out when they changed.
+	const rings = surface.ringSpecs;
 	const ringSpec = rings[ring - 1];
 	const nextRingSpec = rings[ring]; // Luau rings[ring + 1]; undefined on the last ring
-	const context = SurfaceSampler.ringContext(ringSpec, nextRingSpec);
+	const context = surface.contexts[ring - 1];
 	const halfExtent = ringSpec.halfExtent;
 	const centre = surface.centres[ring - 1];
 	// The next FINER ring's window, whose ground this ring skirts. Ring 1 has none, and an
@@ -320,15 +341,66 @@ export function takeExtremes(surface) {
 	return extremes;
 }
 
+/**
+ * Which cascades the rings sample (A3's layer switches): enabled[c - 1] for Luau cascade c. A
+ * cascade switched off leaves every ring's list and its vertex normals, and the fades follow, since
+ * each ring fades what the next one out no longer samples. All off leaves every ring with an empty
+ * list, which is how the teaching sources draw: their waves come through the swells bank alone.
+ * @param {ReadonlyArray<boolean>} enabled
+ */
+export function setRingCascades(surface, enabled) {
+	const on = (cascadeIndex) => enabled[cascadeIndex - 1] === true;
+	const specs = surface.layout.spec.rings.map((ring) =>
+		Object.freeze({
+			...ring,
+			cascades: Object.freeze(ring.cascades.filter(on)),
+			normalCascades: Object.freeze((ring.normalCascades ?? ring.cascades).filter(on)),
+		}),
+	);
+	surface.ringSpecs = Object.freeze(specs);
+	surface.contexts = contextsFor(specs);
+	surface.stale = true;
+}
+
+/**
+ * New bounds (they grow when a slider raises the sea: bounds.js). The skirt moves with them, so the
+ * next write is whole, and `boundsVersion` tells the renderer to refit its bounding spheres.
+ * @param {{ lateral: number, height: number }} bounds
+ */
+export function setBounds(surface, bounds) {
+	checkBounds(bounds);
+	surface.bounds = Object.freeze({ lateral: bounds.lateral, height: bounds.height });
+	surface.skirtY = Math.fround(-(bounds.height - SKIRT_MARGIN));
+	surface.boundsVersion += 1;
+	surface.stale = true;
+}
+
+// Whether the vertex normals are written: not while the look is unlit (white or flat colour) or
+// the config asks for flat normals. Turning them back on rewrites them on the next write.
+export function setFlatNormals(surface, flat) {
+	if (surface.flatNormals === flat) {
+		return;
+	}
+	surface.flatNormals = flat;
+	surface.stale = true;
+}
+
 // One frame of the surface, with the two writes in a deliberate order. The new windows are
 // adopted FIRST, so the vertices written this frame are the ones that belong where the patches
 // are about to be, and only then do the patches move. Returns how many rings shifted; the time
 // the move took is left in `surface.snapSeconds` (the Luau's second return value).
-export function snapAndWrite(surface, focusX, focusZ, store, swells, t, chop, frame) {
+// `still` (A3) says nothing on the surface moves by itself -- the flat plane of step 1 -- so once
+// every ring has been written, a frame on which no window shifted and nothing set the surface
+// stale writes nothing at all (`surface.skipped`). A stale surface is written whole.
+export function snapAndWrite(surface, focusX, focusZ, store, swells, t, chop, frame, still = false) {
 	const moved = adopt(surface, focusX, focusZ);
-	// `adopt` has already marked the rings that shifted, so the write sees them and covers every
-	// ring on this frame; `repositionDirty` below clears the marks once it is done.
-	write(surface, store, swells, t, chop, frame);
+	surface.skipped = still && moved === 0 && surface.everWritten && !surface.stale;
+	if (!surface.skipped) {
+		// `adopt` has already marked the rings that shifted, so the write sees them and covers every
+		// ring on this frame; `repositionDirty` below clears the marks once it is done.
+		write(surface, store, swells, t, chop, surface.stale ? undefined : frame);
+		surface.stale = false;
+	}
 	surface.snapSeconds = 0;
 	if (moved > 0) {
 		const started = performance.now();

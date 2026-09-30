@@ -31,6 +31,7 @@ import * as Tier from '../core/tier.js';
 import * as WaterColour from '../core/waterColour.js';
 import * as WaveField from '../core/waveField.js';
 import { color3 } from '../core/luau.js';
+import { boundsFor } from './bounds.js';
 import { createCascades } from './cascadeTransport.js';
 import * as HorizonState from './horizonState.js';
 import * as PainterClient from './painterClient.js';
@@ -88,19 +89,6 @@ export function probeCascadeMs() {
 	}
 	times.sort((a, b) => a - b);
 	return times[Math.ceil(times.length / 2) - 1];
-}
-
-// A patch's bounding volume is fixed when it is made, so it has to cover the worst displacement
-// these settings can produce. Generous linear guesses: displacement grows with amplitude (scale)
-// and with chop, height with amplitude and the swells. At the shipped defaults they give lateral
-// 46.4 and height 40, against measured extremes of about 10 and 17.5. The report carries the real
-// extremes every window so an underestimate shows as a number, not as flicker.
-function boundsFor(config) {
-	const scale = config.params.scale;
-	return {
-		lateral: 8 + 6 * config.chop * scale + 2 * config.swellScale,
-		height: 8 + 4 * scale + 2.5 * config.swellScale,
-	};
 }
 
 function swellsFor(config) {
@@ -206,7 +194,7 @@ function tierLine(ocean, probeMs) {
  * @param {{ warn: Function, info?: Function }} [deps.log]
  */
 export function create(config, { spawnCascade, spawnPainter, now, probeMs, log = console }) {
-	const bounds = boundsFor(config);
+	const bounds = boundsFor({ params: config.params, chop: config.chop, swellScale: config.swellScale });
 	const measured = config.tier ? null : (probeMs ?? probeCascadeMs());
 	const tierName = config.tier ?? Tier.choose(measured);
 	const preset = Tier.presets[tierName];
