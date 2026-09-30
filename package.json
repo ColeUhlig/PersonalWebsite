@@ -8,7 +8,7 @@
 	"scripts": {
 		"test:ocean": "node --test --experimental-test-coverage --test-coverage-include='content/ocean/js/core/**' --test-coverage-include='content/ocean/js/engine/**' --test-coverage-include='content/ocean/js/workers/**' --test-coverage-include='content/ocean/js/proof/**' --test-coverage-include='content/ocean/js/ui/proofImages.js' --test-coverage-include='content/ocean/js/ui/luauSource.js' 'tests/ocean/core/**/*.test.js' 'tests/ocean/engine/**/*.test.js' 'tests/ocean/proof/**/*.test.js'",
 		"test:ocean:e2e": "playwright test -c playwright.ocean.config.js",
-		"serve:ocean": "python3 -m http.server 8767 --directory content"
+		"serve:ocean": "python3 -m http.server ${OCEAN_PORT:-8767} --directory content"
 	},
 	"devDependencies": {
 		"@playwright/test": "1.63.0",
