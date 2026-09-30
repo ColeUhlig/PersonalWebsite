@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,8 +45,10 @@ function footageAsync(args, env = {}) {
 
 // Stands in for ffmpeg without encoding: first passes (output -) succeed at once; each real
 // output waits FAKE_DELAY seconds, then the mp4 is a copy of a real clip (ffprobe reads it) and
-// the webm and poster are a few bytes, or FAKE_WEBM_BYTES zero bytes for an oversized webm.
+// the webm and poster are a few bytes, or FAKE_WEBM_BYTES zero bytes for an oversized webm. It
+// touches FAKE_MARKER, if set, whenever it runs.
 const FAKE_ENCODER = `#!/bin/sh
+[ -n "$FAKE_MARKER" ] && touch "$FAKE_MARKER"
 for last; do :; done
 [ "$last" = "-" ] && exit 0
 sleep "\${FAKE_DELAY:-0}"
@@ -295,6 +297,126 @@ test('a recording whose name has a colon is read as a file, not a protocol', { s
 		const run = spawnSync(process.execPath, [CLI, 'crest', 'take:1.mov', '--length', '1', '--out', out], { cwd: dir, encoding: 'utf8' });
 		expect.equal(run.status, 0, `run failed: ${run.stderr}`);
 		expect.equal(footageClips(JSON.parse(readFileSync(join(out, 'footage.json'), 'utf8')))[0].shot, 'crest', 'listed');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+async function until(check, ms) {
+	const deadline = Date.now() + ms;
+	while (!check() && Date.now() < deadline) {
+		await new Promise((wake) => setTimeout(wake, 50));
+	}
+	return check();
+}
+
+function alive(pid) {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+test('a second Ctrl-C kills an ffmpeg that ignores SIGTERM and exits at once, leaving no temp folders', { skip: SKIP, timeout: 60_000 }, async () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		const old = seedDeck(out);
+		const temp = join(dir, 'tmp');
+		mkdirSync(temp);
+		const marker = join(dir, 'encoding');
+		// An encoder that ignores SIGTERM (sleep inherits the ignored signal), so only SIGKILL stops it.
+		const stubborn = join(dir, 'stubborn-ffmpeg');
+		writeFileSync(stubborn, `#!/bin/sh\ntrap '' TERM\necho $$ > "${marker}.pid"\ntouch "${marker}"\nexec sleep 30\n`, { mode: 0o755 });
+		const { child, done } = footageAsync(['deck', input, '--out', out], { FFMPEG: stubborn, TMPDIR: temp });
+		let exited = false;
+		done.then(() => {
+			exited = true;
+		});
+		expect.truthy(await until(() => existsSync(marker), 20_000), 'the encode started');
+		const pid = Number(readFileSync(`${marker}.pid`, 'utf8'));
+		child.kill('SIGINT');
+		await new Promise((wake) => setTimeout(wake, 500));
+		expect.equal(exited, false, 'the first SIGINT alone cannot stop an encoder that ignores SIGTERM');
+		const started = Date.now();
+		child.kill('SIGINT');
+		const guard = setTimeout(() => child.kill('SIGKILL'), 15_000);
+		const result = await done;
+		clearTimeout(guard);
+		expect.truthy(Date.now() - started < 3_000, `exited promptly after the second SIGINT (${Date.now() - started} ms)`);
+		expect.equal(result.status, 130, `exit code after two SIGINTs (signal ${result.signal}): ${result.stderr}`);
+		expect.truthy(await until(() => !alive(pid), 3_000), 'the encoder was killed');
+		expectUntouched(out, old);
+		expect.equal(readdirSync(temp).join(','), '', 'pass-log folder removed');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('a lock a killed run left over a minute ago stops the tool before it encodes and is kept', { skip: SKIP, timeout: 60_000 }, () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		const old = seedDeck(out);
+		const lock = join(out, 'footage.json.lock');
+		writeFileSync(lock, '');
+		const minutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+		utimesSync(lock, minutesAgo, minutesAgo);
+		const marker = join(dir, 'encoded');
+		const env = { ...process.env, ...fakeEncoder(dir), FAKE_MARKER: marker };
+		const started = Date.now();
+		const run = spawnSync(process.execPath, [CLI, 'deck', input, '--out', out], { cwd: ROOT, encoding: 'utf8', env });
+		expect.equal(run.status, 1, `exit code: ${run.stderr}`);
+		expect.truthy(Date.now() - started < 10_000, 'failed without waiting for the lock');
+		expect.truthy(run.stderr.includes(lock) && run.stderr.includes('delete it'), `names the lock and how to recover: ${run.stderr}`);
+		expect.equal(existsSync(marker), false, 'ffmpeg never ran');
+		expectUntouched(out, { ...old, 'footage.json.lock': '' });
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('a lock taken seconds ago does not stop the tool, which waits for it', { skip: SKIP, timeout: 60_000 }, async () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		mkdirSync(out, { recursive: true });
+		const lock = join(out, 'footage.json.lock');
+		writeFileSync(lock, '');
+		const secondsAgo = new Date(Date.now() - 10 * 1000);
+		utimesSync(lock, secondsAgo, secondsAgo);
+		const marker = join(dir, 'encoded');
+		const { done } = footageAsync(['crest', input, '--out', out], { ...fakeEncoder(dir), FAKE_MARKER: marker, FAKE_DELAY: '0.3' });
+		expect.truthy(await until(() => existsSync(marker), 20_000), 'the encode started despite the lock');
+		// Another run finishing: its lock goes away, and this run then takes it.
+		rmSync(lock);
+		const result = await done;
+		expect.equal(result.status, 0, `run failed: ${result.stderr}`);
+		expect.equal(footageClips(JSON.parse(readFileSync(join(out, 'footage.json'), 'utf8')))[0].shot, 'crest', 'listed');
+		expect.equal(readdirSync(out).sort().join(','), 'crest.jpg,crest.mp4,crest.webm,footage.json', 'no lock, partial or staging files left');
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test('a staging folder that disappears while stale ones are being cleared does not stop the tool', { skip: SKIP, timeout: 60_000 }, () => {
+	const dir = mkdtempSync(join(tmpdir(), 'ocean-footage-test-'));
+	try {
+		const input = recording(dir, 'input.mov', '640x360');
+		const out = join(dir, 'media');
+		mkdirSync(out, { recursive: true });
+		// readdir lists a dangling link but stat on it fails with ENOENT: the same thing a concurrent
+		// run removing its finished folder between the two calls looks like, but every time.
+		symlinkSync(join(dir, 'removed-meanwhile'), join(out, '.ocean-footage-gone'));
+		const env = { ...process.env, ...fakeEncoder(dir) };
+		const run = spawnSync(process.execPath, [CLI, 'flyup', input, '--out', out], { cwd: ROOT, encoding: 'utf8', env });
+		expect.equal(run.status, 0, `run failed: ${run.stderr}`);
+		expect.equal(readdirSync(out).sort().join(','), '.ocean-footage-gone,flyup.jpg,flyup.mp4,flyup.webm,footage.json', 'encoded and listed');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}

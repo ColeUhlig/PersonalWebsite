@@ -10,8 +10,10 @@
 // bob starts and stops at speed.
 // Several shots can be encoded at once: each run stages its files in its own folder, and the
 // manifest update takes footage.json.lock. Ctrl-C (SIGINT) or SIGTERM stops the running ffmpeg,
-// removes the run's temp folders and exits 130 or 143; a SIGKILL cannot be caught, so staging
-// folders older than 6 hours are removed at the next start.
+// removes the run's temp folders and exits 130 or 143; a second one kills ffmpeg outright (for an
+// ffmpeg that ignores SIGTERM) and exits at once. A SIGKILL cannot be caught, so staging folders
+// older than 6 hours are removed at the next start, and a lock older than a minute stops the run
+// before it encodes, saying to delete it.
 // FFMPEG and FFPROBE in the environment override the binaries (default: Homebrew's, then PATH).
 // How to record: roblox-ocean docs/recording.md.
 import { spawn } from 'node:child_process';
@@ -31,24 +33,58 @@ const STAGE_PREFIX = '.ocean-footage-';
 const STALE_STAGE_MS = 6 * 3600 * 1000;
 const LOCK_WAIT_MS = 30_000;
 const LOCK_RETRY_MS = 100;
+const STALE_LOCK_MS = 60_000;
 const USAGE = [
 	'usage: node scripts/ocean-footage.mjs <shot> <recording> [--start seconds] [--length seconds] [--fps n] [--out dir]',
 	`shots: ${FOOTAGE_SHOTS.join(', ')}`,
 	'env: FFMPEG and FFPROBE override the ffmpeg and ffprobe binaries',
 ].join('\n');
 
-// The ffmpeg or ffprobe processes running now, and the signal that stopped the run, if any. A
-// signal kills the running process, whose failure unwinds main through its finally blocks.
+// The ffmpeg or ffprobe processes running now, the temp folders not yet removed, and the signal
+// that stopped the run, if any. A signal sends SIGTERM to the running process, whose failure
+// unwinds main through its finally blocks; a second signal forces the stop.
 const running = new Set();
+const temps = new Set();
 let stoppedBy = null;
 
 function stop(signal) {
 	if (stoppedBy) {
+		forceStop(signal);
 		return;
 	}
 	stoppedBy = signal;
 	for (const child of running) {
 		child.kill('SIGTERM');
+	}
+}
+
+// For an ffmpeg that ignores SIGTERM: kills it, removes the temp folders here because the finally
+// blocks will not run, and exits. The manifest and the shot's files only change in synchronous
+// code under the lock, where no signal handler can run, so they are left as they were.
+function forceStop(signal) {
+	for (const child of running) {
+		child.kill('SIGKILL');
+	}
+	for (const dir of temps) {
+		removeTemp(dir);
+	}
+	console.error(`stopped by ${signal} again, ffmpeg killed; footage.json and the shot's files were not changed`);
+	process.exit(128 + constants.signals[signal]);
+}
+
+function makeTemp(prefix) {
+	const dir = mkdtempSync(prefix);
+	temps.add(dir);
+	return dir;
+}
+
+// Retries cover a killed ffmpeg's last write landing while the folder is being removed.
+function removeTemp(dir) {
+	try {
+		rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+		temps.delete(dir);
+	} catch (error) {
+		console.error(`could not remove ${dir} (${error.message}); delete it by hand`);
 	}
 }
 
@@ -155,11 +191,24 @@ function clearStaleStages(outDir) {
 		return;
 	}
 	const cutoff = Date.now() - STALE_STAGE_MS;
-	for (const name of readdirSync(outDir)) {
+	for (const name of readdirSync(outDir).filter((entry) => entry.startsWith(STAGE_PREFIX))) {
 		const path = join(outDir, name);
-		if (name.startsWith(STAGE_PREFIX) && statSync(path).isDirectory() && statSync(path).mtimeMs < cutoff) {
+		// Undefined when a run that finished meanwhile removed its folder after readdirSync listed it.
+		const stats = statSync(path, { throwIfNoEntry: false });
+		if (stats?.isDirectory() && stats.mtimeMs < cutoff) {
 			rmSync(path, { recursive: true, force: true });
 		}
+	}
+}
+
+// A run holds footage.json.lock for milliseconds, so one older than STALE_LOCK_MS was left by a
+// run killed with SIGKILL. Stops the run before it encodes rather than after a 30 s wait; the lock
+// is not removed here, since only the user knows no other run is going.
+function refuseStaleLock(lockFile) {
+	const stats = statSync(lockFile, { throwIfNoEntry: false });
+	const age = stats ? Date.now() - stats.mtimeMs : 0;
+	if (age > STALE_LOCK_MS) {
+		throw new Error(`${lockFile} is ${Math.round(age / 1000)} s old, so a killed ocean-footage run probably left it behind. If no other run is going, delete it (rm '${lockFile}') and run again. Nothing was encoded`);
 	}
 }
 
@@ -208,11 +257,11 @@ function writeManifest(file, manifest) {
 // working files or leaves partial ones; both folders are removed whatever happens. The first
 // planEncode validates the shot and the frame rate before the output directory is created.
 async function encode(options, install) {
-	const passDir = mkdtempSync(join(tmpdir(), 'ocean-footage-'));
+	const passDir = makeTemp(join(tmpdir(), 'ocean-footage-'));
 	try {
 		const target = planEncode({ ...options, passDir });
 		mkdirSync(options.outDir, { recursive: true });
-		const stageDir = mkdtempSync(join(options.outDir, STAGE_PREFIX));
+		const stageDir = makeTemp(join(options.outDir, STAGE_PREFIX));
 		try {
 			const staged = planEncode({ ...options, outDir: stageDir, passDir });
 			for (const args of staged.commands) {
@@ -222,10 +271,10 @@ async function encode(options, install) {
 			const moveFiles = () => Object.keys(target.outputs).forEach((kind) => renameSync(staged.outputs[kind], target.outputs[kind]));
 			return await install(measured, moveFiles);
 		} finally {
-			rmSync(stageDir, { recursive: true, force: true });
+			removeTemp(stageDir);
 		}
 	} finally {
-		rmSync(passDir, { recursive: true, force: true });
+		removeTemp(passDir);
 	}
 }
 
@@ -251,6 +300,7 @@ async function main(argv) {
 	const { shot, input, values, outDir } = parse(argv);
 	const manifestFile = join(outDir, MANIFEST_NAME);
 	clearStaleStages(outDir);
+	refuseStaleLock(`${manifestFile}.lock`);
 	manifestWith(manifestFile, { shot, ...clipFiles(shot), width: 2, height: 2, seconds: 1 });
 	const source = await probe(input);
 	const window = clipWindow(source.seconds, { start: number(values.start, 'start'), length: number(values.length, 'length') });
