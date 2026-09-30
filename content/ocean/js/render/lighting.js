@@ -1,0 +1,46 @@
+// The Studio place's lighting, read from "SOT jonswap ocean" on 2026-09-28: Lighting Brightness 2.6,
+// ClockTime 16.9, GeographicLatitude 30, Ambient (0.27, 0.33, 0.40), OutdoorAmbient (0.45, 0.52,
+// 0.60), ExposureCompensation 0.1, sun direction (-0.953, 0.282, 0.113); Atmosphere Density 0.22,
+// Offset 0.1, Color (0.74, 0.84, 0.90), Decay (0.55, 0.68, 0.78), Glare 0.35, Haze 0.6;
+// ColorCorrection Contrast 0.08, Saturation 0.12; Bloom 0.55 / size 30 / threshold 2.2; SunRays 0.06;
+// camera FieldOfView 70 (vertical, as Three.js). Three.js lights are not Roblox's: every intensity
+// below is a starting point, tuned against Studio captures in the look-match task, which records
+// the final values and why here.
+export const SUN_DIRECTION = Object.freeze([-0.9526530504226685, 0.2821884751319885, 0.11323313415050507]);
+export const SUN_COLOUR = Object.freeze([1, 0.96, 0.9]);
+export const SUN_INTENSITY = 2.6;
+export const SKY_AMBIENT = Object.freeze([0.45, 0.52, 0.6]);
+export const GROUND_AMBIENT = Object.freeze([0.27, 0.33, 0.4]);
+// Look match 2026-09-29, round 1 (against the Studio deck and high captures of 2026-09-23 at the same
+// cameras and sea): 1 -> 0.6. At 1 the water read pale cyan where Studio's is deep navy-teal.
+export const AMBIENT_INTENSITY = 0.6;
+export const EXPOSURE = 2 ** 0.1;
+export const FOG_COLOUR = Object.freeze([0.74, 0.84, 0.9]);
+// Look match rounds 1 and 2: 0.00035 -> 0.0007 -> 0.0009. Studio's Atmosphere hazes the far field;
+// with too little fog the horizon quads' 256-stud texture repeat showed plainly from the high shot.
+export const FOG_DENSITY = 0.0009;
+// Look match round 1: 1 -> 0.6, for the same pale-water reason as the ambient light.
+// How strongly the sky's reflections light the water (Three.js scene.environmentIntensity; Roblox's
+// EnvironmentSpecularScale is 1, but Three.js's PMREM sky reflects far brighter than Roblox's).
+export const ENVIRONMENT_INTENSITY = 0.6;
+export const FIELD_OF_VIEW = 70;
+export const CSS_FILTER = 'contrast(1.08) saturate(1.12)';
+// Roblox EmissiveStrength reaches about 30 on the brightest patch; Three.js emissive intensity is
+// on another scale. Tuned in the look match.
+// Look match rounds 2 and 3: 0.05 -> 0.1 -> 0.25. Measured at the high shot: the strongest patch's
+// Roblox strength is about 8.5, which reads bright turquoise in Studio; at 0.1 that gave an emissive
+// intensity of 0.85, invisible here. At 0.25 the sun-side crests glow as in the Studio capture.
+export const EMISSIVE_SCALE = 0.25;
+// The ripple normal map's green channel carries +z; whether Three.js reads it as +v or -v is decided
+// by the paired calibration in tests/ocean/e2e/materials.spec.js. V is the high shot with cascade 1
+// in the vertex normals; in one ?calibrate=map load F is the map off (normalScale 0, 0) and M the
+// map at (1, +1) or (1, -1); r = corr(V - F, M - F) over the 85 rows the vertex normals move.
+// Decision, sun turned 90 degrees about +Y to (0.113, 0.282, 0.953) with the environment off
+// (SwiftShader, 2026-09-29): r(1, 1) = 0.791, r(1, -1) = -0.697, margin 1.488, so the sign is 1.
+// Beside it, the place's sun with its environment: r(1, 1) = 0.866, r(1, -1) = 0.749 (margin 0.117,
+// too small to decide on), and the x sign is 1 there (r(-1, 1) = -0.693, r(-1, -1) = -0.686).
+// The environment is excluded because the sky's reflections keep the place's sun lobe along -x
+// whatever the light does, so they follow the x slopes and drown the green channel's term.
+export const NORMAL_SCALE_Y = 1;
+export const SKY = Object.freeze({ turbidity: 4, rayleigh: 1.5, mieCoefficient: 0.005, mieDirectionalG: 0.8 });
+export const MAX_PIXEL_RATIO = 2;

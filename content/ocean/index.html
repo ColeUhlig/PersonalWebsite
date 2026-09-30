@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Building an Ocean in Roblox</title>
+	<meta name="description" content="A Sea of Thieves-style FFT ocean I built in Roblox, running live in your browser. The full write-up is on its way.">
+	<link rel="canonical" href="https://coleuhlig.com/ocean/">
+	<script src="/js/canonical-host.js"></script>
+	<link rel="stylesheet" href="style.css">
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+		}
+	}
+	</script>
+</head>
+<body>
+	<canvas id="ocean" aria-label="Live ocean simulation"></canvas>
+	<main class="teaser">
+		<p class="teaser-kicker">Work in progress</p>
+		<h1>Building an Ocean in Roblox</h1>
+		<p>This is the ocean I built in Roblox: an FFT sea with three wave cascades, foam and crest glow. What you're looking at is it running live in your browser, ported to JavaScript and held to what Roblox allows.</p>
+		<p>The full story (how it goes from a flat plane to this, step by step, and every wall Roblox put in the way) is on its way.</p>
+		<p><a href="/">&larr; coleuhlig.com</a></p>
+	</main>
+	<div id="notice" hidden></div>
+	<pre id="stats" hidden></pre>
+	<script type="module" src="js/main.js"></script>
+</body>
+</html>
