@@ -20,16 +20,22 @@ export const SPECTRUM_AXIS = Object.freeze({ from: 0.2, to: 6, points: 200 });
 // The naive sum is O(n^4): 28 ms at n = 64 in Node on Cole's Mac (2026-09-30, warm), about 0.45 s
 // at 128, which would freeze the page.
 export const MAX_NAIVE_N = 64;
-// Before any clock starts, both transforms run untimed at min(n, WARMUP_N) until the JIT has
+// Before the first clock starts, both transforms run untimed at WARMUP_N until the JIT has
 // optimised them: timed cold, the naive sum read up to 4 times slower than it runs, and the speedup
-// with it (43x at n = 8, twice the operation ratio). 30 naive runs, not fewer, is what brings a
-// first call at n = 64 down to the warm figure; the warm-up costs about 8 ms (7 naive, 1.3 FFT).
+// with it (43x at n = 8, twice the operation ratio). 120 naive runs is what brings a first single
+// run at n = 64 down to the warm figure: after 30 it still read 25 to 35% slow, and 4 runs at
+// n = 32 fixed n = 64 but left a first n = 8 call slow. The warm-up costs about 21 ms (20 naive,
+// 1.3 FFT), so it runs once per page (the `warmedUp` flag below), at 16 whatever n the first call
+// asks for: a warm-up at n = 2 would leave a later n = 64 cold.
 const WARMUP_N = 16;
-const WARMUP_RUNS = Object.freeze({ naive: 30, fft: 200 });
+const WARMUP_RUNS = Object.freeze({ naive: 120, fft: 200 });
 // Then the two are timed in alternating batches and each reports its median batch, so a spike of
 // load hits both and moves neither. Fast runs repeat within a batch until the clock has something
 // to read (browsers coarsen performance.now()). Batches stop at MAX_BATCHES, or after MIN_BATCHES
-// once TIME_BUDGET_MS has gone, which only the naive sum at n = 64 reaches.
+// once TIME_BUDGET_MS has gone. A naive run slower than SINGLE_NAIVE_MS (n = 64, 28 ms) is timed
+// once, not three times: one run that long is already a steady reading, and three blocked the page
+// for 200 ms and more under load. The FFT still takes its median.
+export const SINGLE_NAIVE_MS = 20;
 const MIN_BATCH_MS = 2;
 const MAX_BATCH_RUNS = 5000;
 const MIN_BATCHES = 3;
@@ -37,6 +43,8 @@ const MAX_BATCHES = 5;
 const TIME_BUDGET_MS = 100;
 // The wavenumber whose omega is this one, by bisection: the inverse of Spectrum.omega.
 const BISECTION_STEPS = 200;
+// The page's one piece of module state: whether the JIT has had its warm-up yet.
+let warmedUp = false;
 
 /**
  * S(omega) across the axis: `physical` is JONSWAP with the depth factor (m^2 s / rad), `shaped` is
@@ -108,15 +116,18 @@ function wavenumberFor(omega, params) {
  *
  * Each component: `kx`, `kz` (rad/stud), `wavelength` (studs), `omega` (rad/s, the cascade's
  * loop-quantised value), `h0Re`, `h0Im` and `amplitude` = |h0| (studs). The amplitude is the
- * arrow's length, not the wave's: the mirror cell at -k carries the conjugate, so the travelling
- * wave is 2 |h0| cos(k . x - omega t + phase), its crest 2 |h0| above the mean and 4 |h0| above
- * its trough. |h0| is half the wave's amplitude.
+ * arrow's length, not the wave's. Cell -k holds its own h0(-k), a separate wave running the other
+ * way, but its h~ also carries conj(h0(k)) e^{+i omega t}, and that term and this arrow's
+ * h0(k) e^{-i omega t} make the travelling wave 2 |h0| cos(k . x - omega t + phase): its crest
+ * 2 |h0| above the mean and 4 |h0| above its trough. |h0| is half the wave's amplitude.
  *
- * `count` above the number of cells that hold a wave (cascade 1's band leaves the rest at zero) is
- * a RangeError, not quietly fewer arrows.
+ * `count` that is not an integer from 1 to the number of cells that hold a wave (cascade 1's band
+ * leaves the rest at zero) is a RangeError, not quietly fewer arrows.
  */
 export function createPhaseArrows(params, { seed = SEED, count = 8, sizes = Tier.presets.High.sizes, n = Tier.presets.High.n } = {}) {
-	check(Number.isInteger(count) && count >= 1 && count <= n * n, `count must be an integer 1 .. ${n * n}, got ${count}`);
+	if (!(Number.isInteger(count) && count >= 1 && count <= n * n)) {
+		throw new RangeError(`count must be an integer 1 .. ${n * n}, got ${count}`);
+	}
 	const band = WaveField.bands(sizes, n)[0];
 	const cascade = Cascade.create({ n, size: sizes[0], kMin: band.kMin, kMax: band.kMax, seed: cascadeSeed(seed, 1), loopPeriod: LOOP_PERIOD, params });
 	const amplitude = (i) => Math.hypot(cascade.h0Re[i], cascade.h0Im[i]);
@@ -179,8 +190,10 @@ function fftRunner(n, input, outRe, outIm) {
 	};
 }
 
-function warmUp(n, seed) {
-	const size = Math.min(n, WARMUP_N);
+function warmUpOnce(seed) {
+	if (warmedUp) return;
+	warmedUp = true;
+	const size = WARMUP_N;
 	const input = randomGrid(size, seed);
 	const outRe = new Float64Array(size * size);
 	const outIm = new Float64Array(size * size);
@@ -209,15 +222,20 @@ function median(values) {
 	return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+function enoughBatches(count, started) {
+	return count >= MAX_BATCHES || (count >= MIN_BATCHES && performance.now() - started >= TIME_BUDGET_MS);
+}
+
 function timeBoth(naive, fft) {
-	const naiveTimes = [];
-	const fftTimes = [];
 	const started = performance.now();
-	while (naiveTimes.length < MAX_BATCHES && (naiveTimes.length < MIN_BATCHES || performance.now() - started < TIME_BUDGET_MS)) {
-		naiveTimes.push(timeBatch(naive));
+	const naiveTimes = [timeBatch(naive)];
+	const fftTimes = [timeBatch(fft)];
+	const single = naiveTimes[0] > SINGLE_NAIVE_MS;
+	while (!enoughBatches(fftTimes.length, started)) {
+		if (!single) naiveTimes.push(timeBatch(naive));
 		fftTimes.push(timeBatch(fft));
 	}
-	return { naiveMs: median(naiveTimes), fftMs: median(fftTimes) };
+	return { naiveMs: median(naiveTimes), fftMs: median(fftTimes), batches: Object.freeze({ naive: naiveTimes.length, fft: fftTimes.length }) };
 }
 
 /**
@@ -225,10 +243,12 @@ function timeBoth(naive, fft) {
  * term-by-term inverse DFT and the radix-2 FFT the ocean runs, and the largest difference between
  * their answers. `operations` counts complex multiply-adds: n^4 for the naive sum, n^2 log2 n
  * butterflies for the FFT. The FFT time includes copying its input (it works in place). Both are
- * warmed up untimed first, then timed in alternating batches, and each time is its median batch
- * (see WARMUP_RUNS and MIN_BATCHES). Runs on the calling thread: 20 to 40 ms per call up to
- * n = 32 (the warm-up and the batches), about 120 ms at n = 64 (three naive sums), so call it on a
- * slider change, never per frame.
+ * warmed up untimed on the first call, then timed in alternating batches, and each time is its
+ * median batch; `batches` says how many each took (the naive sum at n = 64 takes one, see
+ * SINGLE_NAIVE_MS). Runs on the calling thread: about 20 ms per call up to n = 32 (the batches;
+ * the first call adds the 21 ms warm-up) and about 40 ms at n = 64, so call it on a slider change,
+ * never per frame. One naive sample at n = 64 is at the mercy of the machine's load: a busy
+ * moment can move that speedup by a factor of two either way, where the smaller n take medians.
  */
 export function measureTransforms(n, { seed = 1 } = {}) {
 	check(
@@ -236,13 +256,13 @@ export function measureTransforms(n, { seed = 1 } = {}) {
 		`n must be a power of two from 2 to ${MAX_NAIVE_N}, got ${n}`,
 	);
 	const cells = n * n;
-	warmUp(n, seed);
+	warmUpOnce(seed);
 	const input = randomGrid(n, seed);
 	const naiveRe = new Float64Array(cells);
 	const naiveIm = new Float64Array(cells);
 	const fftRe = new Float64Array(cells);
 	const fftIm = new Float64Array(cells);
-	const { naiveMs, fftMs } = timeBoth(naiveRunner(n, input, naiveRe, naiveIm), fftRunner(n, input, fftRe, fftIm));
+	const { naiveMs, fftMs, batches } = timeBoth(naiveRunner(n, input, naiveRe, naiveIm), fftRunner(n, input, fftRe, fftIm));
 	let maxDifference = 0;
 	for (let i = 0; i < cells; i++) {
 		maxDifference = Math.max(maxDifference, Math.abs(naiveRe[i] - fftRe[i]), Math.abs(naiveIm[i] - fftIm[i]));
@@ -255,5 +275,6 @@ export function measureTransforms(n, { seed = 1 } = {}) {
 		speedup: naiveMs / fftMs,
 		operations: Object.freeze({ naive: cells * cells, fft: cells * Math.log2(n) }),
 		maxDifference,
+		batches,
 	});
 }

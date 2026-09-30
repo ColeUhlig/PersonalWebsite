@@ -135,20 +135,50 @@ test('asking for more arrows than cascade 1 has waves is a RangeError; exactly t
 	}
 	expect.truthy(error instanceof RangeError, `a RangeError: ${error}`);
 	expect.truthy(error.message.includes(String(waves)), error.message);
+	for (const bad of [0, 2.5, 64 * 64 + 1]) {
+		let refused = null;
+		try {
+			Charts.createPhaseArrows(HERO, { count: bad });
+		} catch (caught) {
+			refused = caught;
+		}
+		expect.truthy(refused instanceof RangeError, `count ${bad} is a RangeError too: ${refused}`);
+	}
+});
+
+test('a naive sum too slow to repeat is timed once; fast ones take the median of several batches', () => {
+	const small = Charts.measureTransforms(8);
+	expect.truthy(small.batches.naive >= 3 && small.batches.fft >= 3, `n=8 batches: ${JSON.stringify(small.batches)}`);
+	expect.equal(small.batches.naive, small.batches.fft, 'alternating, one of each');
+	const large = Charts.measureTransforms(64);
+	expect.truthy(large.batches.fft >= 3, `the FFT keeps its median at n=64: ${JSON.stringify(large.batches)}`);
+	if (large.batches.naive === 1) {
+		expect.truthy(large.naiveMs > Charts.SINGLE_NAIVE_MS, `one batch only above ${Charts.SINGLE_NAIVE_MS} ms: ${large.naiveMs}`);
+	} else {
+		expect.truthy(large.batches.naive >= 3, `or a median: ${JSON.stringify(large.batches)}`);
+	}
 });
 
 // A fresh process, so the JIT has seen neither transform: the very first call must already be
 // warm on both sides. The naive sum does n^4 multiply-adds and the FFT n^2 log2 n butterflies, each
 // dearer than one naive step (bit reversal, the copy, twiddle loads), so a true speedup stays under
 // the operation ratio (21.3 at n = 8). A cold naive sum beside a warm FFT read 43x to 70x here.
-// The 1.5 is headroom for a loaded machine, not for a cold start.
+// The 1.5 is headroom for a loaded machine, not for a cold start. Two children, and the smaller of
+// their speedups: at load 20 about one child in several hundred read 100x or more, all or nothing,
+// which looks like a starved background compiler rather than a cold start.
 test('the first measurement in a fresh process is not inflated by a cold JIT', async (t) => {
 	const url = new URL('../../../content/ocean/js/engine/charts.js', import.meta.url).href;
 	const script = `const Charts = await import(${JSON.stringify(url)}); console.log(JSON.stringify(Charts.measureTransforms(8)));`;
-	const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script]);
-	const result = JSON.parse(stdout);
-	const ratio = result.operations.naive / result.operations.fft;
-	t.diagnostic(`fresh n=8: naive ${result.naiveMs} ms, fft ${result.fftMs} ms, speedup ${result.speedup}, op ratio ${ratio}`);
-	expect.truthy(result.speedup <= ratio * 1.5, `first-call speedup ${result.speedup} exceeds 1.5 x the op ratio ${ratio}`);
-	expect.truthy(result.maxDifference < 1e-9, 'and the two still agree');
+	const results = [];
+	for (let child = 0; child < 2; child++) {
+		const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script]);
+		results.push(JSON.parse(stdout));
+	}
+	const ratio = results[0].operations.naive / results[0].operations.fft;
+	for (const result of results) {
+		t.diagnostic(`fresh n=8: naive ${result.naiveMs} ms, fft ${result.fftMs} ms, speedup ${result.speedup}, op ratio ${ratio}`);
+		expect.truthy(result.maxDifference < 1e-9, 'and the two still agree');
+	}
+	const speedup = Math.min(...results.map((result) => result.speedup));
+	expect.truthy(speedup <= ratio * 1.5, `first-call speedup ${speedup} exceeds 1.5 x the op ratio ${ratio}`);
 });
