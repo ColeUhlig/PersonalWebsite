@@ -231,15 +231,17 @@ test('destroying the panel mid-run throws nothing, leaves no worker, and a later
 		await route.continue();
 	});
 	await openPanel(page);
-	await page.evaluate(() => {
-		window.__running = window.__proof.run();
+	// window.__proof is the lazy handle (proofLazy.js); mountNow() hands back the mounted panel.
+	await page.evaluate(async () => {
+		window.__panel = await window.__proof.mountNow();
+		window.__running = window.__panel.run();
 	});
 	await expect.poll(() => workers.length).toBe(1);
 	const state = await page.evaluate(async () => {
-		const before = window.__proof.element.dataset.proofState;
-		window.__proof.destroy();
+		const before = window.__panel.element.dataset.proofState;
+		window.__panel.destroy();
 		await window.__running;
-		await window.__proof.run();
+		await window.__panel.run();
 		return before;
 	});
 	expect(state).toBe('running');

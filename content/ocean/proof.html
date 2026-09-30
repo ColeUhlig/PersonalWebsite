@@ -18,8 +18,8 @@
 		<div id="proof"></div>
 	</main>
 	<script type="module">
-		import { mountProofPanel } from './js/ui/proofPanel.js';
-		window.__proof = mountProofPanel(document.getElementById('proof'));
+		import { mountProofPanelWhenNear } from './js/ui/proofLazy.js';
+		window.__proof = mountProofPanelWhenNear(document.getElementById('proof'));
 	</script>
 </body>
 </html>
