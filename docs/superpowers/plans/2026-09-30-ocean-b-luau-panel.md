@@ -37,8 +37,8 @@
   - A returned Luau table is a proxy: read its fields with `table.get(name)`.
   - Only numbers and strings cross reliably. Numbers, including `Infinity` and `NaN`, cross exactly. A JavaScript object passed in becomes a proxy whose arrays index from 0 and whose missing keys are not `nil`, so tables are never passed in.
   - Strings come back as UTF-8 text, so bytes above 0x7f are mangled. Binary data comes back as hex.
-  - The WebAssembly heap is fixed at about 16 MB and every state shares it. A failed allocation aborts the module with a `WebAssembly.RuntimeError`, and it does not collect garbage first. An idle state's garbage is collected only when that state allocates.
-  - `state.destroy()` breaks states created after it. Never call it.
+  - The WebAssembly heap is fixed at about 16 MB and every state shares it. A failed allocation aborts the module with a `WebAssembly.RuntimeError`, and it does not collect garbage first. An idle state's garbage is collected only when that state allocates (observed, not pinned: the experiment could not separate the two explanations).
+  - `state.destroy()` can break states created after it (always with one state destroyed then another created; sometimes otherwise; never states made before). Never call it.
   - `collectgarbage` is not available.
   - An error inside `pcall` is not caught; it escapes to JavaScript. Nothing bundled uses `pcall`.
 - Subagents run on opus.
