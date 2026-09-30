@@ -40,6 +40,15 @@ equations, real numbers and real Roblox code, and nothing overstated.
 - Its own cinematic look: full-screen live ocean, the story scrolling over it in dark glass panels. It is
   not styled like the VEX page; it shares only the site-wide header and link back home.
 - Engine approach A: module-by-module hand port, checked against the real Luau.
+- Decided 2026-09-30 (Cole, before the headless build of B, A3, C, A4 and D): the hero sea is the rough
+  default (the sea judged in A2); the copy is first person and casual ("I built this in Roblox, and
+  Roblox fought me the whole way"); the page title is "Building an Ocean in Roblox"; the footage section
+  is built with its film mode but stays hidden until Cole records clips; the roblox-ocean M4 branch is
+  merged into main locally and the place is prepared for players, but Cole makes it public himself, and
+  the Play button stays hidden until a public place URL is set; nothing is deployed: the work stays on
+  the ocean-showcase branch; phones get the lighter tier by rule (screens under 900 px wide, touch-first
+  devices), unmeasured, and the page's numbers say so. Plans for these pieces run without a per-plan
+  review, on Cole's instruction ("execute the entire ocean website thing").
 
 ### Honesty rules
 
