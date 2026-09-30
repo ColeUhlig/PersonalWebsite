@@ -6,22 +6,23 @@
 // (director.js) binds slider values in, blends two neighbours by the scroll progress (blend.js)
 // and hands the result to the engine and the renderer.
 //
-// Steps 1 to 6 run the Gerstner sum (the `sine` source, then the 32-wave `bank`, through
+// Steps 1 to 6 run the Gerstner sum (the `sine` source, then the teaching `bank`, through
 // WaveSampler as the original Roblox prototype did); from step 7 the surface is the FFT pipeline,
 // one layer until step 10 brings in all three. Every step starts from the hero sea, the rough
 // default Cole judged in A2 (stageControl.js DEFAULT_SETTINGS), which the finale is unchanged.
-// Steps 4 and 5 sum the 16 tallest bank waves rather than 32: 32 cost about 27 ms a frame over
-// 18,144 vertices in Node (2026-09-30), and waves 17 to 32 are under 0.15 studs tall.
+// Steps 4 and 5 sum the 16 tallest bank waves rather than the whole bank: the whole bank over
+// 18,144 vertices took longer than a 60 fps frame in Node (2026-09-30), and the waves past the
+// 16th are under 0.15 studs tall.
 //
 // The two high shots (steps 6 and 10) look steeply down on the sea from a few hundred studs, so
 // the frame never reaches the flat horizon plane past the last ring (Task 10 fix round 1: from
 // 700 studs up the plane's join read as the edge of a swimming pool, and thin fog showed the
 // world's own square edge). They keep A2's fog: nothing in their frames is far enough to need
-// thinning it, and the blends into them stay hazed at the horizon. Step 6 also sums only the bank's
-// 4 tallest waves (40 to 85 studs): its lit sea has no painted maps to even out the rings, and the
-// shorter waves alias on the 16-stud ring, where the frame's outer half sits, into blurrier, paler
-// water with a hard square edge around the 8-stud ring. The 4 still repeat every 256 studs, which
-// is the step's point. tests/ocean/stages/shots.test.js checks all of this from the geometry.
+// thinning it, and the blends into them stay hazed at the horizon.
+// Step 6 also sums only the bank's 4 tallest waves (40 to 85 studs): its lit sea has no painted
+// maps to even out the rings, and the shorter waves alias on the 16-stud ring, where the frame's
+// outer half sits, into blurrier, paler water with a hard square edge around the 8-stud ring. The
+// 4 still repeat every 256 studs, which is the step's point. tests/ocean/stages/shots.test.js checks all of this from the geometry.
 import { DEFAULT_SETTINGS } from '../engine/stageControl.js';
 import { SEED } from '../engine/config.js';
 import { FOG_DENSITY } from '../render/lighting.js';

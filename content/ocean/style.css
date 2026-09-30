@@ -530,7 +530,7 @@ footer.site a {
 		font-size: 1.3rem;
 	}
 
-	.panel p {
+	.panel > p {
 		margin-bottom: 10px;
 		font-size: 0.95rem;
 		line-height: 1.5;

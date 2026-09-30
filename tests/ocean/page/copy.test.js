@@ -8,8 +8,7 @@ import * as expect from '../expect.js';
 import { COPY_SOURCES, PHRASES } from './copySources.js';
 import { NUMBER, normalise, uncoveredNumbers } from './copyCheck.js';
 import { NOTICES } from '../../../content/ocean/js/page/notices.js';
-import { LUAU_FORK, LUAU_RELEASE, LUAU_WEB_VERSION } from '../../../content/ocean/js/proof/runtime.js';
-import { cascadeOptions } from '../../../content/ocean/js/proof/proofConfig.js';
+import { proofPanelText, readProofPanel } from './proofPanelText.js';
 
 const SITE = fileURLToPath(new URL('../../../', import.meta.url));
 const ROBLOX = process.env.ROBLOX_OCEAN_DIR || '/Users/cole/Projects/roblox-ocean';
@@ -54,26 +53,44 @@ test("the notices' numbers are sourced", () => {
 });
 
 // B's proofPanel.js builds the panel's markup at run time, so the page's copy check skips #proof
-// whole. Its fixed text is checked here instead: the template's placeholders are filled from the
-// modules the panel reads them from (proofConfig.js for the grid and seed, runtime.js for the
-// runtime), the result must say what the page's sourced phrases say, and every number in it must
-// sit inside a sourced phrase.
+// whole. Its fixed text is checked here instead: proofPanelText.js fills the panel's INTRO, markup
+// and map templates from the modules the panel reads (proofConfig.js for the grid and seed,
+// runtime.js for the runtime), and every number in the result must sit inside a sourced phrase.
 test("the proof panel's fixed text matches runtime.js and proofConfig.js, and its numbers are sourced", () => {
-	const panel = readFileSync(join(SITE, 'content/ocean/js/ui/proofPanel.js'), 'utf8');
-	const options = cascadeOptions();
-	const fieldsInWords = /const FIELDS_IN_WORDS = '([^']*)';/.exec(panel)?.[1];
-	expect.truthy(fieldsInWords, 'FIELDS_IN_WORDS is a plain string in proofPanel.js');
-	const values = { 'o.n': options.n, 'o.seed': options.seed, LUAU_FORK, LUAU_RELEASE, LUAU_WEB_VERSION, FIELDS_IN_WORDS: fieldsInWords };
-	const fill = (template) =>
-		template.replace(/\$\{([^}]+)\}/g, (_, name) => {
-			if (!(name in values)) throw new Error(`proofPanel.js fixed text uses \${${name}}, which this test does not know`);
-			return String(values[name]);
-		});
-	const fixed = [...panel.matchAll(/<(h2|p) class="proof-(?:title|lede|note)">(.*?)<\/\1>/g)].map((match) => fill(match[2]));
-	expect.equal(fixed.length, 5, 'the heading, the lede and three notes');
-	const text = normalise(fixed.join(' '));
+	const { text, attributes } = proofPanelText();
+	expect.truthy(text.includes('Run both') && text.includes('Luau height') && text.includes('Verdict'), `the button, a caption and a term are read: ${text}`);
+	expect.truthy(text.includes('This is my actual Roblox code, running in your browser.'), `the heading is read: ${text}`);
 	expect.truthy(text.includes('one wave cascade, 64 × 64 cells at seed 7.'), `grid and seed: ${text}`);
 	expect.truthy(text.includes('My Luau runs on luau-interop, a fork of Luau 0.711, packaged as luau-web 1.4.0:'), `runtime: ${text}`);
-	const missing = uncoveredNumbers(text, PHRASES);
+	const missing = [...uncoveredNumbers(text, PHRASES), ...uncoveredNumbers(attributes, PHRASES)];
 	expect.equal(missing.length, 0, `unsourced numbers in the proof panel: ${JSON.stringify(missing)}`);
+});
+
+test('the proof panel check catches a new number anywhere in its templates', () => {
+	const source = readProofPanel();
+	const mutations = [
+		['a new paragraph', '<p class="proof-note">The comparison', '<p class="proof-note">It ran 3 times.</p>\n\t\t\t\t<p class="proof-note">The comparison'],
+		['the button', '>Run both</button>', '>Run both 2 ways</button>'],
+		['a term', '<dt>Verdict</dt>', '<dt>Verdict 9</dt>'],
+		['a caption', "'Luau height'", "'Luau height 5'"],
+		['the heading', 'running in your browser.</h2>', 'running in your browser 4 you.</h2>'],
+		['an attribute', '<select data-proof="module">', '<select data-proof="module" aria-label="Module 6 of 9">'],
+	];
+	for (const [where, from, to] of mutations) {
+		expect.truthy(source.includes(from), `${where}: "${from}" is in proofPanel.js`);
+		const { text, attributes } = proofPanelText(source.replace(from, to));
+		const missing = [...uncoveredNumbers(text, PHRASES), ...uncoveredNumbers(attributes, PHRASES)];
+		expect.truthy(missing.length > 0, `${where}: the extra number was not caught`);
+	}
+	expect.truthy(
+		(() => {
+			try {
+				proofPanelText(source.replace('at seed ${o.seed}', 'at seed ${o.seed} of ${o.count}'));
+				return false;
+			} catch (error) {
+				return error.message.includes('o.count');
+			}
+		})(),
+		'an unknown placeholder throws',
+	);
 });
