@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 const [outDir = 'capture', extra = ''] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1366, height: 767 } });
 for (const cam of ['deck', 'high', 'crest']) {
 	const query = `?freeze=12&cam=${cam}&focus=origin&hud=0${extra ? `&${extra}` : ''}`;
