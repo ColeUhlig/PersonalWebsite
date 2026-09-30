@@ -1,4 +1,4 @@
-// The thirteen steps of the story (spec section 3), each as a recipe (spec 4.3; A3): which parts
+// The thirteen steps of the story (spec section 3), each as a recipe (spec 4.3; A3; not a twin): which parts
 // of the engine are on and the sea they run (`engine`, the EngineSettings stageControl.js takes,
 // less the `normals` and `warm` the blend works out), how the surface is drawn (`look`), where the
 // camera stands (`shot`), which charts the step shows (`charts`) and which sliders its panel
@@ -55,8 +55,9 @@ function toggle(id, label, bind, value) {
 	return { id, label, kind: 'toggle', bind, default: value };
 }
 
-function counter(id, label, bind, value) {
-	return { id, label, kind: 'counter', bind, min: 1, default: value };
+// A whole number from 1; `max`, when given, caps it (the seed: see the seed slider below).
+function counter(id, label, bind, value, max) {
+	return { id, label, kind: 'counter', bind, min: 1, ...(max === undefined ? {} : { max }), default: value };
 }
 
 function choice(id, label, bind, options, value) {
@@ -121,14 +122,15 @@ export const RECIPES = Object.freeze([
 		charts: { spectrum: true },
 		sliders: [
 			range('wind', 'Wind speed', 'engine.sea.windSpeed', { min: 3, max: 25, step: 0.5, value: 12, unit: 'm/s' }),
-			range('fetch', 'Fetch', 'engine.sea.fetch', { min: 5000, max: 200000, step: 1000, value: 80000, unit: 'm', scale: 'log' }),
+			range('fetch', 'Fetch', 'engine.sea.fetch', { min: 5000, max: 200000, step: 100, value: 80000, unit: 'm', scale: 'log' }),
 		],
 	}),
 	make(8, 'random-ocean', 'A random ocean, moving', {
 		engine: ONE_LAYER,
 		shot: { position: [0, 30, 60], target: [0, 0, 0] },
 		charts: { phaseArrows: true },
-		sliders: [counter('seed', 'New sea', 'engine.seed', SEED)],
+		// Capped: seeds 1 .. 9999 are plenty of seas, and far inside the engine's 2^31 - 1 (stageControl.js).
+		sliders: [counter('seed', 'New sea', 'engine.seed', SEED, 9999)],
 	}),
 	make(9, 'fft', 'The FFT', {
 		engine: ONE_LAYER,

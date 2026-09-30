@@ -37,6 +37,11 @@ export const SOURCES = Object.freeze(['sine', 'bank', 'fft']);
 // (recipes.js); these ceilings only refuse a value no slider can make, before the spectrum and the
 // bounds (which only grow) see it. 40 m/s is past hurricane force at the fetch law's edge.
 export const SEA_LIMITS = Object.freeze({ windSpeed: 40, fetch: 1e6 });
+// The largest seed the engine takes. cascadeSeed (config.js) multiplies it by 7919: past 2^53 the
+// three cascade seeds collapse into one, and at 1e305 the product is Infinity and the cascade
+// worker throws. 2^31 - 1 keeps the product near 1.7e13, exact in a double. The seed slider stops
+// at 9999 (recipes.js); this only refuses a value no slider makes.
+export const SEED_MAX = 2 ** 31 - 1;
 
 // The hero sea as settings: the rough default Cole judged in A2 (config.js's defaults), every
 // part on, the FFT shown. What the ocean runs before any stage is configured. Built from the
@@ -91,8 +96,8 @@ export function normalise(s) {
 			fail(`sea.${name}`, `a number above 0 and at most ${SEA_LIMITS[name]}`, value);
 		}
 	}
-	if (!Number.isInteger(s.seed)) {
-		fail('seed', 'an integer', s.seed);
+	if (!Number.isSafeInteger(s.seed) || s.seed < 0 || s.seed > SEED_MAX) {
+		fail('seed', `an integer in 0 .. ${SEED_MAX}`, s.seed);
 	}
 	if (!flagList(s.layers)) {
 		fail('layers', 'a list of true or false', s.layers);

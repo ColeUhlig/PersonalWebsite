@@ -335,6 +335,12 @@ test('normalise names every field it refuses (fix round 1)', () => {
 		[null, 'settings'],
 		['fft', 'settings'],
 		[settings({ seed: 1.5 }), 'seed'],
+		// Fix round 1 (Task 7 review): a seed past 2^31 - 1 overflows cascadeSeed (Infinity at
+		// 1e305) or collapses the three cascade seeds into one (at 2^53).
+		[settings({ seed: 1e305 }), 'seed'],
+		[settings({ seed: 2 ** 53 }), 'seed'],
+		[settings({ seed: 2 ** 31 }), 'seed'],
+		[settings({ seed: -1 }), 'seed'],
 		[settings({ maps: 'yes' }), 'maps'],
 		[settings({ foam: 1 }), 'foam'],
 		[settings({ glow: null }), 'glow'],

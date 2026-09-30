@@ -1,4 +1,4 @@
-// The sun as the story's sliders move it (A3): azimuth and elevation in degrees, azimuth measured
+// The sun as the story's sliders move it (A3; not a twin): azimuth and elevation in degrees, azimuth measured
 // from +x towards +z, and the unit vector towards the sun the renderer and the glow use.
 import { mod } from '../core/luau.js';
 import { SUN_DIRECTION } from '../render/lighting.js';
@@ -11,8 +11,10 @@ export function sunAngles(direction) {
 	if (!(Number.isFinite(length) && length > 0)) {
 		throw new RangeError(`the sun needs a non-zero direction, got ${JSON.stringify(direction)}`);
 	}
+	// mod gives 360 itself for a hair below 0 (-5.7e-16 + 360 rounds to 360); keep to [0, 360).
+	const azimuth = mod(Math.atan2(z, x) / RADIANS, 360);
 	return {
-		azimuth: mod(Math.atan2(z, x) / RADIANS, 360),
+		azimuth: azimuth === 360 ? 0 : azimuth,
 		elevation: Math.asin(y / length) / RADIANS,
 	};
 }

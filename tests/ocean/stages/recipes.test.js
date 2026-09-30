@@ -5,7 +5,7 @@ import * as StageControl from '../../../content/ocean/js/engine/stageControl.js'
 import * as Lighting from '../../../content/ocean/js/render/lighting.js';
 import { getPath } from '../../../content/ocean/js/stages/paths.js';
 import * as Recipes from '../../../content/ocean/js/stages/recipes.js';
-import { KINDS } from '../../../content/ocean/js/stages/sliders.js';
+import { KINDS, clampSlider, sliderById } from '../../../content/ocean/js/stages/sliders.js';
 
 const R = Recipes.RECIPES;
 const deepFrozen = (value) => value === null || typeof value !== 'object' || (Object.isFrozen(value) && Object.values(value).every(deepFrozen));
@@ -98,6 +98,30 @@ test('each step offers the controls the story table names', () => {
 	expect.equal(count.max, 32, 'to 32');
 	expect.equal(R[8].sliders[0].options.join(','), '8,16,32,64', 'naive sum against FFT at these grid sizes');
 	expect.equal(R[6].sliders[1].scale, 'log', 'fetch on a log slider');
+});
+
+test('every slider leaves its own default where it is (fix round 1)', () => {
+	for (const recipe of R) {
+		for (const slider of recipe.sliders.filter((s) => s.kind !== 'toggle')) {
+			expect.equal(clampSlider(slider, slider.default), slider.default, `step ${recipe.step} ${slider.id}`);
+		}
+	}
+	expect.equal(clampSlider(sliderById(R[3], 'sunAzimuth'), 173.4), 173, 'a value that is not the default still snaps');
+});
+
+test('the seed counter stops at 9999, and the engine refuses a seed past 2^31 - 1 (fix round 1)', () => {
+	const seed = sliderById(R[7], 'seed');
+	expect.equal(seed.max, 9999, 'max');
+	expect.equal(clampSlider(seed, 1e305), 9999, '1e305 clamps');
+	StageControl.normalise({ ...R[7].engine, seed: 9999, normals: true, warm: { fft: false, maps: false, layers: [false, false, false] } });
+});
+
+test('the fetch slider steps 100 m on its log track and stays inside 5,000 .. 200,000 (fix round 1)', () => {
+	const fetch = sliderById(R[6], 'fetch');
+	expect.equal(fetch.step, 100, 'step');
+	expect.equal(clampSlider(fetch, 4000), 5000, 'min');
+	expect.equal(clampSlider(fetch, 1e9), 200000, 'max');
+	expect.equal(clampSlider(fetch, 5260), 5300, 'snapped to 100 m');
 });
 
 test("the layer toggles name the High tier's cascade sizes", () => {
