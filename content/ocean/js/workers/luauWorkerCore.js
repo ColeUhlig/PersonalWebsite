@@ -6,9 +6,14 @@
 // Replies:
 //   { type: 'cascade', id, packed: Float32Array, ms, loadMs }  packed's buffer is transferred;
 //     ms is the Luau's own time (os.clock) for build, evolve and synthesis; loadMs is what loading
-//     the runtime and compiling the bundle took, on the run that did it, and 0 after.
-//   { type: 'error', id, stage: 'load' | 'run', message, fatal }
-//     stage 'load': the runtime or the bundle could not be loaded (the next message tries again).
+//     the runtime and compiling the bundle took, on the run that did it, and 0 after (the client
+//     reports the fuller start-up, from spawning the worker, in its place).
+//   { type: 'error', id, stage: 'wasm' | 'load' | 'run', message, fatal }
+//     stage 'wasm': this worker has no WebAssembly (iOS Lockdown Mode, a managed browser), so the
+//     runtime cannot exist; nothing is fetched. This file never touches WebAssembly when it is
+//     missing, since the error path would throw a second time and leave the message unanswered.
+//     stage 'load': the runtime or the bundle could not be loaded (the next message tries again,
+//     though the client throws a browser worker away instead: its module map keeps the failure).
 //     fatal: the WebAssembly module aborted (its fixed heap ran out, or a trap); nothing in this
 //     worker can be trusted after it, so the client throws the worker away.
 import { createLuauRunner } from '../proof/luauRunner.js';
@@ -43,7 +48,7 @@ export function createLuauWorker(post, { loadRuntime, loadSource, now = () => pe
 			id,
 			stage,
 			message: error?.message ?? String(error),
-			fatal: error instanceof WebAssembly.RuntimeError,
+			fatal: typeof WebAssembly !== 'undefined' && error instanceof WebAssembly.RuntimeError,
 		});
 	}
 
@@ -51,6 +56,10 @@ export function createLuauWorker(post, { loadRuntime, loadSource, now = () => pe
 		const id = message?.id;
 		if (message?.type !== 'cascade') {
 			fail(id, 'run', new Error(`unknown message type ${message?.type}`));
+			return;
+		}
+		if (typeof WebAssembly === 'undefined') {
+			fail(id, 'wasm', new Error('this browser has WebAssembly switched off'));
 			return;
 		}
 		let loaded;

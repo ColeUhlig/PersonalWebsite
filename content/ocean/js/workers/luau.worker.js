@@ -16,5 +16,9 @@ const handle = createLuauWorker((message, transfer) => self.postMessage(message,
 	loadSource,
 });
 self.onmessage = (event) => {
-	handle(event.data);
+	// handle() answers every message itself; if it ever rejects anyway, the message still gets an
+	// answer, marked fatal so the client throws this worker away instead of waiting out a timeout.
+	handle(event.data).catch((error) => {
+		self.postMessage({ type: 'error', id: event.data?.id, stage: 'run', message: error?.message ?? String(error), fatal: true });
+	});
 };
