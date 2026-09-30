@@ -34,7 +34,7 @@
 		<section id="opening" class="opening">
 			<div class="opening-inner">
 				<h1>Building an Ocean in Roblox</h1>
-				<p class="lede">I built this in Roblox, and Roblox fought me the whole way. The sea behind this text is a port of that ocean, running live in your browser.</p>
+				<p class="lede">I built this in Roblox, and Roblox fought me the whole way. The sea on this page is a port of that ocean, running live in your browser.</p>
 				<p class="cue">Scroll to build it from nothing <span aria-hidden="true">↓</span></p>
 			</div>
 		</section>
@@ -49,7 +49,7 @@
 					<div class="tex" data-copy-skip="math"><code>\htmlClass{t-grid}{(x_i,\ z_j)} = (i\,\Delta,\ j\,\Delta), \qquad y_{ij} = 0</code></div>
 					<p class="math-note">A grid of points Δ apart, every height zero. The wireframe shows the triangles between them.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -75,7 +75,7 @@
 					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin\!\big(\htmlClass{t-len}{k}\,x - \htmlClass{t-speed}{\omega}\,t\big), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
 					<p class="math-note">A is the height, λ the length from crest to crest, and the wave travels at ω/k.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -83,7 +83,7 @@
 						<dt>In Roblox</dt>
 						<dd>No vertex shaders. A Luau script has to move every point itself.</dd>
 						<dt>What I did</dt>
-						<dd>Wrote every point from a script, every frame: 18,144 of them (the outermost ring every other frame).</dd>
+						<dd>Wrote every point from a script, every frame: 18,144 of them on the top tier (the outermost ring every other frame).</dd>
 						<dt>The number</dt>
 						<dd>About 3.5 ms a frame in Studio with Luau's native code generation, 7.7 ms without it. Roblox documents native code for servers, and I haven't measured a player's client yet.</dd>
 					</dl>
@@ -101,7 +101,7 @@
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(\mathbf{k}_i\cdot\mathbf{x} - \omega_i t + \varphi_i)</code></div>
 					<p class="math-note">N waves, each with its own height, direction, length and starting phase. The last few barely show: they're small, and fitting them to the tile's grid stacked a few on top of each other.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -127,17 +127,17 @@
 					<div class="tex" data-copy-skip="math"><code>\mathbf{n} = \frac{(-\partial_x y,\ 1,\ -\partial_z y)}{\lVert(-\partial_x y,\ 1,\ -\partial_z y)\rVert}, \quad L = \max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}}), \quad F = F_0 + (1 - F_0)(1 - \mathbf{n}\cdot\mathbf{v})^5</code></div>
 					<p class="math-note">n is the way the surface faces, s points at the sun and v at your eye. L is the plain sunlight, and F (Schlick's Fresnel term) is why water turns into a mirror when you look across it.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
 						<dd>A pixel shader works out the colour of every pixel on screen, every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh. Ripples come from a normal map, and on a mesh built by code that only worked when I passed the map in the moment the material was created; assigning it afterwards, the obvious way, broke the shine.</dd>
+						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh, and ripples come from a normal map. On a mesh built by code, the normal map only worked when I passed it in as the material was created. Setting it afterwards, the obvious way, broke the shine.</dd>
 						<dt>What I did</dt>
-						<dd>Paint the colour, the glow mask and the ripple map on a worker thread, and hand Roblox one image per frame, which is all it uploads anyway.</dd>
+						<dd>Paint the colour, glow mask and ripple maps on two worker threads and hand Roblox a slice of them each frame (Roblox says it uploads only one image a frame).</dd>
 						<dt>The number</dt>
-						<dd>Handing over the frame's image costs 0.037 ms of script time in Studio.</dd>
+						<dd>Measured before I added foam, handing over one image a frame cost 0.037 ms of script time in Studio.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -159,14 +159,14 @@
 		<section class="step" id="step-6" data-step="6" aria-labelledby="step-6-title">
 			<article class="panel">
 				<h2 id="step-6-title">The repetition problem</h2>
-				<p>Fly up and the trick falls apart. Up here the page keeps only the 4 tallest waves, so the tile shows plainly. Every wave fits a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here.</p>
+				<p>Fly up and the trick falls apart. Up here only the 4 tallest waves are left (the small ones blur at this distance), and like every wave on this page they fit a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here.</p>
 				<div class="controls" data-controls="6" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_x) = y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_z) = y(\mathbf{x}) \quad\text{when every}\quad \mathbf{k}_i = \frac{2\pi}{\htmlClass{t-tile}{L}}\,(m_i,\ n_i)</code></div>
 					<p class="math-note">Waves whose wavevectors sit on that grid all line up again after L studs. Here L is the 256-stud tile.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -185,7 +185,7 @@
 		<section class="step" id="step-7" data-step="7" aria-labelledby="step-7-title">
 			<article class="panel">
 				<h2 id="step-7-title">Real ocean data</h2>
-				<p>Instead of picking waves by hand, ask oceanographers. The JONSWAP spectrum, fitted to North Sea measurements, gives the energy at each wavelength for a wind speed and a fetch (how far the wind has blown over open water).</p>
+				<p>Instead of picking waves by hand, ask oceanographers. The JONSWAP spectrum, fitted to North Sea measurements, gives the energy at each wave frequency for a wind speed and a fetch (how far the wind has blown over open water).</p>
 				<div class="controls" data-controls="7" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="spectrum">
 					<div class="chart-body" data-copy-skip="live"></div>
@@ -202,7 +202,7 @@
 		<section class="step" id="step-8" data-step="8" aria-labelledby="step-8-title">
 			<article class="panel">
 				<h2 id="step-8-title">A random ocean, moving</h2>
-				<p>A real sea isn't a neat set of chosen waves, so each wave from the spectrum gets a random height from a bell curve and a random starting angle. The arrows are real waves from this sea, turning at the speeds the dispersion gives them (the rule that sends long waves faster than short ones), looping every 120 s.</p>
+				<p>A real sea isn't a neat set of chosen waves, so each wave from the spectrum gets a random height from a bell curve and a random starting angle. The arrows are real waves from this sea, turning at the speeds the dispersion gives them (short waves turn fastest, though long waves travel fastest), looping every 120 s.</p>
 				<div class="controls" data-controls="8" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="phase">
 					<div class="chart-body" data-copy-skip="live"></div>
@@ -210,7 +210,7 @@
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{\sqrt{2}}\,(\xi_r + i\,\xi_i)\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}, \quad \tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,e^{-i\omega t} + \tilde h_0^{*}(-\mathbf{k})\,e^{i\omega t}, \quad \omega = \sqrt{g k \tanh(k d)}, \quad e^{i\theta} = \cos\theta + i\sin\theta</code></div>
+					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,(\xi_r + i\,\xi_i)\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}, \quad \tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,e^{-i\omega t} + \tilde h_0^{*}(-\mathbf{k})\,e^{i\omega t}, \quad \omega = \sqrt{g k \tanh(k d)}, \quad e^{i\theta} = \cos\theta + i\sin\theta</code></div>
 					<p class="math-note">The ξ are random numbers from a bell curve, picked by the seed (the New sea button). In deep water ω is close to √(gk), so long waves outrun short ones, and Euler's formula turns each wave into an arrow spinning in the complex plane. The random numbers come from a documented generator rather than Roblox's own, so this is the same kind of sea as the game's, not the same waves.</p>
 				</details>
 			</article>
@@ -219,7 +219,7 @@
 		<section class="step" id="step-9" data-step="9" aria-labelledby="step-9-title">
 			<article class="panel">
 				<h2 id="step-9-title">The FFT</h2>
-				<p>Adding up thousands of waves at every point, one by one, is hopeless. The fast Fourier transform does the same sum for a whole grid at once by reusing work; pick a grid size and this page times both ways, right now, in your browser.</p>
+				<p>Adding up thousands of waves at every point, one by one, is hopeless. The fast Fourier transform does the same sum for a whole grid at once by reusing work; set the waves per side and this page times both ways, right now, in your browser.</p>
 				<div class="controls" data-controls="9" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="transforms">
 					<div class="chart-body" data-copy-skip="live"></div>
@@ -230,7 +230,7 @@
 					<div class="tex" data-copy-skip="math"><code>h(\mathbf{x}, t) = \sum_{\mathbf{k}} \tilde h(\mathbf{k}, t)\,e^{i\,\mathbf{k}\cdot\mathbf{x}}, \qquad \underbrace{O(\htmlClass{t-n}{N}^4)}_{\text{wave by wave}} \;\to\; \underbrace{O(\htmlClass{t-n}{N}^2 \log \htmlClass{t-n}{N})}_{\text{FFT}}, \qquad \begin{aligned} X &amp;= E + W^k O \\ Y &amp;= E - W^k O \end{aligned}</code></div>
 					<p class="math-note">For an N × N grid, summing wave by wave costs N⁴ steps. The radix-2 FFT splits the sum in half again and again, and each butterfly (X and Y) gets two answers out of one multiply.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -249,14 +249,14 @@
 		<section class="step" id="step-10" data-step="10" aria-labelledby="step-10-title">
 			<article class="panel">
 				<h2 id="step-10-title">Three layers of waves</h2>
-				<p>One 64 × 64 grid can't hold both the long swells and the small ripples, so there are three, tiling patches of 256, 64 and 16 studs. The tiles don't line up, so your eye stops finding the pattern: it's still there, just well hidden. That's how 12,288 wave components pass for far more.</p>
+				<p>One 64 × 64 grid can't hold both the long swells and the small ripples, so there are three, tiling patches of 256, 64 and 16 studs. The two smaller layers pile detail on top of the big one, so your eye stops finding the 256-stud pattern: it's still there, just well hidden. That's how 12,288 wave components pass for far more.</p>
 				<div class="controls" data-controls="10" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>h(\mathbf{x}, t) = \sum_{j=1}^{3} h_j(\mathbf{x}, t), \qquad h_j \text{ keeps only } k_j^{\min} \le \lvert\mathbf{k}\rvert &lt; k_j^{\max}, \qquad \htmlClass{t-layer}{L_j} = 256,\ 64,\ 16</code></div>
 					<p class="math-note">Each layer carries only the wavelengths that suit its patch, so no wave is counted twice.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -266,7 +266,7 @@
 						<dt>What I did</dt>
 						<dd>Fade from each layer's old result to its new one, counted in frames.</dd>
 						<dt>The number</dt>
-						<dd>Before the fade it looked like 20 fps. The game ran at about 44 fps, but the waves only moved 15 times a second.</dd>
+						<dd>Before the fade it looked like 20 fps to me: the game ran at about 44 fps, but the waves only moved 15 times a second.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -275,14 +275,14 @@
 		<section class="step" id="step-11" data-step="11" aria-labelledby="step-11-title">
 			<article class="panel">
 				<h2 id="step-11-title">Foam</h2>
-				<p>Where a wave gets steep enough to fold, it breaks, and breaking water turns white. The maths can spot exactly where the surface squeezes together; each frame adds foam there and old foam fades a little, so it trails off in streaks.</p>
+				<p>Where a wave gets steep enough to fold, it breaks, and breaking water turns white. The math can spot exactly where the surface squeezes together; each frame adds foam there and old foam fades a little, so it trails off in streaks.</p>
 				<div class="controls" data-controls="11" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>J = (1 + \partial_x D_x)(1 + \partial_z D_z) - \partial_x D_z\,\partial_z D_x, \qquad f \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{d}\,f + g\,\max(0,\ \htmlClass{t-whitecap}{w} - J),\ 0,\ 1\big)</code></div>
 					<p class="math-note">J (the Jacobian) drops below the whitecap level w where the water folds. f is the foam: it grows there, and everywhere it keeps a fraction d of itself each step.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -308,7 +308,7 @@
 					<div class="tex" data-copy-skip="math"><code>E = \htmlClass{t-glow}{k}\,\max(0,\ -\mathbf{s}\cdot\mathbf{v})^{3}\,\big(\tfrac{1}{2} - \tfrac{1}{2}\,\htmlClass{t-sun}{s_y}\big), \qquad \text{glow} = E \cdot M(h)</code></div>
 					<p class="math-note">v points from the water to your eye and s toward the sun, so E is largest looking into a low sun. M(h) is a mask from the wave's height above the average surface: crests glow, troughs don't.</p>
 				</details>
-				<aside class="card" aria-label="Roblox says no">
+				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
@@ -316,7 +316,7 @@
 						<dt>In Roblox</dt>
 						<dd>No lighting hooks. The only thing a script can turn is how strongly each material glows.</dd>
 						<dt>What I did</dt>
-						<dd>An emissive mask painted from the waves, plus one glow strength per patch, set on 232 separate materials every frame. Sea of Thieves' published mask measured wrong on my waves (it lit their sides, not their crests), so the mask is height above the average surface instead.</dd>
+						<dd>An emissive mask painted from the waves, plus one glow strength per patch, set on 232 separate materials (224 patches plus 8 horizon pieces) every frame. Sea of Thieves' published mask measured wrong on my waves (it lit their sides, not their crests), so the mask is height above the average surface instead.</dd>
 						<dt>The number</dt>
 						<dd>Those 232 glow writes take 0.062 ms a frame in Studio.</dd>
 					</dl>
@@ -327,7 +327,7 @@
 		<section class="step step-finale" id="step-13" data-step="13" aria-labelledby="step-13-title">
 			<article class="panel">
 				<h2 id="step-13-title">The whole thing</h2>
-				<p>That's all of it at once: three layers of FFT waves on the CPU, foam, glow, painted maps and 232 materials, with a script moving all 18,144 points. Scroll back up any time; every step still works.</p>
+				<p>That's all of it at once: layers of FFT waves on the CPU, foam, glow and painted maps, with a script moving every point. On the top tier that's three layers, 232 materials and 18,144 points. Scroll back up any time; every step still works.</p>
 				<div class="controls" data-controls="13" data-copy-skip="live"></div>
 				<div class="render-mode" data-render-mode hidden>
 					<p class="render-mode-label">Rendering</p>
@@ -335,7 +335,7 @@
 						<button type="button" role="radio" aria-checked="true" data-mode="roblox">Roblox mode</button>
 						<button type="button" role="radio" aria-checked="false" data-mode="unleashed">Unleashed</button>
 					</div>
-					<p>Unleashed runs the same wave maths through GPU shaders, the way a normal engine would. The gap between the two is what Roblox costs.</p>
+					<p>Unleashed runs the same wave math through GPU shaders, the way a normal engine would. The gap between the two is what Roblox costs.</p>
 				</div>
 			</article>
 
@@ -345,7 +345,7 @@
 				<dl class="live" data-live data-copy-skip="live"></dl>
 				<p data-live-phone hidden>Your screen looks like a phone's, so the page picked the lighter tier by rule: 6,480 points instead of 18,144, and two layers of waves instead of three. I haven't measured this ocean on a phone myself yet.</p>
 				<p data-live-none hidden>The live ocean isn't running in this browser, so there's nothing to measure.</p>
-				<p>For comparison, in a Roblox Studio playtest on my MacBook Air the same ocean holds 60 fps: a 16.65 ms median frame with 2.81 ms of script time. That's with native code on, and I haven't measured a live Roblox client yet.</p>
+				<p>For comparison, in a Roblox Studio playtest on my MacBook Air, on the top tier, the ocean just before I added foam holds 60 fps: a 16.65 ms median frame with 2.81 ms of script time. That's with native code on, and I haven't measured a live Roblox client yet.</p>
 				<p>I matched this page's look to Studio captures over three rounds of lighting changes. My verdict: looks pretty good. It isn't pixel for pixel the same, and can't be: a browser doesn't light things the way Roblox does.</p>
 			</section>
 
@@ -357,8 +357,8 @@
 
 			<section class="block" id="proof-block" aria-labelledby="proof-title">
 				<h3 id="proof-title">This is my actual Roblox code</h3>
-				<p>The panel below runs the ocean's real Luau modules in your browser, compiled to WebAssembly (luau-interop, a fork of Luau 0.711), next to this page's JavaScript version of the same code, and compares what they produce. The Luau takes well under a second once it has loaded; the JavaScript takes milliseconds.</p>
-				<p>When I checked six cascades at four seeds, all 196,608 float32 values matched bit for bit, and so did the maps.</p>
+				<p>The panel below runs the ocean's real Luau modules in your browser, compiled to WebAssembly, next to this page's JavaScript version of the same code, and compares what they produce. The Luau takes well under a second once it has loaded; the JavaScript takes milliseconds.</p>
+				<p>When I checked six layers of waves across four seeds, all 196,608 float32 values matched bit for bit, and so did the painted maps.</p>
 				<div id="proof" data-copy-skip="live"></div>
 			</section>
 
@@ -380,13 +380,13 @@
 
 			<section class="block" id="believed" aria-labelledby="believed-title">
 				<h3 id="believed-title">Things we believed about Roblox that turned out false</h3>
-				<p>Each of these was treated as fact until a test in Studio said otherwise.</p>
+				<p>Each of these was treated as fact until a test said otherwise.</p>
 				<ul>
 					<li><strong>EditableMesh is capped at 8 meshes per player.</strong> It's a shared memory budget; fixed-size meshes are charged what they really use.</li>
 					<li><strong>A script can give a material an editable image by setting its ColorMapContent.</strong> Only plugins can do that; a game script has to use CreateSurfaceAppearanceAsync.</li>
 					<li><strong>Normal maps don't work on meshes built by code.</strong> They do, if the map is passed in when the material is created.</li>
-					<li><strong>Luau costs about 0.1 microseconds per arithmetic operation.</strong> It's about 0.0026, roughly 40 times faster.</li>
-					<li><strong>Texture coordinates stay precise far from the origin.</strong> At 100,000 the texels tore apart, so the sea re-bases them by whole tiles.</li>
+					<li><strong>Luau costs about 0.1 microseconds per arithmetic operation.</strong> It's about 0.0026 microseconds, roughly 40 times faster.</li>
+					<li><strong>Texture coordinates stay precise far from the origin.</strong> At texture coordinates of 100,000 the texels tore apart, so the sea re-bases them by whole tiles.</li>
 					<li><strong>Normal maps show at any distance.</strong> It depends on the graphics quality: at level 6 the ripples are gone by 170 studs.</li>
 					<li><strong>A running Studio picks up a newly installed plugin.</strong> It doesn't; restart it.</li>
 				</ul>
@@ -395,7 +395,7 @@
 			<section class="block" id="credits" aria-labelledby="credits-title">
 				<h3 id="credits-title">Credits</h3>
 				<ul>
-					<li>The step-by-step order comes from Acerola's two videos, <a href="https://www.youtube.com/watch?v=PH9q0HNBjT4">How Games Fake Water</a> and <a href="https://www.youtube.com/watch?v=yPfagLeUa7k">I Tried Simulating The Entire Ocean</a>. Watch them. The words, visuals and code here are mine.</li>
+					<li>The step-by-step order comes from Acerola's two videos, <a href="https://www.youtube.com/watch?v=PH9q0HNBjT4">How Games Fake Water</a> and <a href="https://www.youtube.com/watch?v=yPfagLeUa7k">I Tried Simulating The Entire Ocean</a>. Watch them. Nothing here is copied from them.</li>
 					<li>Jerry Tessendorf, <a href="https://jtessen.people.clemson.edu/reports/papers_files/coursenotes2004.pdf">Simulating Ocean Water</a>: the SIGGRAPH course notes (2001, revised 2004) that every FFT ocean is built on.</li>
 					<li><a href="https://gpuopen.com/gdc-presentations/2019/gdc-2019-agtd6-interactive-water-simulation-in-atlas.pdf">Wakes, Explosions and Lighting: Interactive Water Simulation in Atlas</a> (Mihelich and Tcheblokov, GDC 2019): the JONSWAP setup and the scatter term behind the glow.</li>
 					<li>Rare's <a href="https://history.siggraph.org/wp-content/uploads/2022/09/2018-Talks-Ang_The-Technical-Art-of-Sea-of-Thieves.pdf">The Technical Art of Sea of Thieves</a> (SIGGRAPH 2018; <a href="https://www.youtube.com/watch?v=y9BOz2dFZzs">the talk</a>): foam and the stylised look.</li>

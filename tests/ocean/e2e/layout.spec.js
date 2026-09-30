@@ -1,3 +1,6 @@
+// The ocean page's layout (piece C, Task 2): the title, the thirteen steps and their math, cards and
+// charts, the finale's blocks, the desktop and phone layouts, contrast, and a story that reads with
+// three blocked.
 import { test, expect } from '@playwright/test';
 
 const TITLES = [
@@ -57,7 +60,7 @@ test('the title, the opening and thirteen steps in order', async ({ page }) => {
 	}
 });
 
-test('every step to 12 has a collapsed maths line, and the cards sit where the spec puts them', async ({ page }) => {
+test('every step to 12 has a collapsed math line, and the cards sit where the spec puts them', async ({ page }) => {
 	await page.goto('/ocean/');
 	for (let n = 1; n <= 12; n++) {
 		const math = page.locator(`#step-${n} details.math`);
@@ -110,6 +113,24 @@ test('on desktop the panels sit in the left third over the full-screen ocean', a
 	expect(panel.x + panel.width).toBeLessThanOrEqual(1366 / 3);
 });
 
+test('no panel scrolls inside itself: a tall panel grows with the page (1366 x 767)', async ({ page }) => {
+	await page.goto('/ocean/');
+	for (const [name, text] of [['closed', false], ['math open', true]]) {
+		if (text) await page.evaluate(() => document.querySelectorAll('details.math').forEach((d) => { d.open = true; }));
+		const scrollers = await page.evaluate(() => [...document.querySelectorAll('.panel')]
+			.map((panel) => ({
+				id: panel.closest('section.step').id,
+				overflowY: getComputedStyle(panel).overflowY,
+				hidden: panel.scrollHeight - panel.clientHeight,
+			}))
+			.filter((row) => row.overflowY !== 'visible' || row.hidden > 1));
+		expect(scrollers, name).toEqual([]);
+	}
+	// The point of the test: at this height some panels are taller than the screen once their math opens.
+	const tallest = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.panel')].map((panel) => panel.offsetHeight)));
+	expect(tallest).toBeGreaterThan(767);
+});
+
 test('nothing on the page uses backdrop-filter, and only the canvas carries a filter', async ({ page }) => {
 	await page.goto('/ocean/');
 	const offenders = await page.evaluate(() => [...document.querySelectorAll('*')]
@@ -125,16 +146,20 @@ for (const scheme of ['dark', 'light']) {
 	test(`panel text keeps 4.5:1 contrast over a black or a white sea when the system prefers ${scheme} (the page is always dark)`, async ({ page }) => {
 		await page.emulateMedia({ colorScheme: scheme });
 		await page.goto('/ocean/');
-		const { ink, glass, cardInk, cardBg } = await page.evaluate(() => ({
+		const { ink, glass, cardInk, cardBg, ledeInk, scrim } = await page.evaluate(() => ({
 			ink: getComputedStyle(document.querySelector('#step-2 .panel p')).color,
 			glass: getComputedStyle(document.querySelector('#step-2 .panel')).backgroundColor,
 			cardInk: getComputedStyle(document.querySelector('#step-2 .card dd')).color,
 			cardBg: getComputedStyle(document.querySelector('#step-2 .card')).backgroundColor,
+			ledeInk: getComputedStyle(document.querySelector('#opening .lede')).color,
+			scrim: getComputedStyle(document.querySelector('#opening .opening-inner')).backgroundColor,
 		}));
 		for (const backdrop of [[0, 0, 0], [255, 255, 255]]) {
 			const panel = over(parse(glass), backdrop);
 			expect(contrast(parse(ink).slice(0, 3), panel)).toBeGreaterThanOrEqual(4.5);
 			expect(contrast(parse(cardInk).slice(0, 3), over(parse(cardBg), panel))).toBeGreaterThanOrEqual(4.5);
+			// The opening's lede sits on its own faint scrim, straight over the sea.
+			expect(contrast(parse(ledeInk).slice(0, 3), over(parse(scrim), backdrop))).toBeGreaterThanOrEqual(4.5);
 		}
 	});
 }

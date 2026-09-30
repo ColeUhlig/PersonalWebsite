@@ -8,6 +8,9 @@
 	--ink: #e8eef2;
 	--ink-dim: #a9bcc8;
 	--glass: rgba(7, 18, 27, 0.86);
+	/* Behind the opening's title and lede: lighter than the glass, feathered at the edge by a shadow of
+	   the same colour, and still dark enough for white text over a white sea (layout.spec.js). */
+	--scrim: rgba(7, 18, 27, 0.6);
 	--line: rgba(232, 238, 242, 0.14);
 	--accent: #5fd4c4;
 	--card-bg: rgba(92, 20, 20, 0.6);
@@ -149,6 +152,15 @@ footer.site {
 	box-sizing: border-box;
 }
 
+.opening-inner {
+	box-sizing: border-box;
+	max-width: 100%;
+	padding: 24px 32px;
+	border-radius: 28px;
+	background: var(--scrim);
+	box-shadow: 0 0 48px 24px var(--scrim);
+}
+
 .opening h1 {
 	margin: 0 0 12px;
 	font-size: clamp(2.2rem, 6vw, 4.5rem);
@@ -189,9 +201,6 @@ footer.site {
 	top: 10vh;
 	box-sizing: border-box;
 	width: var(--panel-width);
-	max-height: 84vh;
-	max-height: 84svh;
-	overflow-y: auto;
 	margin-left: max(var(--gutter), 2.5vw);
 	padding: 20px 22px;
 	border-radius: 14px;
@@ -340,8 +349,6 @@ body[data-ocean='unavailable'] .chart {
 
 .step-finale .panel {
 	position: static;
-	max-height: none;
-	overflow: visible;
 }
 
 .block {
@@ -500,8 +507,6 @@ footer.site a {
 	.panel {
 		position: static;
 		width: auto;
-		max-height: none;
-		overflow: visible;
 		margin: 0 var(--gutter);
 	}
 
@@ -511,6 +516,42 @@ footer.site a {
 
 	.live {
 		grid-template-columns: 1fr;
+	}
+}
+
+/* A short laptop screen (1366 x 768 and the like): panels grow with their text rather than scroll
+   inside themselves, so tighten them a little to keep more of each one in view at once. */
+@media (min-width: 900px) and (max-height: 820px) {
+	.panel {
+		padding: 16px 18px;
+	}
+
+	.panel h2 {
+		font-size: 1.3rem;
+	}
+
+	.panel p {
+		margin-bottom: 10px;
+		font-size: 0.95rem;
+		line-height: 1.5;
+	}
+
+	.controls {
+		margin: 10px 0;
+	}
+
+	.card {
+		margin-top: 10px;
+		padding: 10px 14px;
+	}
+
+	.card dt {
+		margin-top: 6px;
+	}
+
+	.card dd {
+		font-size: 0.88rem;
+		line-height: 1.45;
 	}
 }
 

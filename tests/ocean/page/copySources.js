@@ -18,6 +18,8 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: '224 patches in 5 rings', source: FACTS, quote: '224 patches in 5 rings' },
 	{ phrase: '18,144', source: FACTS, quote: '18,144 vertices' },
 	{ phrase: '232', source: FACTS, quote: '232 materials' },
+	{ phrase: '224 patches plus', source: FACTS, quote: '224 patches in 5 rings' },
+	{ phrase: '8 horizon pieces', source: FACTS, quote: 'the horizon adds 8 quads' },
 	{ phrase: '2, 4, 8, 16 and 32 studs', source: FACTS, quote: 'ring spacing 2, 4, 8, 16 and 32 studs' },
 	{ phrase: '64 × 64', source: FACTS, quote: 'three layers of 64 × 64' },
 	{ phrase: '3 × 64 × 64 = 12,288', source: FACTS, quote: '3 × 64 × 64 = 12,288' },
@@ -62,8 +64,8 @@ export const COPY_SOURCES = Object.freeze([
 	// The engine-assumptions ledger (roblox-ocean docs/research/engine-assumptions.md).
 	{ phrase: 'capped at 8 meshes', source: LEDGER, quote: '"8 EditableMesh per client" is a cap' },
 	{ phrase: 'about 0.1 microseconds', source: LEDGER, quote: 'about 0.1 microseconds per arithmetic op' },
-	{ phrase: 'about 0.0026, roughly 40 times faster', source: LEDGER, quote: 'About 0.0026: roughly 40 times faster' },
-	{ phrase: 'At 100,000', source: LEDGER, quote: 'REFUTED at 100,000' },
+	{ phrase: 'about 0.0026 microseconds, roughly 40 times faster', source: LEDGER, quote: 'About 0.0026: roughly 40 times faster' },
+	{ phrase: 'texture coordinates of 100,000', source: LEDGER, quote: 'Large world-anchored UV values keep enough precision far from the origin | **REFUTED at 100,000' },
 	{ phrase: 'at level 6', source: LEDGER, quote: 'at level 6 they render at 45 studs and are gone by 170' },
 	{ phrase: 'by 170 studs', source: LEDGER, quote: 'at level 6 they render at 45 studs and are gone by 170' },
 	// Credits.
