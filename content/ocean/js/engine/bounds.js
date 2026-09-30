@@ -20,13 +20,30 @@ export function seaFactor(params) {
 }
 
 // A2's generous linear guesses (lateral 46.4 and height 40 at the shipped sea, against measured
-// extremes of about 10 and 17.5), with the amplitude scaled by the sea factor.
+// extremes of about 10 and 17.5), with the amplitude scaled by the sea factor. The swells move a
+// vertex sideways by chop x 1.9 x swellScale (the Gerstner sum), so their lateral term grows with
+// the chop past 1; at or under chop 1 it is A2's 2 x swellScale.
 export function boundsFor({ params, chop, swellScale }) {
 	const scale = params.scale * seaFactor(params);
+	return Object.freeze({
+		lateral: 8 + 6 * chop * scale + 2 * Math.max(chop, 1) * swellScale,
+		height: 8 + 4 * scale + 2.5 * swellScale,
+	});
+}
+
+// A2's guess exactly as A2 made it (ocean.js boundsFor before A3): no sea factor.
+export function a2Bounds({ params, chop, swellScale }) {
+	const scale = params.scale;
 	return Object.freeze({
 		lateral: 8 + 6 * chop * scale + 2 * swellScale,
 		height: 8 + 4 * scale + 2.5 * swellScale,
 	});
+}
+
+// The bounds the page starts with: A2's guess, grown when the URL's wind or fetch raise the sea.
+// A calm URL sea never shrinks them below A2's, so the page without ?step behaves as A2's.
+export function pageBounds(settings) {
+	return grow(a2Bounds(settings), boundsFor(settings));
 }
 
 // A Gerstner bank can stand no taller than its summed amplitude (waveBanks.bankExtent), nor move a

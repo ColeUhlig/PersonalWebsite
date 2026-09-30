@@ -182,6 +182,25 @@ test('a still surface is written once and then left alone until a window moves',
 	expect.equal(probeSurface(surface).maxAbsY, 0, 'still flat');
 });
 
+test('a live surface going still is written whole on the first still frame, odd or not', () => {
+	const { layout, store, preset } = setup();
+	const surface = SurfaceState.create(layout, BOUNDS, false);
+	SurfaceState.setRingCascades(surface, [false, false, false]);
+	const { bank: live } = WaveBanks.nextSine(null, { amplitude: 2, wavelength: 24, speed: 5 }, 0);
+	SurfaceState.snapAndWrite(surface, 0, 0, store, live, 1.5, 0, 2, false);
+	expect.truthy(probeSurface(surface).maxAbsY > 1.5, 'the live sine is up');
+	const silent = WaveBanks.nextSine(null, { amplitude: 0, wavelength: 24, speed: 5 }, 0).bank;
+	for (const p of surface.patches) p.written = false;
+	SurfaceState.snapAndWrite(surface, 0, 0, store, silent, 1.6, 0, 3, true);
+	expect.equal(surface.skipped, false, 'the first still frame is written');
+	expect.equal(probeSurface(surface).maxAbsY, 0, 'flat at once');
+	const outer = surface.patches.filter((p) => p.ring === preset.rings.length && !p.hidden);
+	expect.truthy(outer.length > 0 && outer.every((p) => p.written), 'odd frame, yet every outer-ring patch is rewritten');
+	for (const p of surface.patches) p.written = false;
+	SurfaceState.snapAndWrite(surface, 0, 0, store, silent, 1.7, 0, 4, true);
+	expect.equal(surface.skipped, true, 'the second still frame has nothing to do');
+});
+
 test('setBounds moves the skirt and makes the next write whole', () => {
 	const { layout, store, swells, preset } = setup();
 	const surface = SurfaceState.create(layout, BOUNDS, false);

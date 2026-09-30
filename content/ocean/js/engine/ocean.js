@@ -31,7 +31,7 @@ import * as Tier from '../core/tier.js';
 import * as WaterColour from '../core/waterColour.js';
 import * as WaveField from '../core/waveField.js';
 import { color3 } from '../core/luau.js';
-import { boundsFor } from './bounds.js';
+import { pageBounds } from './bounds.js';
 import { createCascades } from './cascadeTransport.js';
 import * as HorizonState from './horizonState.js';
 import * as PainterClient from './painterClient.js';
@@ -194,7 +194,7 @@ function tierLine(ocean, probeMs) {
  * @param {{ warn: Function, info?: Function }} [deps.log]
  */
 export function create(config, { spawnCascade, spawnPainter, now, probeMs, log = console }) {
-	const bounds = boundsFor({ params: config.params, chop: config.chop, swellScale: config.swellScale });
+	const bounds = pageBounds({ params: config.params, chop: config.chop, swellScale: config.swellScale });
 	const measured = config.tier ? null : (probeMs ?? probeCascadeMs());
 	const tierName = config.tier ?? Tier.choose(measured);
 	const preset = Tier.presets[tierName];

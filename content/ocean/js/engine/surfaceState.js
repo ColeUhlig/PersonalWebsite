@@ -145,6 +145,9 @@ export function create(layout, bounds, flatNormals) {
 		boundsVersion: 0,
 		// True when the last snapAndWrite had nothing to do: a still surface whose windows held.
 		skipped: false,
+		// Whether the last snapAndWrite wrote a still surface. The first still frame after a live one
+		// is written whole: the outer ring still carries the live geometry.
+		wasStill: false,
 	};
 	snap(surface, 0, 0);
 	return surface;
@@ -377,6 +380,8 @@ export function setBounds(surface, bounds) {
 
 // Whether the vertex normals are written: not while the look is unlit (white or flat colour) or
 // the config asks for flat normals. Turning them back on rewrites them on the next write.
+// Turning flat normals on leaves the previous normals in the buffers, which is fine only because
+// flat normals are used by unlit looks.
 export function setFlatNormals(surface, flat) {
 	if (surface.flatNormals === flat) {
 		return;
@@ -391,15 +396,19 @@ export function setFlatNormals(surface, flat) {
 // the move took is left in `surface.snapSeconds` (the Luau's second return value).
 // `still` (A3) says nothing on the surface moves by itself -- the flat plane of step 1 -- so once
 // every ring has been written, a frame on which no window shifted and nothing set the surface
-// stale writes nothing at all (`surface.skipped`). A stale surface is written whole.
+// stale writes nothing at all (`surface.skipped`). A stale surface is written whole, and so is the
+// first still frame after a live one: the frames after it are skipped, so it must leave no ring
+// (the half-rate outer ring above all) holding the live geometry.
 export function snapAndWrite(surface, focusX, focusZ, store, swells, t, chop, frame, still = false) {
 	const moved = adopt(surface, focusX, focusZ);
-	surface.skipped = still && moved === 0 && surface.everWritten && !surface.stale;
+	surface.skipped = still && surface.wasStill && moved === 0 && surface.everWritten && !surface.stale;
 	if (!surface.skipped) {
+		const whole = surface.stale || (still && !surface.wasStill);
 		// `adopt` has already marked the rings that shifted, so the write sees them and covers every
 		// ring on this frame; `repositionDirty` below clears the marks once it is done.
-		write(surface, store, swells, t, chop, surface.stale ? undefined : frame);
+		write(surface, store, swells, t, chop, whole ? undefined : frame);
 		surface.stale = false;
+		surface.wasStill = still;
 	}
 	surface.snapSeconds = 0;
 	if (moved > 0) {

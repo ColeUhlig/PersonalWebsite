@@ -83,3 +83,23 @@ test('bankBounds covers a Gerstner bank and grow keeps the larger of each', () =
 	expect.equal(g.height, 50, 'the taller height');
 	expect.truthy(Object.isFrozen(g), 'frozen');
 });
+
+test("the page's bounds never shrink below A2's guess: a calm URL sea keeps them", () => {
+	const calm = readConfig('?wind=3&fetch=5000');
+	const b = Bounds.pageBounds({ params: calm.params, chop: calm.chop, swellScale: calm.swellScale });
+	expect.equal(b.lateral, 8 + 6 * 0.8 * 8, "A2's lateral 46.4");
+	expect.equal(b.height, 8 + 4 * 8, "A2's height 40");
+	const a2 = Bounds.a2Bounds({ params: calm.params, chop: calm.chop, swellScale: calm.swellScale });
+	expect.equal(a2.lateral, b.lateral, 'the A2 guess itself');
+	const storm = readConfig('?wind=25&fetch=200000');
+	const s = Bounds.pageBounds({ params: storm.params, chop: storm.chop, swellScale: storm.swellScale });
+	expect.truthy(s.height > 40 && s.lateral > 46.4, `a storm still grows them: ${s.lateral}, ${s.height}`);
+});
+
+test('the swell term reaches sideways with the chop past 1 (Gerstner sideways is chop x 1.9 x swellScale)', () => {
+	const soft = Bounds.boundsFor({ params: HERO, chop: 0.5, swellScale: 3 });
+	const hard = Bounds.boundsFor({ params: HERO, chop: 2, swellScale: 3 });
+	expect.equal(soft.lateral, 8 + 6 * 0.5 * 8 + 2 * 1 * 3, 'chop under 1 keeps the swell term at 2 x swellScale');
+	expect.equal(hard.lateral, 8 + 6 * 2 * 8 + 2 * 2 * 3, 'chop 2 doubles it');
+	expect.truthy(2 * 2 * 3 >= 2 * 1.9 * 3, 'covers chop x 1.9 x swellScale');
+});
