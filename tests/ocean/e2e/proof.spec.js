@@ -289,8 +289,8 @@ test('without WebAssembly on the page the panel says so at once and throws nothi
 	expect(errors).toEqual([]);
 });
 
-// The same, when only the worker lacks WebAssembly: luau-web's own import then throws, and the
-// worker must still answer rather than leave the panel to time out.
+// The same, when only the worker lacks WebAssembly: the worker core notices before importing
+// luau-web and answers at once, rather than leave the panel to time out.
 test('without WebAssembly in the worker the panel says so quickly and throws nothing', async ({ page }) => {
 	const errors = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -406,5 +406,5 @@ test('the first Run reports the whole start-up, worker included', async ({ page 
 	await openPanel(page);
 	await page.locator('[data-proof="run"]').click();
 	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'done', { timeout: 60_000 });
-	await expect(page.locator('[data-proof="status"]')).toHaveText(/Starting the Luau \(worker, runtime and bundle\) took \d+ ms\.$/);
+	await expect(page.locator('[data-proof="status"]')).toHaveText(/Starting the Luau and getting its first answer back \(worker, runtime, bundle and hand-back\) took \d+ ms\.$/);
 });

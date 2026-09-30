@@ -230,7 +230,7 @@ export function mountProofPanel(root, deps = {}) {
 		setText('differing', `${all.differing.toLocaleString('en-US')} of ${all.count.toLocaleString('en-US')} (all eight fields)`);
 		setText('luau-ms', `${luau.ms.toFixed(1)} ms`);
 		// loadMs runs from spawning the worker to its first answer, minus the Luau run itself.
-		const loading = luau.loadMs > 0 ? ` Starting the Luau (worker, runtime and bundle) took ${Math.round(luau.loadMs)} ms.` : '';
+		const loading = luau.loadMs > 0 ? ` Starting the Luau and getting its first answer back (worker, runtime, bundle and hand-back) took ${Math.round(luau.loadMs)} ms.` : '';
 		setText('status', `Done: ${lowerFirst(line)}.${loading}`);
 		setState('done');
 	}
