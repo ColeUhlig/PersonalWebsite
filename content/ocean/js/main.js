@@ -1,6 +1,7 @@
 // The live ocean: scene, camera, the painted materials, the CPU-written meshes over the engine's
 // typed arrays, the frame loop and the stats readout. With ?step=N A3's stage director drives the
-// ocean from the URL (ui/devStage.js). Piece C: this module no longer runs by itself. boot.js
+// ocean from the URL (ui/devStage.js); without it the scroll story does (ui/storyStage.js).
+// Piece C: this module no longer runs by itself. boot.js
 // imports it dynamically once WebGL is known to work, so a CDN failure cannot stop the page; the
 // frame loop schedules its next frame before running this one, so an exception cannot stop it
 // (page/frameGuard.js); the renderer follows a change of device pixel ratio; and the ocean reads
@@ -14,6 +15,7 @@ import { createOceanMeshes } from './render/oceanMeshes.js';
 import { createMaterials } from './render/materials.js';
 import { createPerfReadout } from './ui/perfReadout.js';
 import { startStageRoute } from './ui/devStage.js';
+import { createStoryStage } from './ui/storyStage.js';
 import { watchPixelRatio } from './ui/pixelRatio.js';
 
 // The phone rule's two facts about this device (engine/config.js tierForDevice decides).
@@ -61,7 +63,12 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 	watchPixelRatio(resize);
 	const parts = { ocean, view, rig, meshes, materials, config };
 	const dev = route ? startStageRoute({ route, ...parts }) : null;
-	const stage = dev;
+	// Piece C: without a route the scroll story drives the ocean (ui/storyStage.js).
+	const story = route ? null : createStoryStage({ ...parts, reducedMotion });
+	if (story) {
+		rig.limitForStory({ coarsePointer: window.matchMedia('(pointer: coarse)').matches });
+	}
+	const stage = dev ?? story;
 	window.__ocean = {
 		status: () => Ocean.status(ocean),
 		report: () => Ocean.report(ocean),
@@ -71,7 +78,7 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 		setSun: (direction) => view.setSun(direction),
 		setEnvironment: (enabled) => view.setEnvironment(enabled),
 		stage: dev ? dev.hooks : null,
-		story: null,
+		story: story ? story.hooks : null,
 		frameFailures: () => guard.failures(),
 		// Test hook: the next `count` frames throw before stepping (tests/ocean/e2e/boot.spec.js).
 		injectFrameErrors: (count) => {
@@ -94,9 +101,13 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 		meshes.sync();
 		view.follow();
 		stage?.afterStep(dt);
-		const renderStarted = performance.now();
-		view.render();
-		Ocean.addStageSeconds(ocean, 'render', (performance.now() - renderStarted) / 1000);
+		// The story holds the last picture while a layer it switched on rejoins (ui/storyStage.js): a
+		// frame not drawn leaves the canvas showing the one before.
+		if (!stage?.holdsPicture?.()) {
+			const renderStarted = performance.now();
+			view.render();
+			Ocean.addStageSeconds(ocean, 'render', (performance.now() - renderStarted) / 1000);
+		}
 		readout.frame(time);
 		if (config.stats) readout.show(Ocean.status(ocean), Ocean.report(ocean));
 	}
@@ -112,5 +123,5 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 	}
 	requestAnimationFrame(frame);
 
-	return Object.freeze({ ...parts, canvas, reducedMotion, stage: dev ? dev.hooks : null, story: null });
+	return Object.freeze({ ...parts, canvas, reducedMotion, stage: dev ? dev.hooks : null, story });
 }
