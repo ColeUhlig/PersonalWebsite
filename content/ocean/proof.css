@@ -8,6 +8,8 @@
 	--proof-line: rgba(232, 238, 242, 0.16);
 	--proof-accent: #5fd4c4;
 	--proof-code: rgba(0, 0, 0, 0.35);
+	/* The showcase is always dark, so native controls and scrollbars are dark too. */
+	color-scheme: dark;
 	box-sizing: border-box;
 	max-width: 1100px;
 	margin: 0 auto;
@@ -53,7 +55,7 @@
 	color: #04201c;
 	cursor: pointer;
 }
-.proof-run:disabled {
+.proof-run[aria-disabled="true"] {
 	opacity: 0.6;
 	cursor: progress;
 }
@@ -69,6 +71,9 @@
 .proof-maps figure {
 	margin: 0;
 }
+.proof-frame {
+	position: relative;
+}
 .proof-maps canvas {
 	display: block;
 	width: 100%;
@@ -76,6 +81,24 @@
 	image-rendering: pixelated;
 	background: #000;
 	border: 1px solid var(--proof-line);
+}
+/* A map with nothing from the current run: striped, never black, with a word saying why. */
+.proof-maps figure[data-empty] canvas {
+	background: repeating-linear-gradient(135deg, rgba(232, 238, 242, 0.07) 0 6px, transparent 6px 12px);
+}
+.proof-empty {
+	display: none;
+	position: absolute;
+	inset: 0;
+	align-items: center;
+	justify-content: center;
+	padding: 4px;
+	text-align: center;
+	font-size: 0.8rem;
+	color: var(--proof-dim);
+}
+.proof-maps figure[data-empty] .proof-empty {
+	display: flex;
 }
 .proof-maps figcaption {
 	margin-top: 4px;
