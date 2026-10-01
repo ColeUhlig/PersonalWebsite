@@ -21,9 +21,14 @@ export const GRAPH_Y_SCALE = 4;
 export const GRAPH_HOLD = 0.5;
 export const GRAPH_OFF = Object.freeze({ opacity: 0, yScale: 1, near: NO_CLIP, far: NO_CLIP, components: false });
 
+/** @returns {boolean} whether a blended look.graph clips the sea; allocates nothing, for per-frame use */
+export function graphClips(graph) {
+	return graph.near < NO_CLIP || graph.far < NO_CLIP;
+}
+
 /** @returns {null | [number, number]} the surface's x range for a blended look.graph, or null for none */
 export function graphBand(graph) {
-	if (graph.near >= NO_CLIP && graph.far >= NO_CLIP) {
+	if (!graphClips(graph)) {
 		return null;
 	}
 	return [GRAPH_PLANE_X - graph.near, GRAPH_PLANE_X + graph.far];

@@ -186,9 +186,8 @@ test('step 13 draws the tile edges at multiples of the tile, and its neighbours 
 
 // Task 15 polish (the walk: on a phone the heading arrows and the frame's T and B were a few pixels
 // thick in the ocean's top half): on the narrow layout every arrow is drawn thicker (its length is
-// the model's, page/overlayModel.js, tested there); on a wide screen as before. Read
-// from the drawn instance's own matrix (final review Minor 11), so a girth that never reaches the
-// buffer fails.
+// the model's, page/overlayModel.js, tested there); on a wide screen as before. Read from the drawn
+// instance's own matrix (final review Minor 11), so a girth that never reaches the buffer fails.
 test("on a phone the arrows' shafts are drawn 1.8 times as thick as on a laptop", async ({ page }) => {
 	const drawn = {};
 	for (const { width, height } of [{ width: 390, height: 844 }, { width: 1366, height: 767 }]) {

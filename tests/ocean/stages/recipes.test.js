@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as StageControl from '../../../content/ocean/js/engine/stageControl.js';
 import { MAX_POLAR, polarOf } from '../../../content/ocean/js/page/orbitLimits.js';
-import { FLAT_BAND, GRAPH_HOLD, GRAPH_PLANE_X, NO_CLIP, graphBand } from '../../../content/ocean/js/stages/graph.js';
+import { FLAT_BAND, GRAPH_HOLD, GRAPH_PLANE_X, NO_CLIP, graphBand, graphClips } from '../../../content/ocean/js/stages/graph.js';
 import { getPath } from '../../../content/ocean/js/stages/paths.js';
 import * as Recipes from '../../../content/ocean/js/stages/recipes.js';
 import { KINDS, clampSlider } from '../../../content/ocean/js/stages/sliders.js';
@@ -55,6 +55,17 @@ test('sources and spreads: the sine, the bank along one axis, the bank fanned, t
 	expect.equal(column((r) => r.engine.maps), 'false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true', 'maps from 16');
 	expect.equal(column((r) => r.engine.foam), 'false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,true', 'foam from 26');
 	expect.equal(column((r) => r.engine.glow), 'false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true', 'glow from 27');
+});
+
+// The story and the dev route ask every banded frame whether the band clips the sea; graphClips
+// answers from near and far without building graphBand's range (C2 final review style item 1).
+test('graphClips agrees with graphBand on every step, at the edges of NO_CLIP and beyond it', () => {
+	const cases = [...R.map((r) => r.look.graph), { near: NO_CLIP, far: NO_CLIP }, { near: NO_CLIP * 2, far: NO_CLIP }, { near: NO_CLIP, far: FLAT_BAND }, { near: FLAT_BAND, far: NO_CLIP }, { near: NO_CLIP - 1e-9, far: NO_CLIP }];
+	for (const graph of cases) {
+		expect.equal(graphClips(graph), graphBand(graph) !== null, `near ${graph.near}, far ${graph.far}`);
+	}
+	expect.equal(graphClips({ near: NO_CLIP, far: NO_CLIP }), false, 'both at NO_CLIP: no clip');
+	expect.equal(graphClips({ near: FLAT_BAND, far: NO_CLIP }), true, 'one side in: a clip');
 });
 
 test('materials, overlays, the graph and the charts sit where the contract puts them', () => {

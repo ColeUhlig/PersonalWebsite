@@ -199,8 +199,9 @@ test('the fft step does not re-time for the grid size it already shows', async (
 
 // Fix round 1: with the peak near 3 rad/s the old placement found no room for the peak's label on
 // either side of the peak line, and the chart threw (nine reachable settings; wind 7 m/s at 5,000 m
-// is one; tests/ocean/page/spectrumLayout.test.js checks every setting at two chart widths). Here
-// the page draws it at a laptop's and a phone's chart width, with no error.
+// is one; tests/ocean/page/spectrumLayout.test.js checks every wind step at every 25th fetch
+// position, at two chart widths). Here the page draws it at a laptop's and a phone's chart width,
+// with no error.
 for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) test(`the jonswap step labels the peak at wind 7 m/s and 5,000 m without an error (${viewport.width} px)`, async ({ page }) => {
 	const errors = watchErrors(page);
 	await page.setViewportSize(viewport);

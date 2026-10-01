@@ -29,7 +29,7 @@
 // the math box at its top right: the λ bracket over the crests ends short of it.
 import * as THREE from 'three';
 import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, niceAtLeast, floorDepth, graphSpan, lambdaPair, lineZAt, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
-import { GRAPH_OFF, GRAPH_PLANE_X, graphBand } from '../stages/graph.js';
+import { GRAPH_OFF, GRAPH_PLANE_X, graphBand, graphClips } from '../stages/graph.js';
 import { createAxes, createLabel } from './graphLabels.js';
 
 const BACKDROP_DISTANCE = 3000; // studs: inside the far plane
@@ -144,7 +144,9 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	const span = { zMin: 0, zMax: 0, frameMin: 0, frameMax: 0, depth: 0, studsPerPixel: 0 };
 	const chosen = new Int32Array(MAX_COMPONENTS);
 	let current = GRAPH_OFF;
-	let band = null;
+	// Whether the band clips the sea; its range is read from `current` (graphBand would build an array
+	// every frame).
+	let banded = false;
 	let shown = 0;
 	let curveShown = 0;
 	let lastT = null;
@@ -196,7 +198,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	}
 
 	function clip() {
-		if (band === null) {
+		if (!banded) {
 			look.setClip(null);
 			return;
 		}
@@ -204,17 +206,17 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		floorPlane.constant = waves === null ? NO_FLOOR : floorDepth(waves);
 		if (shown >= OPAQUE) {
 			// Keep x >= far + 1 and x <= far: nothing.
-			minPlane.constant = -(band[1] + 1);
+			minPlane.constant = -(GRAPH_PLANE_X + current.far + 1);
 		} else {
-			minPlane.constant = -band[0];
+			minPlane.constant = -(GRAPH_PLANE_X - current.near);
 		}
-		maxPlane.constant = band[1];
+		maxPlane.constant = GRAPH_PLANE_X + current.far;
 		look.setClip(planes);
 	}
 
 	function apply(graph) {
 		current = graph;
-		band = graphBand(graph);
+		banded = graphClips(graph);
 		clip();
 	}
 
@@ -277,7 +279,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		tallest = sampleCurve(waves, t, span, current.yScale, curve.points);
 		drawLine(curve, (BOLD_PX * span.studsPerPixel) / 2);
 		sampled = true;
-		drawn = band !== null && current.components ? componentWaves(waves, chosen) : 0;
+		drawn = banded && current.components ? componentWaves(waves, chosen) : 0;
 		for (let c = 0; c < drawn; c++) {
 			sampleComponent(waves, chosen[c], t, span, current.yScale, components[c].points);
 			drawLine(components[c], (FAINT_PX * span.studsPerPixel) / 2);
@@ -289,9 +291,9 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		shown = approach(shown, current.opacity, dt);
 		clip();
 		const waves = ocean.source === 'waves' ? ocean.waves : null;
-		const faced = band !== null || curveShown > 0 ? measureSpan() : false;
-		curveShown = approach(curveShown, band !== null && waves !== null && faced ? 1 : 0, dt);
-		const on = band !== null || shown > 0 || curveShown > 0;
+		const faced = banded || curveShown > 0 ? measureSpan() : false;
+		curveShown = approach(curveShown, banded && waves !== null && faced ? 1 : 0, dt);
+		const on = banded || shown > 0 || curveShown > 0;
 		group.visible = on;
 		drawn = 0;
 		if (!on) {
@@ -314,7 +316,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			components[c].mesh.visible = drawing && c < drawn;
 			components[c].mesh.material.opacity = COMPONENT_OPACITY * curveShown;
 		}
-		if (drawing && band !== null && axisOpacityOf(shown) > 0) {
+		if (drawing && banded && axisOpacityOf(shown) > 0) {
 			decorate(t, axisOpacityOf(shown));
 		} else {
 			undecorate();
@@ -538,15 +540,15 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			opacity: current.opacity,
 			shown,
 			yScale: current.yScale,
-			band: band === null ? null : [band[0], band[1]],
-			emptied: band !== null && shown >= OPAQUE,
+			band: graphBand(current),
+			emptied: banded && shown >= OPAQUE,
 			// The backdrop covers the scene (no depth test, over the sea) rather than sitting behind it.
 			covers: backdrop.material.depthTest === false && backdrop.material.transparent && backdrop.renderOrder < ORDER.axes,
 			curveShown,
-			floor: band !== null && floorPlane.constant < NO_FLOOR ? -floorPlane.constant : null,
+			floor: banded && floorPlane.constant < NO_FLOOR ? -floorPlane.constant : null,
 			components: drawn,
-			axes: drawing && band !== null && axisOpacityOf(shown) > 0,
-			labels: drawing && band !== null && axisOpacityOf(shown) > 0 ? [...shownLabels] : [],
+			axes: drawing && banded && axisOpacityOf(shown) > 0,
+			labels: drawing && banded && axisOpacityOf(shown) > 0 ? [...shownLabels] : [],
 			markers,
 			lambdaSide,
 			labelRects: labelRects(),

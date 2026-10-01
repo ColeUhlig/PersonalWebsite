@@ -10,9 +10,10 @@
 // step that only needs to show where the sky enters. It reads the vertex normals the engine writes
 // from the waves' exact slopes (stageControl.js writes them for 'terms'), takes the scene's fog, and
 // clips like every other surface material (clipping: true, so the stage look's setClip reaches
-// it), and cuts the skirts while the band is on, with the stage look's own uniforms. Only the teaching steps wear it; the painted Roblox-mode materials are never touched. It
-// demonstrates the terms in the browser only: Roblox scripts cannot write shaders, so the Roblox
-// build gets these terms from the engine's own lighting, not from this.
+// it), and cuts the skirts while the band is on, with the stage look's own uniforms. Only the
+// teaching steps wear it; the painted Roblox-mode materials are never touched. It demonstrates the
+// terms in the browser only: Roblox scripts cannot write shaders, so the Roblox build gets these
+// terms from the engine's own lighting, not from this.
 import * as THREE from 'three';
 import * as Lighting from './lighting.js';
 import { TERMS } from '../page/lightTerms.js';
