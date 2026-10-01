@@ -3,7 +3,7 @@
 // graph from step 5 on.
 import { test, expect } from '@playwright/test';
 import { load, stage, story, grid, mean, watchErrors, waitFrames } from './helpers/stage.js';
-import { oceanRunning, scrollToId, scrollToOpening } from './helpers/story.js';
+import { oceanRunning, restAtFoot, scrollToId, scrollToOpening } from './helpers/story.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { STEP_COUNT, stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { CURVE_POINTS } from '../../../content/ocean/js/page/graphModel.js';
@@ -200,25 +200,6 @@ test('the swing into step 4 is one smooth camera move while the backdrop fades a
 	expect(graph.shown).toBe(0);
 	expect(graph.band[1]).toBeGreaterThan(300);
 });
-
-// End's smooth scroll can still be running when the last step is read (fix round 1: 35,858 of
-// 37,678), and a Home pressed then is lost; and the finale grows about 570 px in the same frames the
-// scroll lands, so the foot it was heading for moves (fix round 2). Wait for the page to rest, which
-// is scrollY unchanged for 10 frames wherever that is; resting short of the foot, scroll to the
-// foot as it now is and wait again.
-async function restAtFoot(page) {
-	await page.waitForFunction(() => {
-		const state = (window.__footRest ??= { y: -1, still: 0 });
-		const y = window.scrollY;
-		state.still = y === state.y ? state.still + 1 : 0;
-		state.y = y;
-		if (state.still < 10) return false;
-		if (y + window.innerHeight >= document.documentElement.scrollHeight - 2) return true;
-		window.scrollTo(0, document.documentElement.scrollHeight);
-		state.still = 0;
-		return false;
-	}, null, { polling: 'raf', timeout: 30_000 });
-}
 
 // Review Focus 1.
 test("a fling across the graph's boundary lands clean", async ({ page }) => {

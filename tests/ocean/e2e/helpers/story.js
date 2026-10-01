@@ -71,3 +71,22 @@ export async function scrollToFigure(page, id, selector = 'figure') {
 	}, [step, selector]);
 	if (box.top < 0 || box.top >= box.height) throw new Error(`step ${step} ${selector} is off screen after the scroll: ${JSON.stringify(box)}`);
 }
+
+// C2 (lane B; moved here by Task 15 for the walk): End's smooth scroll can still be running when
+// the last step is read (fix round 1: 35,858 of 37,678), and a Home pressed then is lost; and the
+// finale grows about 570 px in the same frames the scroll lands, so the foot it was heading for
+// moves (fix round 2). Wait for the page to rest, which is scrollY unchanged for 10 frames wherever
+// that is; resting short of the foot, scroll to the foot as it now is and wait again.
+export async function restAtFoot(page) {
+	await page.waitForFunction(() => {
+		const state = (window.__footRest ??= { y: -1, still: 0 });
+		const y = window.scrollY;
+		state.still = y === state.y ? state.still + 1 : 0;
+		state.y = y;
+		if (state.still < 10) return false;
+		if (y + window.innerHeight >= document.documentElement.scrollHeight - 2) return true;
+		window.scrollTo(0, document.documentElement.scrollHeight);
+		state.still = 0;
+		return false;
+	}, null, { polling: 'raf', timeout: 30_000 });
+}
