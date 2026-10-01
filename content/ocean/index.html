@@ -432,7 +432,7 @@
 		<section class="step" id="step-23" data-step="23" data-step-id="sampling" aria-labelledby="step-23-title">
 			<article class="panel">
 				<h2 id="step-23-title">Reading between the grid points</h2>
-				<p>Reading a value out of a texture is called sampling it. The points the surface is built from (the next step shows them) don't sit exactly on the grid, so each one blends the four grid values around it, weighted by how close it is. That's bilinear sampling. The FFT's grid also repeats: its last column runs straight on into its first. So a point past the last column wraps round and blends with the first one, and the sea tiles without a seam. The dot swings back and forth across that edge, which is drawn as a dashed line.</p>
+				<p>Reading a value out of a texture is called sampling it. A point the surface is built from (the next step shows them) doesn't have to sit exactly on the grid, and when it doesn't, it blends the four grid values around it, weighted by how close it is. That's bilinear sampling. The FFT's grid also repeats: its last column runs straight on into its first. So a point past the last column wraps round and blends with the first one, and the sea tiles without a seam. The dot swings back and forth across that edge, which is drawn as a dashed line.</p>
 				<div class="controls" data-controls="23" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="sampling">
 					<div class="inset-body" data-copy-skip="live"></div>
@@ -451,7 +451,7 @@
 						<dt>In Roblox</dt>
 						<dd>Roblox's renderer samples the images I hand it (more on those in a moment), but I can't write a shader, so nothing samples my height grids for the mesh's points.</dd>
 						<dt>What I did</dt>
-						<dd>Wrote the blend in Luau and ran it for every point on the visible water, for each layer that point's ring uses, every frame (the outermost ring every other frame).</dd>
+						<dd>Wrote the blend in Luau and ran it for every point of the water that a finer ring doesn't cover, on screen or off, for each layer that point's ring uses, every frame (the outermost ring every other frame).</dd>
 					</dl>
 				</aside>
 			</article>
@@ -486,7 +486,7 @@
 		<section class="step" id="step-25" data-step="25" data-step-id="painted" aria-labelledby="step-25-title">
 			<article class="panel">
 				<h2 id="step-25-title">Painted maps</h2>
-				<p>The grids so far move the mesh. The look comes from a second kind of texture: images Roblox wraps onto the mesh and samples itself, pixel by pixel, with the same blend as the step above, done by the graphics card. Three of them are shown here: the colour, a glow mask (how much each spot glows) and the ripples, a normal map, which keeps a direction in every pixel so the light sees bumps far smaller than the mesh's triangles. I can't work those out pixel by pixel in Roblox, so two worker threads paint them into images and hand them over a piece at a time. This page does the same. These are its real maps, live in your browser, as its painters leave them.</p>
+				<p>The grids so far move the mesh. The look comes from a second kind of texture: images Roblox wraps onto the mesh and samples itself, pixel by pixel, on the graphics card, with a blend much like the one in the step above. Three of them are shown here: the colour, a glow mask (how much each spot glows) and the ripples, a normal map, which keeps a direction in every pixel so the light sees bumps far smaller than the mesh's triangles. I can't work those out pixel by pixel in Roblox, so two worker threads paint them into images and hand them over a piece at a time. This page does the same. These are its real maps, live in your browser, as its painters leave them.</p>
 				<div class="controls" data-controls="25" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="painted">
 					<div class="inset-body" data-copy-skip="live"></div>
