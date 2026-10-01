@@ -27,7 +27,7 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: '232 separate materials on the top tier (224 patches plus 8 horizon pieces)', source: FACTS, quote: '232 materials: 224 patches plus 8 horizon pieces' },
 	{ phrase: '232 materials on the top tier, each with its own glow', source: FACTS, quote: '232 materials: 224 patches plus 8 horizon pieces' },
 	{ phrase: 'Points 2, 4, 8, 16 and 32 studs apart, ring by ring', source: FACTS, quote: 'ring spacing 2, 4, 8, 16 and 32 studs' },
-	{ phrase: '(Parallel Luau), 64 × 64 per layer', source: FACTS, quote: 'three layers of 64 × 64' },
+	{ phrase: '(three on the top tier), 64 × 64 per layer', source: FACTS, quote: 'three layers of 64 × 64' },
 	{ phrase: 'Kept every layer at 64 × 64, so the whole sea is at most 3 × 64 × 64 = 12,288 wave components', source: FACTS, quote: 'three layers of 64 × 64 over 256, 64 and 16 studs: 3 × 64 × 64 = 12,288' },
 	{ phrase: "One 64 × 64 grid can't hold", source: FACTS, quote: 'three layers of 64 × 64' },
 	{ phrase: 'tiling patches of 256, 64 and 16 studs', source: FACTS, quote: 'over 256, 64 and 16 studs' },

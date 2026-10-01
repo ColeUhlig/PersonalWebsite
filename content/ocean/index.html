@@ -362,7 +362,7 @@
 						<dt>Normally</dt>
 						<dd>The FFT runs on the GPU as a compute shader, alongside everything else.</dd>
 						<dt>In Roblox</dt>
-						<dd>No GPU compute. The FFT is written in Luau and runs on the CPU, on three worker Actors (Parallel Luau), 64 × 64 per layer.</dd>
+						<dd>No GPU compute. The FFT is written in Luau and runs on the CPU in Parallel Luau, on one worker Actor per layer (three on the top tier), 64 × 64 per layer.</dd>
 						<dt>What I did</dt>
 						<dd>Kept every layer at 64 × 64, so the whole sea is at most 3 × 64 × 64 = 12,288 wave components on a CPU script. Acerola's GPU ocean runs about 4 million.</dd>
 						<dt>The number</dt>
@@ -401,7 +401,7 @@
 						<dt>Normally</dt>
 						<dd>Each layer is a GPU pass, and they all finish together every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>Three worker Actors that take turns: each layer got a fresh result only every third frame.</dd>
+						<dd>The FFT runs on one worker Actor per layer (three on the top tier), and they take turns: each layer got a fresh result only every third frame.</dd>
 						<dt>What I did</dt>
 						<dd>Fade from each layer's old result to its new one, counted in frames.</dd>
 						<dt>The number</dt>
@@ -612,7 +612,7 @@
 					<li data-card="into-3d">No vertex shaders: a script moves every point, every frame (the farthest ring every other frame).</li>
 					<li data-card="many-waves">No shader to spread the waves over: each extra wave is another pass of a Luau loop over every point, so the count stays down.</li>
 					<li data-card="highlights">No pixel shaders for light: Roblox's own lighting does the highlight and the sky reflection.</li>
-					<li data-card="fft">No GPU compute: the FFT runs in Luau on three worker Actors.</li>
+					<li data-card="fft">No GPU compute: the FFT runs in Luau on a worker Actor per layer.</li>
 					<li data-card="layers">Workers take turns: a frame-counted fade hides it.</li>
 					<li data-card="sampling">No texture reads from my own code: the heights are blended in Luau, point by point.</li>
 					<li data-card="mesh">No moving meshes on the GPU and no tessellation: rings of patches built with EditableMesh.</li>

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as expect from '../expect.js';
+import * as Tier from '../../../content/ocean/js/core/tier.js';
 import { COPY_SOURCES, PHRASES } from './copySources.js';
 import { NUMBER, normalise, uncoveredNumbers } from './copyCheck.js';
 import { NOTICES } from '../../../content/ocean/js/page/notices.js';
@@ -93,4 +94,16 @@ test('the proof panel check catches a new number anywhere in its templates', () 
 		})(),
 		'an unknown placeholder throws',
 	);
+});
+
+// C final review fix 1: Roblox makes one worker Actor per cascade (OceanClient.client.luau), so the
+// lighter tier runs two; the page counts them per layer and gives three only for the top tier.
+test('the worker Actors are counted one per layer, never as a flat three', () => {
+	const roblox = sourceText('roblox:src/client/OceanCoordinator/OceanClient.client.luau');
+	expect.truthy(/for index = 1, #preset\.sizes do\s+local actor = Instance\.new\("Actor"\)/.test(roblox), 'Roblox makes one Actor per cascade');
+	expect.equal(`${Tier.presets.High.sizes.length},${Tier.presets.Medium.sizes.length}`, '3,2', 'layers on the top and the lighter tier');
+	const page = readFileSync(join(SITE, 'content/ocean/index.html'), 'utf8');
+	expect.truthy(!/three worker Actors/i.test(page), 'no flat "three worker Actors"');
+	expect.equal((page.match(/worker Actor per layer/g) ?? []).length, 3, 'the FFT card, the layers card and the recap count per layer');
+	expect.equal((page.match(/one worker Actor per layer \(three on the top tier\)/g) ?? []).length, 2, 'the two cards give the top tier its three');
 });
