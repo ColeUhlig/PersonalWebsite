@@ -3,7 +3,7 @@
 // twin, nothing by hand).
 //   frequency (step 14): the flat graph's waves over one tile on top (the same bank the canvas draws:
 //     the teaching bank laid along one axis, as many waves as step 14's slider says, at the ocean's
-//     time when drawn), and underneath the same signal as spikes, one per wave at how many times it
+//     time when drawn, and a note says it is a snapshot), and underneath the same signal as spikes, one per wave at how many times it
 //     repeats across the tile, from the FFT. Redrawn when the slider moves and when the chart comes on
 //     screen.
 //   fourier (step 15): the three tones summed into a chord (faint) and the chord rebuilt from what is
@@ -22,7 +22,7 @@ const GAP = 40; // between the two plots
 // below it), further in steps of AXIS_STEP if a spike ever lies beyond, so no spike is ever dropped.
 const MIN_AXIS = 16;
 const AXIS_STEP = 4;
-const MIN_WIDTH = 240;
+const MIN_WIDTH = 200; // below a 320 px phone's chart body (about 222 px), so its 12 px text stays 12 px
 const FALLBACK_WIDTH = 320;
 
 function svg(tag, attributes = {}, text = null) {
@@ -90,11 +90,22 @@ function spikes(root, box, heights, label, removed = []) {
 	root.append(svg('text', { class: 'chart-text', x: (box.left + box.right) / 2, y: HEIGHT - 6, 'text-anchor': 'middle' }, label));
 }
 
-function canvasFor(figure, width, label) {
+// The chart's body replaced by a fresh SVG and, under it, `notes` as .chart-note paragraphs.
+function canvasFor(figure, width, label, notes = []) {
 	const root = svg('svg', { viewBox: `0 0 ${width} ${HEIGHT}`, role: 'img', 'aria-label': label });
-	figure.querySelector('.chart-body').replaceChildren(root);
+	const paragraphs = notes.map((text) => {
+		const p = document.createElement('p');
+		p.className = 'chart-note';
+		p.textContent = text;
+		return p;
+	});
+	figure.querySelector('.chart-body').replaceChildren(root, ...paragraphs);
 	return root;
 }
+
+// Step 14's top line is drawn when the chart draws (on screen, a slider, a new width), not every
+// frame: the chart says so. The spikes are true at any moment (each wave keeps its height and bin).
+const SNAPSHOT_NOTE = 'The line is a snapshot of the sea when the chart drew; the spikes are the same at any moment.';
 
 function frequencyChart(figure, story, ocean, onLayout) {
 	const step = stepOf('frequency');
@@ -107,9 +118,9 @@ function frequencyChart(figure, story, ocean, onLayout) {
 		const heights = amplitudes(forward(profile));
 		const width = widthOf(figure);
 		const { top, bottom } = boxes(width);
-		const root = canvasFor(figure, width, 'The waves of the flat graph over one tile, and the same waves as spikes, one for each wave at how many times it repeats across the tile');
-		frame(root, top, 'height');
-		frame(root, bottom, 'size');
+		const root = canvasFor(figure, width, 'The waves of the flat graph over one tile, a snapshot of the sea when the chart drew, and the same waves as spikes, one for each wave at how many times it repeats across the tile', [SNAPSHOT_NOTE]);
+		frame(root, top, 'height (studs)');
+		frame(root, bottom, 'size (studs)');
 		const range = Math.max(...profile.map(Math.abs), 1e-9) * 1.15;
 		root.append(svg('path', { class: 'chart-line', d: trace(profile, top, range) }));
 		root.append(svg('text', { class: 'chart-text', x: (top.left + top.right) / 2, y: top.bottom + 14, 'text-anchor': 'middle' }, 'along one tile'));

@@ -1,15 +1,19 @@
-// The story's three charts (piece C, Task 8): the jonswap step's spectrum, the time step's phase
-// arrows and the fft step's FFT timing, drawn live from the ocean's own numbers.
+// The story's three charts (piece C, Task 8): the jonswap step's spectrum, the phase arrows (held
+// still in the random-sea step, turning in the time step: piece C2, lane E) and the fft step's FFT
+// timing, drawn live from the ocean's own numbers.
 import { test, expect } from '@playwright/test';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { oceanRunning, scrollToId, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
 
-// The charts' steps by id (piece C2, Task 0): the spectrum is the jonswap step's; the turning phase
-// arrows are the time step's (the random-sea step's still arrows are lane E's); the FFT timing is
-// the fft step's.
+// The charts' steps by id (piece C2, Task 0): the spectrum is the jonswap step's; the phase arrows
+// are held still in the random-sea step's figure and turn in the time step's; the FFT timing is the
+// fft step's. Lane E's frequency charts are the frequency and fourier steps'.
 const SPECTRUM = stepOf('jonswap');
+const STILL = stepOf('random-sea');
 const PHASE = stepOf('time');
 const TIMING = stepOf('fft');
+const STILL_FIGURE = 'figure.chart[data-chart="phase"][data-motion="still"]';
+const TURNING_FIGURE = 'figure.chart[data-chart="phase"][data-motion="turning"]';
 
 function contrast(a, b) {
 	const lum = (rgb) => {
@@ -86,7 +90,7 @@ test("the jonswap step's axis holds the peak of every sea the sliders allow, lab
 test("the time step's arrows are eight real waves, turning while the ocean runs", async ({ page }) => {
 	await oceanRunning(page);
 	await scrollToId(page, 'time', 0.2);
-	const arrows = page.locator(`#step-${PHASE} figure.chart line.chart-arrow`);
+	const arrows = page.locator(`#step-${PHASE} ${TURNING_FIGURE} line.chart-arrow`);
 	await expect(arrows).toHaveCount(8);
 	const first = async () => arrows.first().evaluate((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`);
 	const before = await first();
@@ -99,7 +103,7 @@ test("the time step's arrows are eight real waves, turning while the ocean runs"
 test("the time step's arrows are labelled in studs and computed from the sea on screen", async ({ page }) => {
 	await oceanRunning(page);
 	await scrollToId(page, 'time', 0.2);
-	const figure = page.locator(`#step-${PHASE} figure.chart`);
+	const figure = page.locator(`#step-${PHASE} ${TURNING_FIGURE}`);
 	await expect(figure.locator('line.chart-arrow')).toHaveCount(8);
 	const labels = await figure.locator('text.chart-wavelength').allTextContents();
 	expect(labels).toHaveLength(8);
@@ -113,7 +117,7 @@ test("the time step's arrows are labelled in studs and computed from the sea on 
 test("the time step's arrows stop being redrawn while the chart is off screen", async ({ page }) => {
 	await oceanRunning(page);
 	await scrollToId(page, 'time', 0.2);
-	const arrow = page.locator(`#step-${PHASE} figure.chart line.chart-arrow`).first();
+	const arrow = page.locator(`#step-${PHASE} ${TURNING_FIGURE} line.chart-arrow`).first();
 	await expect(arrow).toHaveCount(1);
 	await scrollToId(page, 'glow', 0.5);
 	await waitFrames(page, 5);
@@ -353,12 +357,14 @@ test('a fast device still times 64 × 64', async ({ page }) => {
 	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
 });
 
-// Fix round 1: on a 390 px phone the charts' SVG text renders at 12 px or more.
-test('the charts read at 12 px on a phone', async ({ page }) => {
-	await page.setViewportSize({ width: 390, height: 844 });
+// Fix round 1: on a 390 px phone the charts' SVG text renders at 12 px or more; C2 (lane E): at
+// 320 px too, for every chart including the frequency and fourier steps' and the still arrows.
+for (const width of [390, 320]) test(`the charts read at 12 px on a ${width} px phone`, async ({ page }) => {
+	await page.setViewportSize({ width, height: 844 });
 	await oceanRunning(page);
-	for (const step of [SPECTRUM, PHASE, TIMING]) {
+	for (const step of [stepOf('frequency'), stepOf('fourier'), SPECTRUM, STILL, PHASE, TIMING]) {
 		await scrollToStep(page, step, 0.2);
+		await page.waitForFunction((n) => document.querySelector(`#step-${n} figure.chart svg text`), step, { timeout: 30_000 });
 		const sizes = await page.evaluate((n) => {
 			const svg = document.querySelector(`#step-${n} figure.chart svg`);
 			const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
@@ -368,6 +374,7 @@ test('the charts read at 12 px on a phone', async ({ page }) => {
 		expect(Math.min(...sizes), `step ${step}`).toBeGreaterThanOrEqual(11.9);
 		expect(await textOutsideViewBox(page, step)).toEqual([]);
 	}
+	expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 for (const scheme of ['dark', 'light']) {
@@ -385,3 +392,49 @@ for (const scheme of ['dark', 'light']) {
 		expect(contrast(rgb(colours.text), rgb(colours.bg))).toBeGreaterThanOrEqual(4.5);
 	});
 }
+
+test("step 17's arrows are held still at their starting angles; step 18's turn", async ({ page }) => {
+	test.setTimeout(180_000);
+	await oceanRunning(page);
+	const ends = (motion) => page.evaluate((m) => [...document.querySelectorAll(`figure[data-chart="phase"][data-motion="${m}"] line.chart-arrow`)].map((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`), motion);
+	await scrollToId(page, 'random-sea', 0.2);
+	await expect.poll(async () => (await ends('still')).length, { timeout: 30_000 }).toBe(8);
+	const held = await ends('still');
+	await waitFrames(page, 45);
+	expect(await ends('still')).toEqual(held);
+	await scrollToId(page, 'time', 0.2);
+	await expect.poll(async () => (await ends('turning')).length, { timeout: 30_000 }).toBe(8);
+	const first = await ends('turning');
+	await waitFrames(page, 45);
+	expect(await ends('turning')).not.toEqual(first);
+	// Two arrow figures on one page: no id inside the charts is used twice.
+	const ids = await page.evaluate(() => [...document.querySelectorAll('figure.chart [id]')].map((n) => n.id));
+	expect(ids.length).toBeGreaterThan(0);
+	expect(new Set(ids).size).toBe(ids.length);
+});
+
+// R13: each figure draws its own step's sea. A new sea in step 17 re-deals step 17's still arrows
+// (a different eight tallest waves, at new starting angles) and leaves step 18's, whose sea keeps
+// its own seed, as they were.
+test("a new sea in step 17 changes step 17's arrows and not step 18's", async ({ page }) => {
+	test.setTimeout(180_000);
+	await oceanRunning(page);
+	const read = (figure) => page.evaluate((f) => {
+		const root = document.querySelector(f);
+		return {
+			labels: [...root.querySelectorAll('text.chart-wavelength')].map((t) => t.textContent),
+			ends: [...root.querySelectorAll('line.chart-arrow')].map((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`),
+		};
+	}, figure);
+	await scrollToId(page, 'random-sea', 0.2);
+	await expect.poll(async () => (await read(STILL_FIGURE)).ends.length, { timeout: 30_000 }).toBe(8);
+	await expect.poll(async () => (await read(TURNING_FIGURE)).labels.length, { timeout: 30_000 }).toBe(8);
+	const still = await read(STILL_FIGURE);
+	const turning = await read(TURNING_FIGURE);
+	await page.locator(`#step-${STILL} [data-slider="seed"] button.control-press`).click();
+	await expect.poll(async () => (await read(STILL_FIGURE)).ends, { timeout: 30_000 }).not.toEqual(still.ends);
+	expect((await read(STILL_FIGURE)).labels, 'a new sea deals different tallest waves').not.toEqual(still.labels);
+	await scrollToId(page, 'time', 0.2);
+	await waitFrames(page, 10);
+	expect((await read(TURNING_FIGURE)).labels).toEqual(turning.labels);
+});

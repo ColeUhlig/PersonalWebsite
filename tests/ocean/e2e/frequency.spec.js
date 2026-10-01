@@ -1,9 +1,10 @@
 // Steps 14 and 15's charts in the browser (piece C2, lane E; spec 10.7): the flat graph's waves as
 // spikes from the engine's FFT, following the wave slider; the chord, a tone switched off and rebuilt.
+// And chapter four's step 20 (Task 9): choppiness, seen from the side, visibly moves the sea.
 import { test, expect } from '@playwright/test';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import { bankSpikes } from '../../../content/ocean/js/page/frequencyMath.js';
-import { watchErrors } from './helpers/stage.js';
+import { grid, load, meanDiff, stage, waitFrames, watchErrors } from './helpers/stage.js';
 import { oceanRunning, scrollToId } from './helpers/story.js';
 
 let errors;
@@ -39,6 +40,10 @@ test('step 14: one spike per wave of the graph, where the bank puts it, followin
 		});
 	});
 	expect(placed).toEqual(expectedPeaks(8).map(() => true));
+	// The line on top is the sea as it stood when the chart drew, and the chart says so.
+	await expect(page.locator('figure[data-chart="frequency"] .chart-body')).toContainText('a snapshot of the sea when the chart drew');
+	// Heights are in studs, the engine's unit, on both plots.
+	expect(await page.locator('figure[data-chart="frequency"] svg text[transform]').allTextContents()).toEqual(['height (studs)', 'size (studs)']);
 });
 
 test('step 15: three tones; switch one off and the chord is rebuilt without it', async ({ page }) => {
@@ -51,6 +56,7 @@ test('step 15: three tones; switch one off and the chord is rebuilt without it',
 	await page.locator('section[data-step-id="fourier"] [data-slider="note2"] input').click();
 	await expect.poll(() => page.evaluate(() => window.__frequency.fourier().notes)).toEqual([true, false, true]);
 	await expect(page.locator('figure[data-chart="fourier"] .chart-spike-removed')).toHaveCount(1);
+	await expect(page.locator('figure[data-chart="fourier"] .chart-spike')).toHaveCount(2);
 	expect(await page.locator('figure[data-chart="fourier"] .chart-rebuilt').getAttribute('d')).not.toBe(before);
 });
 
@@ -77,4 +83,22 @@ test.describe('on a phone', () => {
 		}
 		expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth)).toBe(true);
 	});
+});
+
+const VISIBLE = 3; // mean luminance change for a slider whose whole lesson is the change it makes
+
+test("step 20: choppiness pushes the FFT sea sideways, visibly, from the side", async ({ page }) => {
+	test.setTimeout(240_000);
+	await load(page, 'step=choppiness&freeze=12&s.chop=0', 60);
+	expect((await stage(page, 'surface')).maxLateral).toBe(0);
+	const flat = await grid(page);
+	const slider = (await stage(page, 'sliders')).find((s) => s.id === 'chop');
+	await stage(page, 'setSlider', 'chop', slider.default);
+	await waitFrames(page, 30);
+	expect((await stage(page, 'surface')).maxLateral).toBeGreaterThan(0.1);
+	const middle = await grid(page);
+	expect(meanDiff(flat, middle)).toBeGreaterThan(VISIBLE);
+	await stage(page, 'setSlider', 'chop', slider.max);
+	await waitFrames(page, 30);
+	expect(meanDiff(middle, await grid(page))).toBeGreaterThan(VISIBLE);
 });
