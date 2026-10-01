@@ -17,9 +17,11 @@ export const TEXTURES = Object.freeze({
 		// Thicker fog past the wire grid's fade: past about 600 studs a grid's lines crowd into grey
 		// moire bands (A3 fix round 1, piece C's old step 1). Task 14: the camera stands high and looks
 		// steeply down so the rings show as squares, so the wire's fade (stages/recipeKit.js WIRE_FADE)
-		// starts past the far edge of High's 8-stud ring, where the 16-stud ring begins.
-		look: { material: 'white', wireframe: true, fog: 0.0015, wireFade: [400, 900] },
-		shot: { position: [0, 170, 120], target: [0, 0, 0] },
+		// starts past the far edge of High's 8-stud ring, where the 16-stud ring begins. Task 15: higher
+		// and further back (322 studs from the target), so that ring's right and far edges both show,
+		// and its step to the 16-stud ring reads on two sides of the square, not one edge at the top.
+		look: { material: 'white', wireframe: true, fog: 0.0015, wireFade: [500, 1000] },
+		shot: { position: [0, 260, 190], target: [0, 0, 0] },
 		sliders: [toggle('wireframe', 'Wireframe', 'look.wireframe', true)],
 	},
 	painted: { title: 'Painted maps', engine: SEA, shot: { position: [0, 20, 45], target: [0, 1, -20] } },

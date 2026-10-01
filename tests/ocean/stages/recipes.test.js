@@ -220,3 +220,27 @@ test('recipeFor refuses a step outside 1..STEP_COUNT', () => {
 		expect.truthy(message.includes('step'), `${bad}: ${message}`);
 	}
 });
+
+// Task 15 (the Task 14 review's item 2): from the mesh step's shot the 8-stud ring's change to the
+// 16-stud ring shows as more than one edge at the frame's top. On High at 16:9 the middle of the
+// 8-stud ring's right edge and of its far edge both stand well inside the frame (NDC within 0.8),
+// so two sides of that square read, right of the panel's column and under the math box's row.
+test("the mesh step's shot shows the 8-stud ring's right and far edges well inside a 16:9 frame", async () => {
+	const { FIELD_OF_VIEW } = await import('../../../content/ocean/js/render/lighting.js');
+	const tanHalf = Math.tan((FIELD_OF_VIEW / 2) * (Math.PI / 180));
+	const { position, target } = at('mesh').shot;
+	const sub = (a, b) => a.map((v, i) => v - b[i]);
+	const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
+	const unit = (a) => a.map((v) => v / Math.hypot(...a));
+	const forward = unit(sub(target, position));
+	const right = unit([-forward[2], 0, forward[0]]);
+	const up = [right[1] * forward[2] - right[2] * forward[1], right[2] * forward[0] - right[0] * forward[2], right[0] * forward[1] - right[1] * forward[0]];
+	const half = presets.High.rings.find((ring) => ring.spacing === 8).halfExtent;
+	for (const [name, point] of [['right', [target[0] + half, 0, target[2]]], ['far', [target[0], 0, target[2] - half]]]) {
+		const v = sub(point, position);
+		const depth = dot(v, forward);
+		const x = dot(v, right) / depth / (tanHalf * (16 / 9));
+		const y = dot(v, up) / depth / tanHalf;
+		expect.truthy(depth > 0 && Math.abs(x) <= 0.8 && Math.abs(y) <= 0.8, `the ${name} edge's middle at NDC (${x.toFixed(2)}, ${y.toFixed(2)})`);
+	}
+});
