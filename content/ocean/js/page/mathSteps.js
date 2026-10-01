@@ -72,7 +72,7 @@ export const MATH_STEPS = Object.freeze({
 	),
 	tiling: entry(
 		String.raw`y(\mathbf{x} + \htmlClass{fresh}{\htmlClass{t-tile}{L}\,\mathbf{e}}) = y(\mathbf{x}), \quad \mathbf{e} = \mathbf{e}_x \text{ or } \mathbf{e}_z`,
-		'Every wave fits the tile exactly, so the whole sea repeats every L studs.',
+		'With the spread full, every wave fits the tile exactly, so the whole sea repeats every L studs.',
 	),
 	frequency: entry(
 		String.raw`y(x) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(k_i x + \varphi_i) \;\Longleftrightarrow\; \htmlClass{fresh}{\hat{y}(k)}:\ \text{a spike of height } A_i \text{ at each } k_i`,

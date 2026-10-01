@@ -336,8 +336,8 @@
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}, \quad \tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,e^{-i\omega t} + \tilde h_0^{*}(-\mathbf{k})\,e^{i\omega t}, \quad \omega = \sqrt{g k \tanh(k d)}, \quad e^{i\theta} = \cos\theta + i\sin\theta</code></div>
-					<p class="math-note">d is the water depth the engine uses, 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves, so ω is close to √(gk) and long waves outrun short ones. The code rounds each ω down to a whole number of turns per 120 s, so the sea repeats every 120 s. Euler's formula turns each wave into an arrow spinning in the complex plane.</p>
+					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}, \quad \tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,e^{-i\omega t} + \tilde h_0^{*}(-\mathbf{k})\,e^{i\omega t}, \quad \omega = \Big\lfloor \frac{\sqrt{g k \tanh(k d)}}{\omega_0} \Big\rfloor\,\omega_0, \quad \omega_0 = \frac{2\pi}{120\ \text{s}}, \quad e^{i\theta} = \cos\theta + i\sin\theta</code></div>
+					<p class="math-note">d is the water depth the engine uses, 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves, so ω is close to √(gk) and long waves outrun short ones. ω₀ is one turn per 120 s, and the code rounds each ω down to a whole number of those (the ⌊ ⌋ brackets), so the sea repeats every 120 s. Euler's formula turns each wave into an arrow spinning in the complex plane.</p>
 				</details>
 			</article>
 		</section>
@@ -436,7 +436,7 @@
 				<div class="controls" data-controls="23" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="sampling">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>One point between grid values: the four it blends and how much of each, beside the engine's own answer for the same point.</figcaption>
+					<figcaption>A close-up of the 256-stud layer's height grid, worked out in your browser: one point, the four grid values it blends and how much of each (the amber numbers), the tile's edge dashed, and under it the blend beside the engine's own answer for the same point.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
@@ -460,7 +460,7 @@
 		<section class="step" id="step-24" data-step="24" data-step-id="mesh" aria-labelledby="step-24-title">
 			<article class="panel">
 				<h2 id="step-24-title">The mesh</h2>
-				<p>All those numbers end up on a mesh: rings of points centred where the camera looks, each ring twice as coarse as the one inside it, so the detail goes where you're looking. The rings snap to a fixed grid as the camera moves, so the waves don't swim (slide about as the points move under them).</p>
+				<p>All those numbers end up on a mesh: rings of points centred where the camera looks, each ring twice as coarse as the one inside it, so the detail goes where you're looking. The rings snap to a fixed grid as the camera moves, so the waves don't swim (slide about as the points move under them). Here the sea is calmed right down and seen from above so the rings show: nested squares, the finest in the middle.</p>
 				<div class="controls" data-controls="24" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
@@ -490,7 +490,7 @@
 				<div class="controls" data-controls="25" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="painted">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>The colour, glow-mask and ripple maps the painters are making right now, shrunk to fit.</figcaption>
+					<figcaption>The colour map, the glow mask and the ripples (the normal map), as this page's painters are making them right now in your browser, shrunk to fit.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
