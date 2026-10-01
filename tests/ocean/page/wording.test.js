@@ -43,3 +43,15 @@ test('the tiling step claims the tile only at full spread, and the Gerstner step
 	expect.truthy(/not the lone sine/.test(of('tiling')), 'the tiling step says the lone sine is not on the tile');
 	expect.truthy(/Gerstner/.test(of('gerstner')) && /teaching waves/.test(of('gerstner')) && /prototype/.test(of('gerstner')), 'the Gerstner step names the teaching waves and the prototype');
 });
+
+// Task 14: the recap at the foot of the page lists every "Roblox says no" card, in story order.
+// Each line names the card it sums up with data-card (the card's step id); a card may take more than
+// one line (the painted maps' card makes two points), but none is left out and none is out of order.
+test('the recap has a line for every card, in story order', async () => {
+	const { CARD_STEP_IDS } = await import('./structure.js');
+	const recap = /<section class="block" id="recap"[\s\S]*?<\/section>/.exec(html)[0];
+	const lines = [...recap.matchAll(/<li([^>]*)>/g)].map((m) => /data-card="([^"]+)"/.exec(m[1])?.[1] ?? null);
+	expect.truthy(lines.every((id) => id !== null), `every recap line names its card: ${JSON.stringify(lines)}`);
+	const distinct = lines.filter((id, i) => i === 0 || id !== lines[i - 1]);
+	expect.equal(distinct.join(','), CARD_STEP_IDS.join(','), 'one run of lines per card, in story order');
+});

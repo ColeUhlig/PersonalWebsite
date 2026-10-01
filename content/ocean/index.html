@@ -89,7 +89,7 @@
 		<section class="step" id="step-4" data-step="4" data-step-id="into-3d" aria-labelledby="step-4-title">
 			<article class="panel">
 				<h2 id="step-4-title">From a line to a surface</h2>
-				<p>Here's the trick: that curve was never just a line. It's the edge of a surface, seen from the side. Nothing in the sum depends on the other direction, so the curve is just stretched sideways into a sheet. The lines on it are the triangles the surface is built from, and every corner where they meet is a point the code has to move.</p>
+				<p>Here's the trick: that curve was never just a line. It's the edge of a surface, seen from the side, and now drawn at its true height. Nothing in the sum depends on the other direction, so the curve is just stretched sideways into a sheet. The lines on it are the triangles the surface is built from, and every corner where they meet is a point the code has to move.</p>
 				<div class="controls" data-controls="4" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
@@ -609,15 +609,17 @@
 			<section class="block" id="recap" aria-labelledby="recap-title">
 				<h3 id="recap-title">Every time Roblox said no</h3>
 				<ul>
-					<li>No vertex shaders: a script moves every point, every frame (the farthest ring every other frame).</li>
-					<li>No pixel shaders for light: Roblox's own lighting does the highlight and the sky reflection.</li>
-					<li>No GPU compute: the FFT runs in Luau on three worker Actors.</li>
-					<li>Workers take turns: a frame-counted fade hides it.</li>
-					<li>No texture reads from my own code: the heights are blended in Luau, point by point.</li>
-					<li>No moving meshes on the GPU and no tessellation: rings of patches built with EditableMesh.</li>
-					<li>No pixel shaders: colour, glow and ripples are painted into images.</li>
-					<li>No texture swaps from game scripts: every image is handed over up front.</li>
-					<li>No lighting hooks: 232 materials on the top tier, each with its own glow.</li>
+					<li data-card="into-3d">No vertex shaders: a script moves every point, every frame (the farthest ring every other frame).</li>
+					<li data-card="many-waves">No shader to spread the waves over: each extra wave is another pass of a Luau loop over every point, so the count stays down.</li>
+					<li data-card="highlights">No pixel shaders for light: Roblox's own lighting does the highlight and the sky reflection.</li>
+					<li data-card="fft">No GPU compute: the FFT runs in Luau on three worker Actors.</li>
+					<li data-card="layers">Workers take turns: a frame-counted fade hides it.</li>
+					<li data-card="sampling">No texture reads from my own code: the heights are blended in Luau, point by point.</li>
+					<li data-card="mesh">No moving meshes on the GPU and no tessellation: rings of patches built with EditableMesh.</li>
+					<li data-card="painted">No pixel shaders: colour, glow and ripples are painted into images.</li>
+					<li data-card="painted">No texture swaps from game scripts: every image is handed over up front.</li>
+					<li data-card="foam">No pixel shaders for foam either: it's painted into the colour map, a quarter at a time.</li>
+					<li data-card="glow">No lighting hooks: 232 materials on the top tier, each with its own glow.</li>
 				</ul>
 			</section>
 
