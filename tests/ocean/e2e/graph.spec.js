@@ -167,6 +167,13 @@ test("a fling across the graph's boundary lands clean", async ({ page }) => {
 	await page.waitForFunction((last) => window.__page.reading().step === last && window.__ocean.story.state().step === last && window.__ocean.story.graph().band === null, STEP_COUNT, { timeout: 30_000 });
 	expect((await story(page, 'look')).clipped).toBe(false);
 	expect(await story(page, 'orbitEnabled')).toBe(true);
+	// End's smooth scroll can still be running when the last step is read (fix round 1: 35,858 of
+	// 37,678), and a Home pressed then is lost: wait until the page rests at its foot for a few frames.
+	await page.waitForFunction(() => {
+		const atFoot = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+		window.__restingAtFoot = atFoot ? (window.__restingAtFoot ?? 0) + 1 : 0;
+		return window.__restingAtFoot >= 5;
+	}, null, { polling: 'raf', timeout: 30_000 });
 	await page.keyboard.press('Home');
 	// Home scrolls smoothly too: let it land at the top, or it carries on after the next jump and
 	// takes the page back to the opening.
@@ -181,10 +188,12 @@ test("a fling across the graph's boundary lands clean", async ({ page }) => {
 	const graph = await story(page, 'graph');
 	expect(graph.band).toBe(null);
 	expect((await story(page, 'look')).clipped).toBe(false);
-	const trail = await story(page, 'cameraTrail');
-	expect(trail.filter((t) => t.step >= 16).every((t) => t.position[1] > 14), 'the lens stays above the crests').toBe(true);
-	const pictures = await story(page, 'pictures');
-	expect(pictures.filter((p) => p.key >= 16 && !p.held).every((p) => p.maxAbsY > 0), 'no flat sea shown').toBe(true);
+	const trail = (await story(page, 'cameraTrail')).filter((t) => t.step >= 16);
+	expect(trail.length, 'frames watched on the far side').toBeGreaterThan(0);
+	expect(trail.every((t) => t.position[1] > 14), 'the lens stays above the crests').toBe(true);
+	const pictures = (await story(page, 'pictures')).filter((p) => p.key >= 16 && !p.held);
+	expect(pictures.length, 'pictures watched on the far side').toBeGreaterThan(0);
+	expect(pictures.every((p) => p.maxAbsY > 0), 'no flat sea shown').toBe(true);
 });
 
 test.describe('reduced motion', () => {
@@ -193,6 +202,11 @@ test.describe('reduced motion', () => {
 	test('the swing is a cut and the backdrop does not fade', async ({ page }) => {
 		test.setTimeout(180_000);
 		await oceanRunning(page);
+		// Reduced motion boots with the clock paused, and a stopped clock snaps every fade anyway: play
+		// it, so what holds the backdrop still is the stage's own reduced-motion branch (fix round 1).
+		await expect(page.locator('#motion')).toHaveText('Play the ocean');
+		await page.locator('#motion').click();
+		await expect(page.locator('#motion')).toHaveText('Pause the ocean');
 		await scrollToId(page, 'sum-of-sines', 0.3);
 		await waitFrames(page, 5);
 		expect((await story(page, 'graph')).shown).toBe(1);
@@ -207,4 +221,20 @@ test.describe('reduced motion', () => {
 		}
 		expect((await story(page, 'graph')).shown).toBe(0);
 	});
+});
+
+// Fix round 1: the curve fades out when step 4's band ends (and when the camera stops facing the
+// plane), rather than popping; with the clock running, some frames show it part-way.
+test('the curve fades out, not pops, when the band releases', async ({ page }) => {
+	await load(page, 'step=into-3d', 10);
+	await page.waitForFunction(() => window.__ocean.stage.graph().curveShown === 1, null, { timeout: 30_000 });
+	await stage(page, 'set', stepOf('directions'), 0);
+	const samples = [];
+	for (let i = 0; i < 40; i++) {
+		samples.push((await stage(page, 'graph')).curveShown);
+		if (samples.at(-1) === 0) break;
+	}
+	expect(samples.some((s) => s > 0.02 && s < 0.98), `a fade, not a pop: ${samples.map((s) => s.toFixed(2)).join(' ')}`).toBe(true);
+	await page.waitForFunction(() => window.__ocean.stage.graph().curve === null, null, { timeout: 10_000 });
+	expect((await stage(page, 'graph')).band).toBe(null);
 });

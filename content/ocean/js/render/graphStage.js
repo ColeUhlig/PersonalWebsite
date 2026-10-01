@@ -23,7 +23,7 @@
 // go into a buffer made once, and a label's text is rebuilt only when its number changes (R18).
 // The probe's `components` is a number: how many component curves are drawn.
 import * as THREE from 'three';
-import { CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, SPAN_MARGIN, axisTicksInto, componentWaves, floorDepth, graphSpan, niceStep, uprightLean, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../page/graphModel.js';
+import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, floorDepth, graphSpan, lambdaPair, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
 import { GRAPH_OFF, GRAPH_PLANE_X, graphBand } from '../stages/graph.js';
 import { createAxes, createLabel } from './graphLabels.js';
 
@@ -45,14 +45,9 @@ const OPAQUE = 0.999;
 // The floor clip's constant when there is no wave bank to bound the sheet: no floor at all.
 const NO_FLOOR = 1e6;
 const TICK_LABELS = 16;
-// The axes and their words show over the top half of the backdrop's fade only: they belong to the
-// flat picture, and in the swing's oblique view they would float about the frame.
-const axisOpacityOf = (shown) => Math.min(1, Math.max(0, (shown - 0.5) * 2));
 const TICK_COLOUR = '#a9bcc8'; // --ink-dim
-// Pixels the axes stand in from the frame's left edge (room for the height ticks' numbers, drawn to
-// the axis' left) and its right edge.
-const AXIS_LEFT_PX = 44;
-const AXIS_RIGHT_PX = 24;
+// Pixels the λ bracket stays in from the frame's right edge.
+const BRACKET_EDGE_PX = 8;
 // About one distance tick per this many pixels (a phone's top half gets three or four), at most eight.
 const TICK_SPACING_PX = 90;
 const MAX_DISTANCE_TICKS = 8;
@@ -101,8 +96,13 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	// Keep y >= -floor.
 	const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), NO_FLOOR);
 	const planes = [minPlane, maxPlane, floorPlane];
+	// The distance axis, its ticks and the sine's marks; the height axis and its ticks apart, as they
+	// fade on their own (axisLayout's `upright`).
 	const axes = createAxes({ order: ORDER.axes });
-	group.add(axes.lines);
+	const heightAxes = createAxes({ order: ORDER.axes });
+	group.add(axes.lines, heightAxes.lines);
+	const layoutOut = { left: 0, right: 0, sppLeft: 0, sppRight: 0, lean: 0, upright: 1, top: 0, bottom: 0 };
+	const pairOut = { start: 0, crest: true };
 	const word = () => createLabel({ order: ORDER.labels });
 	const words = { distance: word(), height: word(), lambda: word(), amplitude: word() };
 	const ticks = Array.from({ length: TICK_LABELS }, () => createLabel({ colour: TICK_COLOUR, order: ORDER.labels }));
@@ -122,7 +122,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	const forwardArray = [0, 0, 0];
 	const positionArray = [0, 0, 0];
 	const spanInput = { position: positionArray, forward: forwardArray, fovDegrees: 70, aspect: 1, heightPx: 1 };
-	const span = { zMin: 0, zMax: 0, depth: 0, studsPerPixel: 0 };
+	const span = { zMin: 0, zMax: 0, frameMin: 0, frameMax: 0, depth: 0, studsPerPixel: 0 };
 	const chosen = new Int32Array(MAX_COMPONENTS);
 	let current = GRAPH_OFF;
 	let band = null;
@@ -265,6 +265,8 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		words.amplitude.hide();
 		axes.begin();
 		axes.end(0);
+		heightAxes.begin();
+		heightAxes.end(0);
 		shownLabels.length = 0;
 		markers = null;
 	}
@@ -279,33 +281,41 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	}
 
 	// The axes, their ticks and words, faded with the backdrop (axisOpacityOf): they belong to the flat
-	// picture and go as the swing turns it into a surface. The sine steps also mark the live height
-	// and length.
+	// picture and go as the swing turns it into a surface. They are placed from the camera's own view
+	// of the curve's line (graphModel.js axisLayout), so their ends stay on the frame however oblique
+	// it gets, and every offset in pixels is taken at its own depth. The height axis also fades as it
+	// nears the most it can lean (layout.upright). The distance ticks' numbers sit along the graph's
+	// foot, where the curve never crosses them. The sine steps also mark the live height and length.
 	function decorate(t, opacity) {
+		const layout = axisLayout(spanInput, layoutOut);
+		if (layout === null) {
+			undecorate();
+			return;
+		}
 		const x = GRAPH_PLANE_X - LINE_LIFT;
-		const spp = span.studsPerPixel;
-		const width = span.zMax - span.zMin;
-		// The frame's edges inside the widened span, stood in from them.
-		const inset = width * (0.5 - 0.5 / SPAN_MARGIN);
-		const left = span.zMin + inset + AXIS_LEFT_PX * spp;
-		const right = span.zMax - inset - AXIS_RIGHT_PX * spp;
+		const { left, right, sppLeft, sppRight, lean } = layout;
+		const heightOpacity = opacity * layout.upright;
 		const yScale = current.yScale;
-		const heightTop = Math.max(tallest, 0.5) * yScale * 1.25;
-		// The height axis leans to stand upright on screen (the shot looks a little down).
-		const lean = uprightLean(positionArray, forwardArray, left);
+		// A quarter over the tallest crest, kept inside the frame with room for the height word over
+		// it and the distance numbers and word under its foot.
+		const heightTop = Math.max(0.5 * yScale, Math.min(Math.max(tallest, 0.5) * yScale * 1.25, layout.top - 30 * sppLeft, -layout.bottom - 44 * sppLeft));
 		axes.begin();
+		heightAxes.begin();
 		axes.segment(x, 0, left, x, 0, right);
-		axes.segment(x, -heightTop, left - heightTop * lean, x, heightTop, left + heightTop * lean);
-		const wanted = Math.min(MAX_DISTANCE_TICKS, Math.max(2, Math.round((right - left) / spp / TICK_SPACING_PX)));
+		heightAxes.segment(x, -heightTop, left - heightTop * lean, x, heightTop, left + heightTop * lean);
+		// The axis spans the frame less its insets on screen, however oblique the view.
+		const axisPx = spanInput.heightPx * spanInput.aspect - AXIS_LEFT_PX - AXIS_RIGHT_PX;
+		const wanted = Math.min(MAX_DISTANCE_TICKS, Math.max(2, Math.round(axisPx / TICK_SPACING_PX)));
 		const zCount = axisTicksInto(left, right, niceStep(right - left, wanted), zTicks);
 		const yCount = axisTicksInto(-heightTop / yScale, heightTop / yScale, niceStep(heightTop / yScale, 3), yTicks);
 		shownLabels.length = 0;
 		let slot = 0;
 		for (let i = 0; i < zCount; i++) {
 			const z = zTicks[i];
+			const spp = studsPerPixelAt(spanInput, z);
 			axes.segment(x, -5 * spp, z, x, 5 * spp, z);
 			if (slot < TICK_LABELS) {
-				tickLabel(slot, z, 0, x, -14 * spp, z, spp, opacity, 'centre');
+				tickLabel(slot, z, 0, x, -heightTop - 14 * spp, z, spp, opacity, 'centre');
 				slot += 1;
 			}
 		}
@@ -313,9 +323,9 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			const y = yTicks[i];
 			if (y === 0) continue;
 			const at = left + y * yScale * lean;
-			axes.segment(x, y * yScale, at - 5 * spp, x, y * yScale, at + 5 * spp);
+			heightAxes.segment(x, y * yScale, at - 5 * sppLeft, x, y * yScale, at + 5 * sppLeft);
 			if (slot < TICK_LABELS) {
-				tickLabel(slot, y, 1, x, y * yScale, at - 8 * spp, spp, opacity, 'right');
+				tickLabel(slot, y, 1, x, y * yScale, at - 8 * sppLeft, sppLeft, heightOpacity, 'right');
 				slot += 1;
 			}
 		}
@@ -325,47 +335,46 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			heightScale = scale;
 			words.height.set(scale === 1 ? 'height (studs)' : `height (studs, drawn ×${scale})`);
 		}
-		// Clear of the λ marker's words, which sit just over the crests.
-		words.height.place(x, heightTop + 30 * spp, left + heightTop * lean, spp, opacity, 'left');
+		// Clear of the λ marker's words, which sit just over the crests; inside the frame's top.
+		const wordY = Math.min(heightTop + 30 * sppLeft, layout.top);
+		words.height.place(x, wordY, left + wordY * lean, sppLeft, heightOpacity, 'left');
 		words.distance.set('distance (studs)');
-		// Under the distance ticks' numbers, clear of the curve's crests.
-		words.distance.place(x, -32 * spp, right, spp, opacity, 'right');
-		shownLabels.push(words.height.text(), words.distance.text());
+		words.distance.place(x, -heightTop - 32 * sppRight, right, sppRight, opacity, 'right');
+		if (heightOpacity > 0) shownLabels.push(words.height.text());
+		shownLabels.push(words.distance.text());
 		const sine = ocean.stageSettings?.source === 'sine' ? ocean.waves : null;
 		if (sine !== null && sine.packed[2] > 0) {
-			markSine(sine, t, x, spp, opacity, left, right);
+			markSine(sine, t, x, opacity, left, right);
 		} else {
 			markers = null;
 			words.lambda.hide();
 			words.amplitude.hide();
 		}
 		axes.end(opacity);
+		heightAxes.end(heightOpacity);
 	}
 
-	// The crest at or after z, for the sine k z - omega t + phase: crests sit where that is pi/2 + 2 pi m.
-	function crestFrom(z, k, omega, phase, t) {
-		const m = Math.ceil((k * z - Math.PI / 2 - omega * t + phase) / (2 * Math.PI));
-		return (Math.PI / 2 + 2 * Math.PI * m + omega * t - phase) / k;
-	}
-
-	// The sine's crest-to-crest length between two crests in view, and its height at the first.
-	// Pre-flight R10: the pair starts at the first crest a quarter wavelength in from the left axis
-	// (clear of the height axis' labels); when its second crest is past the right edge, the pair one
-	// crest to the left (the first crest at or after the axis) is tried before the length is hidden.
-	function markSine(sine, t, x, spp, opacity, left, right) {
+	// The sine's crest-to-crest length and its height. The λ bracket rides a crest pair between the
+	// height axis and the frame's right edge (pre-flight R10: preferring the pair a quarter wave in
+	// from the axis), or a trough pair under the curve when no crest pair fits there, so it never blinks
+	// out as the wave slides (graphModel.js lambdaPair). The height is marked at a crest.
+	function markSine(sine, t, x, opacity, left, right) {
 		const k = sine.packed[0];
 		const omega = sine.packed[1];
 		const amplitude = sine.packed[2] * sine.weights[0];
 		const phase = sine.packed[3];
 		const wavelength = (2 * Math.PI) / k;
-		let first = crestFrom(left + wavelength * 0.25, k, omega, phase, t);
-		if (first + wavelength >= right) first = crestFrom(left, k, omega, phase, t);
-		const second = first + wavelength;
 		const top = amplitude * current.yScale;
-		const lift = top + 10 * spp;
 		const shownLength = Number(wavelength.toFixed(1));
 		const shownHeight = Number(amplitude.toFixed(2));
-		if (second < right) {
+		const edge = span.frameMax - BRACKET_EDGE_PX * studsPerPixelAt(spanInput, span.frameMax);
+		const pair = lambdaPair(k, omega, phase, t, left, edge, pairOut);
+		if (pair !== null) {
+			const first = pair.start;
+			const second = first + wavelength;
+			const spp = studsPerPixelAt(spanInput, (first + second) / 2);
+			const side = pair.crest ? 1 : -1;
+			const lift = side * (top + 10 * spp);
 			axes.segment(x, lift, first, x, lift, second);
 			axes.segment(x, lift - 4 * spp, first, x, lift + 4 * spp, first);
 			axes.segment(x, lift - 4 * spp, second, x, lift + 4 * spp, second);
@@ -373,18 +382,20 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 				lambdaShown = shownLength;
 				words.lambda.set(`λ = ${shownLength} studs`);
 			}
-			words.lambda.place(x, lift + 12 * spp, (first + second) / 2, spp, opacity);
+			words.lambda.place(x, lift + side * 12 * spp, (first + second) / 2, spp, opacity);
 			shownLabels.push(words.lambda.text());
 		} else {
 			words.lambda.hide();
 		}
-		if (first < right) {
-			axes.segment(x, 0, first, x, top, first + top * uprightLean(positionArray, forwardArray, first));
+		const crest = pair !== null && pair.crest ? pair.start : crestAfter(k, omega, phase, t, left + wavelength * 0.25);
+		if (crest < right) {
+			const spp = studsPerPixelAt(spanInput, crest);
+			axes.segment(x, 0, crest, x, top, crest + top * uprightLean(positionArray, forwardArray, crest));
 			if (shownHeight !== amplitudeShown) {
 				amplitudeShown = shownHeight;
 				words.amplitude.set(`A = ${shownHeight} studs`);
 			}
-			words.amplitude.place(x, top / 2, first + 6 * spp, spp, opacity, 'left');
+			words.amplitude.place(x, top / 2, crest + 6 * spp, spp, opacity, 'left');
 			shownLabels.push(words.amplitude.text());
 		} else {
 			words.amplitude.hide();

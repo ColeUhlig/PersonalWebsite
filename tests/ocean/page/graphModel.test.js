@@ -4,10 +4,11 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
-import { CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, componentWaves, floorDepth, graphSpan, uprightLean, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
+import { CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, componentWaves, floorDepth, graphSpan, uprightLean, axisLayout, axisOpacityOf, lambdaPair, AXIS_LEFT_PX, AXIS_RIGHT_PX, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
 import { GRAPH_PLANE_X } from '../../../content/ocean/js/stages/graph.js';
 import { GRAPH_SHOT } from '../../../content/ocean/js/stages/recipeKit.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { blendRecipes } from '../../../content/ocean/js/stages/blend.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 
 const unit = (v) => {
@@ -161,4 +162,81 @@ test('uprightLean: a line leaning this much projects straight up the frame', () 
 	}
 	expect.near(uprightLean(GRAPH_SHOT.position, forward, 0), 0, 1e-12, 'none at the centre');
 	expect.equal(uprightLean([10, 0, 0], [-1, 0, 0], 5), 0, 'none facing away');
+});
+
+// NDC y of a point (+1 the top edge), for a camera that never rolls.
+const ndcY = (position, forward, fovDegrees, point) => {
+	const right = unit([-forward[2], 0, forward[0]]);
+	const up = [right[1] * forward[2] - right[2] * forward[1], right[2] * forward[0] - right[0] * forward[2], right[0] * forward[1] - right[1] * forward[0]];
+	const p = point.map((v, i) => v - position[i]);
+	const depth = p.reduce((sum, v, i) => sum + v * forward[i], 0);
+	return p.reduce((sum, v, i) => sum + v * up[i], 0) / depth / Math.tan((fovDegrees * Math.PI) / 360);
+};
+
+test('graphSpan also gives where the line crosses the frame itself', () => {
+	const forward = forwardOf(GRAPH_SHOT);
+	const span = graphSpan({ position: GRAPH_SHOT.position, forward, fovDegrees: 70, aspect: 16 / 9, heightPx: 767 });
+	expect.near(ndcX(GRAPH_SHOT.position, forward, 70, 16 / 9, [GRAPH_PLANE_X, 0, span.frameMin]), -1, 1e-9, 'left edge');
+	expect.near(ndcX(GRAPH_SHOT.position, forward, 70, 16 / 9, [GRAPH_PLANE_X, 0, span.frameMax]), 1, 1e-9, 'right edge');
+});
+
+// Fix round 1: the axes are placed from the camera's own view of the line, so wherever they show
+// across the swing from step 3 into step 4 their ends sit on the frame, at the pixel insets, and the
+// height axis turns smoothly (no snap from a lean cut off at its limit).
+test('across the 3 to 4 blend the axes, wherever they show, stay on the frame and turn smoothly', () => {
+	const from = recipeFor(stepOf('sum-of-sines'));
+	const to = recipeFor(stepOf('into-3d'));
+	for (const [aspect, heightPx] of [[1366 / 767, 767], [390 / 422, 422]]) {
+		const widthPx = heightPx * aspect;
+		let previousLean = null;
+		let shown = 0;
+		for (let p = 0; p <= 1.0001; p += 0.01) {
+			const blended = blendRecipes(from, to, Math.min(p, 1));
+			const opacity = axisOpacityOf(blended.look.graph.opacity);
+			if (opacity <= 0) continue;
+			shown += 1;
+			const { position, target } = blended.shot;
+			const forward = unit(target.map((v, i) => v - position[i]));
+			const camera = { position, forward, fovDegrees: 70, aspect, heightPx };
+			const layout = axisLayout(camera);
+			expect.truthy(layout !== null, `axes placed at ${p.toFixed(2)}`);
+			const left = ndcX(position, forward, 70, aspect, [GRAPH_PLANE_X, 0, layout.left]);
+			const right = ndcX(position, forward, 70, aspect, [GRAPH_PLANE_X, 0, layout.right]);
+			expect.near(left, -1 + (2 * AXIS_LEFT_PX) / widthPx, 1e-6, `left end at ${p.toFixed(2)}`);
+			expect.near(right, 1 - (2 * AXIS_RIGHT_PX) / widthPx, 1e-6, `right end at ${p.toFixed(2)}`);
+			// The height axis, while it shows at all, stands upright on the frame.
+			if (layout.upright > 0) {
+				for (const y of [layout.top, layout.bottom]) {
+					const point = [GRAPH_PLANE_X, y, layout.left + y * layout.lean];
+					expect.truthy(Math.abs(ndcY(position, forward, 70, point)) <= 1, `height axis end on the frame at ${p.toFixed(2)}`);
+					expect.near(ndcX(position, forward, 70, aspect, point), left, 1e-6, `height axis upright at ${p.toFixed(2)}`);
+				}
+			}
+			if (previousLean !== null) {
+				expect.truthy(Math.abs(layout.lean - previousLean.lean) < 0.03, `the lean turns smoothly at ${p.toFixed(2)}`);
+				expect.truthy(Math.abs(layout.upright - previousLean.upright) < 0.35, `the height axis fades, not snaps, at ${p.toFixed(2)}`);
+			}
+			previousLean = { lean: layout.lean, upright: layout.upright };
+		}
+		expect.truthy(shown > 3, 'the axes show for part of the blend');
+	}
+});
+
+// Fix round 1: on a phone the axes span about 1.8 wavelengths at the default 20 studs, so a crest pair
+// does not always fit; a trough pair does then, so the λ bracket never blinks out.
+test('lambdaPair always finds a crest or trough pair across 1.5 wavelengths, at any phase', () => {
+	const k = (2 * Math.PI) / 20;
+	let crests = 0;
+	let troughs = 0;
+	for (let t = 0; t < 20; t += 0.05) {
+		const pair = lambdaPair(k, 8 * k, 0, t, -15, 15);
+		expect.truthy(pair !== null, `a pair at t ${t.toFixed(2)}`);
+		expect.truthy(pair.start >= -15 - 1e-9 && pair.start + 20 <= 15 + 1e-9, 'inside');
+		expect.near(Math.sin(k * pair.start - 8 * k * t), pair.crest ? 1 : -1, 1e-9, pair.crest ? 'on a crest' : 'on a trough');
+		if (pair.crest) crests += 1;
+		else troughs += 1;
+	}
+	expect.truthy(crests > 0 && troughs > 0, `both kinds used (${crests} crests, ${troughs} troughs)`);
+	expect.truthy(lambdaPair(k, 0, 0, 0, -38, 38).crest, 'crests when they fit');
+	expect.equal(lambdaPair(k, 0, 0, 0, -10, 10), null, 'nothing across one wavelength');
 });
