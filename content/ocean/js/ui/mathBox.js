@@ -140,8 +140,13 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 		return loading;
 	}
 
+	// The story calls this on every scroll frame: nothing touches the DOM unless the step (or whether
+	// there is one at all) changed. The slot starts hidden, so the opening's first null needs nothing.
 	function show(entry) {
-		const same = current !== null && entry !== null && current.id === entry.id;
+		if ((current?.id ?? null) === (entry?.id ?? null)) {
+			current = entry;
+			return;
+		}
 		current = entry;
 		root.hidden = entry === null;
 		if (entry === null) {
@@ -150,7 +155,6 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 			sentence.textContent = PROMPT;
 			return;
 		}
-		if (same) return;
 		render(entry);
 		sentence.textContent = entry.changed;
 		glow();

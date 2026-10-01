@@ -5,7 +5,10 @@
 // would need a source for them). Checked against: the sine and bank (engine/waveBanks.js,
 // core/waveSampler.js: the normal is dP/dz x dP/dx), the lighting terms (page/lightTerms.js,
 // render/termsMaterial.js, lane D's, which mirror step 11's formula), the spectrum and the time
-// evolution (core/spectrum.js, core/cascade.js), the choppy displacement's sign (core/cascade.js: +i,
+// evolution (core/spectrum.js, core/cascade.js: ω rounded down to a multiple of 2π over
+// engine/config.js LOOP_PERIOD, 120 s), the chord's phases (lane E's page/frequencyMath.js TONES), the
+// sheet (at fan 0 the waves vary along world z and the sheet unrolls along world x, so the box calls
+// the line's coordinate x and the new direction x⊥, never a world axis), the choppy displacement's sign (core/cascade.js: +i,
 // which moves water toward the crests), the rings (core/tier.js: 2 to 32 studs; core/ringLayout.js
 // windowCentre snaps a ring's window to twice its spacing), the ripple map's bytes
 // (core/normalTexels.js: R from n.x, G from n.z, B from n.y), the foam (core/foamField.js, whose fold
@@ -30,8 +33,8 @@ export const MATH_STEPS = Object.freeze({
 		'Several waves, each with its own height, length, speed and starting point, simply added together.',
 	),
 	'into-3d': entry(
-		String.raw`y(x, \htmlClass{fresh}{z}, t) = \sum_{i=1}^{N} A_i \sin(k_i x - \omega_i t + \varphi_i)`,
-		'Nothing in the sum depends on z, so the curve is just stretched sideways into a sheet.',
+		String.raw`y(x, \htmlClass{fresh}{x_\perp}, t) = \sum_{i=1}^{N} A_i \sin(k_i x - \omega_i t + \varphi_i)`,
+		'Nothing in the sum depends on the new direction across the line, so the curve is just stretched sideways into a sheet.',
 	),
 	directions: entry(
 		String.raw`y(\htmlClass{fresh}{\mathbf{x}}, t) = \sum_{i=1}^{N} A_i \sin\big(k_i\,(\htmlClass{fresh}{\htmlClass{t-dir}{\hat{\mathbf{d}}_i}\cdot\mathbf{x}}) - \omega_i t + \varphi_i\big)`,
@@ -74,7 +77,7 @@ export const MATH_STEPS = Object.freeze({
 		'The same waves written as a list instead of a curve: one spike per wave, at its frequency.',
 	),
 	fourier: entry(
-		String.raw`y(t) = \sum_j \htmlClass{t-note}{a_j}\sin(2\pi f_j t), \qquad \hat{y} = \htmlClass{fresh}{\mathcal{F}}\{y\}, \qquad y = \htmlClass{fresh}{\mathcal{F}^{-1}}\{\hat{y}\}`,
+		String.raw`y(t) = \sum_j \htmlClass{t-note}{a_j}\sin(2\pi f_j t + \varphi_j), \qquad \hat{y} = \htmlClass{fresh}{\mathcal{F}}\{y\}, \qquad y = \htmlClass{fresh}{\mathcal{F}^{-1}}\{\hat{y}\}`,
 		'Going to frequencies and back loses nothing, so you can take one tone out and rebuild the rest.',
 	),
 	jonswap: entry(
@@ -86,7 +89,7 @@ export const MATH_STEPS = Object.freeze({
 		"Each wave's height and starting angle are rolled at random around what the spectrum allows.",
 	),
 	time: entry(
-		String.raw`\tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,\htmlClass{fresh}{e^{-i\omega t}} + \tilde h_0^{*}(-\mathbf{k})\,\htmlClass{fresh}{e^{i\omega t}}, \quad \omega = \sqrt{g k \tanh(k d)}`,
+		String.raw`\tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,\htmlClass{fresh}{e^{-i\omega t}} + \tilde h_0^{*}(-\mathbf{k})\,\htmlClass{fresh}{e^{i\omega t}}, \quad \htmlClass{fresh}{\omega = \Big\lfloor \frac{\sqrt{g k \tanh(k d)}}{\omega_0} \Big\rfloor\,\omega_0}, \quad \omega_0 = \frac{2\pi}{120\ \text{s}}`,
 		"Euler's formula spins every arrow at the speed the dispersion gives it, and the sea starts to move.",
 	),
 	fft: entry(
@@ -118,7 +121,7 @@ export const MATH_STEPS = Object.freeze({
 		'Workers paint the colour, the glow mask and the ripples into images, and Roblox wraps them onto the mesh.',
 	),
 	foam: entry(
-		String.raw`J = (1 + c\,\partial_x D_x)(1 + c\,\partial_z D_z) - (c\,\partial_x D_z)^2, \quad \htmlClass{fresh}{f} \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \htmlClass{fresh}{\beta\,\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)`,
+		String.raw`\htmlClass{fresh}{J = (1 + c\,\partial_x D_x)(1 + c\,\partial_z D_z) - (c\,\partial_x D_z)^2}, \quad \htmlClass{fresh}{f} \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \htmlClass{fresh}{\beta\,\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)`,
 		'Where the surface folds, foam grows, and everywhere it fades a little every step.',
 	),
 	glow: entry(

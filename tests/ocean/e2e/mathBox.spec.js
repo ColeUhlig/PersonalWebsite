@@ -4,6 +4,7 @@
 // TeX when KaTeX never arrives (Review Focus 2), and out of the way of the finale's full-width
 // blocks (pre-flight R14).
 import { test, expect } from '@playwright/test';
+import { freshCount } from '../../../content/ocean/js/page/mathBoxModel.js';
 import { mathFor } from '../../../content/ocean/js/page/mathSteps.js';
 import { TERM_BY_SLIDER } from '../../../content/ocean/js/page/sliderModel.js';
 import { RECIPES } from '../../../content/ocean/js/stages/recipes.js';
@@ -37,10 +38,33 @@ test('hidden over the opening; at the top right from step 1, beside the panels, 
 	expect(card.x + card.width).toBeLessThanOrEqual(1366 - 15);
 	expect(card.y).toBeGreaterThanOrEqual(40);
 	expect(panel.x + panel.width).toBeLessThan(card.x);
+	// The glow on entry lasts FRESH_SECONDS; a loaded machine can miss that window between polls, so
+	// count the class being added instead of looking for it.
+	await page.evaluate(() => {
+		window.__entered = 0;
+		new MutationObserver(() => {
+			if (document.getElementById('mathbox').classList.contains('is-entering')) window.__entered += 1;
+		}).observe(document.getElementById('mathbox'), { attributes: true, attributeFilter: ['class'] });
+	});
 	await scrollToId(page, 'moving-sine', 0.1);
 	await expect(page.locator('#mathbox .mathbox-sentence')).toHaveText(mathFor('moving-sine').changed);
-	await expect(box(page)).toHaveClass(/is-entering/);
-	await expect(page.locator('#mathbox .fresh')).not.toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.__entered)).toBeGreaterThan(0);
+	// What glows is exactly the term the step adds: "− ωt".
+	const fresh = page.locator('#mathbox .katex-html .fresh');
+	await expect(fresh).toHaveCount(freshCount(mathFor('moving-sine').tex));
+	expect((await fresh.textContent()).replace(/[\s\u200b]/g, '')).toBe('−ωt');
+	// Scrolling on inside the same step touches nothing in the box (the story reads every frame).
+	await expect(box(page)).not.toHaveClass(/is-entering/, { timeout: 10_000 });
+	await page.evaluate(() => {
+		window.__mutations = 0;
+		new MutationObserver((records) => {
+			window.__mutations += records.length;
+		}).observe(document.getElementById('mathbox'), { attributes: true, childList: true, subtree: true, characterData: true });
+	});
+	await scrollToId(page, 'moving-sine', 0.6);
+	await expect.poll(() => page.evaluate(() => window.__page.reading().progress)).toBeGreaterThan(0.5);
+	await page.waitForTimeout(300);
+	expect(await page.evaluate(() => window.__mutations)).toBe(0);
 	await scrollToOpening(page);
 	await expect(box(page)).toBeHidden();
 });
@@ -81,6 +105,7 @@ test("every step's equation typesets without a KaTeX error, fits the card, and c
 		await page.evaluate((step) => window.__mathbox.show(step), id);
 		await expect(page.locator('#mathbox .katex-error')).toHaveCount(0);
 		await expect(page.locator('#mathbox .katex')).not.toHaveCount(0);
+		await expect(page.locator('#mathbox .katex-html .fresh'), `${id}'s highlights`).toHaveCount(freshCount(mathFor(id).tex));
 		const fits = await page.evaluate(() => {
 			const eq = document.querySelector('#mathbox .mathbox-eq');
 			return eq.scrollWidth <= eq.clientWidth + 1;
