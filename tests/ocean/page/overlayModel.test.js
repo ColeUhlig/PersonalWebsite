@@ -199,8 +199,8 @@ test('the overlays hold at the sliders ends: spread 0 and 1, spacing 0.5 and 16,
 });
 
 test('the readout says the gap and the spacing, live numbers only', () => {
-	expect.equal(readoutText({ meanAngle: 3.217, spacing: 4 }), 'On this sea just now, the two arrows differ by 3.2° on average, sampling 4 studs either side.');
-	expect.equal(readoutText({ meanAngle: 0.0412, spacing: 0.5 }), 'On this sea just now, the two arrows differ by 0.041° on average, sampling 0.5 studs either side.');
+	expect.equal(readoutText({ meanAngle: 3.217, spacing: 4 }), 'On this sea, sampling 4 studs either side, the two arrows differ by 3.2° on average, measured in your browser just now.');
+	expect.equal(readoutText({ meanAngle: 0.0412, spacing: 0.5 }), 'On this sea, sampling 0.5 studs either side, the two arrows differ by 0.041° on average, measured in your browser just now.');
 	expect.equal(readoutText({ meanAngle: null, spacing: 4 }), '');
 });
 
