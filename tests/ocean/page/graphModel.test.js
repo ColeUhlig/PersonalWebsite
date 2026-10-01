@@ -4,9 +4,11 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
-import { CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, SPAN_MARGIN, componentWaves, graphSpan, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
+import { CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, componentWaves, floorDepth, graphSpan, uprightLean, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
 import { GRAPH_PLANE_X } from '../../../content/ocean/js/stages/graph.js';
 import { GRAPH_SHOT } from '../../../content/ocean/js/stages/recipeKit.js';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 
 const unit = (v) => {
 	const l = Math.hypot(...v);
@@ -15,17 +17,47 @@ const unit = (v) => {
 const forwardOf = (shot) => unit(shot.target.map((t, i) => t - shot.position[i]));
 const line = (count) => WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), 0), count);
 
+// Task 4 (Task 3 review): where a point lands across the frame, -1 at the left edge, +1 at the right
+// (the camera never rolls, so its right is level).
+const ndcX = (position, forward, fovDegrees, aspect, point) => {
+	const right = unit([-forward[2], 0, forward[0]]);
+	const p = point.map((v, i) => v - position[i]);
+	const depth = p.reduce((sum, v, i) => sum + v * forward[i], 0);
+	return p.reduce((sum, v, i) => sum + v * right[i], 0) / depth / (Math.tan((fovDegrees * Math.PI) / 360) * aspect);
+};
+
 test('graphSpan: the plane in view from the graph shot, widened, and the studs a pixel covers', () => {
 	const forward = forwardOf(GRAPH_SHOT);
 	const span = graphSpan({ position: GRAPH_SHOT.position, forward, fovDegrees: 70, aspect: 16 / 9, heightPx: 767 });
 	const along = (GRAPH_PLANE_X - GRAPH_SHOT.position[0]) / forward[0];
-	const half = along * Math.tan((35 * Math.PI) / 180) * (16 / 9) * SPAN_MARGIN;
-	expect.near(span.zMin, -half, 1e-9, 'left');
-	expect.near(span.zMax, half, 1e-9, 'right');
+	const frameHalf = along * Math.tan((35 * Math.PI) / 180) * (16 / 9);
+	expect.truthy(span.zMin < -frameHalf && span.zMin > -frameHalf * SPAN_MARGIN * 1.02, `left ${span.zMin}`);
+	expect.truthy(span.zMax > frameHalf && span.zMax < frameHalf * SPAN_MARGIN * 1.02, `right ${span.zMax}`);
+	expect.near(span.zMin + span.zMax, 0, 1e-9, 'centred on the axis it faces');
 	expect.near(span.depth, along, 1e-9, 'depth');
 	expect.near(span.studsPerPixel, (2 * along * Math.tan((35 * Math.PI) / 180)) / 767, 1e-12, 'studs per pixel');
 	expect.equal(graphSpan({ position: [10, 0, 0], forward: [-1, 0, 0], fovDegrees: 70, aspect: 1, heightPx: 100 }), null, 'looking away: no graph');
 	expect.equal(graphSpan({ position: [-10, 0, 0], forward: [0, 0, -1], fovDegrees: 70, aspect: 1, heightPx: 100 }), null, 'looking along the plane: no graph');
+});
+
+test("graphSpan from step 4's oblique shot puts both ends of the curve outside the frame, desktop and phone", () => {
+	const shot = recipeFor(stepOf('into-3d')).shot;
+	const forward = forwardOf(shot);
+	for (const aspect of [16 / 9, 390 / 422]) {
+		const span = graphSpan({ position: shot.position, forward, fovDegrees: 70, aspect, heightPx: 767 });
+		const left = ndcX(shot.position, forward, 70, aspect, [GRAPH_PLANE_X - LINE_LIFT, 0, span.zMin]);
+		const right = ndcX(shot.position, forward, 70, aspect, [GRAPH_PLANE_X - LINE_LIFT, 0, span.zMax]);
+		// Past NDC 1.05: 34 px beyond the edge at 1366 wide. (From step 4 the line's vanishing point is at
+		// NDC -1.35, so a capped end cannot be far beyond it.)
+		expect.truthy(Math.min(left, right) < -1.05 && Math.max(left, right) > 1.05, `aspect ${aspect.toFixed(2)}: ends at NDC ${left.toFixed(2)}, ${right.toFixed(2)}`);
+		const centre = shot.position[2] + (forward[2] * (GRAPH_PLANE_X - shot.position[0])) / forward[0];
+		expect.truthy(span.zMin >= centre - MAX_SPAN_HALF - 1e-9 && span.zMax <= centre + MAX_SPAN_HALF + 1e-9, 'capped');
+		expect.truthy((span.zMax - span.zMin) / (CURVE_POINTS - 1) <= 3.01, 'points no more than three studs apart');
+	}
+	// Looking almost along the plane: the far side runs to the cap, the near side stays in view.
+	const grazing = graphSpan({ position: [-10, 5, 0], forward: unit([0.2, -0.05, -1]), fovDegrees: 70, aspect: 16 / 9, heightPx: 767 });
+	expect.truthy(Number.isFinite(grazing.zMin) && Number.isFinite(grazing.zMax) && grazing.zMin < grazing.zMax, 'finite and ordered at a grazing angle');
+	expect.truthy(grazing.zMax - grazing.zMin <= 2 * MAX_SPAN_HALF + 1e-9, 'no wider than the cap');
 });
 
 test('sampleCurve is the engine sampler along the plane, drawn yScale times taller, just in front of it', () => {
@@ -78,4 +110,55 @@ test('a ribbon is halfWidth either side of the line, square to it, with two tria
 	const indices = ribbonIndices(4);
 	expect.equal(indices.length, 18, 'three segments');
 	expect.truthy(Math.max(...indices) === 7, 'eight vertices');
+});
+
+test('axis ticks: a round step for the range, ticks on its multiples, inside the range', () => {
+	expect.equal(niceStep(150, 8), 20, '150 studs in about eight ticks');
+	expect.equal(niceStep(9, 6), 2, 'nine studs');
+	expect.equal(niceStep(0.9, 4), 0.2, 'under a stud');
+	expect.equal(axisTicks(-31, 47, 20).join(','), '-20,0,20,40', 'multiples inside');
+	expect.equal(axisTicks(0, 0.5, 0.2).map((v) => v.toFixed(1)).join(','), '0.0,0.2,0.4', 'no float noise');
+});
+
+// Pre-flight R18: the stage writes its ticks into a buffer made once.
+test('axisTicksInto writes the same ticks into a reused buffer, at most its length', () => {
+	const out = new Float64Array(4);
+	expect.equal(axisTicksInto(-31, 47, 20, out), 4, 'four ticks');
+	expect.equal(Array.from(out).join(','), '-20,0,20,40', 'the same ticks');
+	expect.equal(axisTicksInto(0, 100, 10, out), 4, 'stops at the buffer');
+	expect.equal(Array.from(out).join(','), '0,10,20,30', 'the first four');
+	expect.equal(axisTicksInto(0, 0.5, 0.2, out), 3, 'three');
+	expect.near(out[2], 0.4, 0, 'no float noise');
+});
+
+// The skirts hang below the clipped sheet's cut edge; the floor clip keeps y above the deepest the
+// summed waves can reach, so it never touches the sheet.
+test('floorDepth is the most the summed waves can add up to, plus a margin', () => {
+	const waves = line(3);
+	let sum = 0;
+	for (let i = 0; i < 3; i++) sum += Math.abs(waves.packed[i * WaveSampler.STRIDE + 2]) * waves.weights[i];
+	expect.near(floorDepth(waves), sum + FLOOR_MARGIN, 1e-12, 'the bank extent plus the margin');
+	const s = new Float64Array(7);
+	let lowest = 0;
+	for (let z = -256; z <= 256; z += 0.5) lowest = Math.min(lowest, WaveSampler.sample(waves.packed, 3, 4, GRAPH_PLANE_X, z, 0, waves.weights, 0, s)[1]);
+	expect.truthy(-floorDepth(waves) < lowest, `the floor ${-floorDepth(waves)} under the lowest trough ${lowest}`);
+});
+
+// The graph shot looks a little down at the plane, so a true upright at the frame's edge leans on
+// screen; the axes lean the other way to stand straight (Task 4's screenshots: 13 px over the axis).
+test('uprightLean: a line leaning this much projects straight up the frame', () => {
+	const forward = forwardOf(GRAPH_SHOT);
+	for (const z of [-36, -10, 0, 25]) {
+		const lean = uprightLean(GRAPH_SHOT.position, forward, z);
+		const low = ndcX(GRAPH_SHOT.position, forward, 70, 16 / 9, [GRAPH_PLANE_X, -12, z - 12 * lean]);
+		const high = ndcX(GRAPH_SHOT.position, forward, 70, 16 / 9, [GRAPH_PLANE_X, 12, z + 12 * lean]);
+		expect.near(low, high, 1e-9, `upright at z ${z}`);
+		if (z !== 0) {
+			const plainLow = ndcX(GRAPH_SHOT.position, forward, 70, 16 / 9, [GRAPH_PLANE_X, -12, z]);
+			const plainHigh = ndcX(GRAPH_SHOT.position, forward, 70, 16 / 9, [GRAPH_PLANE_X, 12, z]);
+			expect.truthy(Math.abs(plainLow - plainHigh) > 1e-4, `a plain upright leans at z ${z}`);
+		}
+	}
+	expect.near(uprightLean(GRAPH_SHOT.position, forward, 0), 0, 1e-12, 'none at the centre');
+	expect.equal(uprightLean([10, 0, 0], [-1, 0, 0], 5), 0, 'none facing away');
 });

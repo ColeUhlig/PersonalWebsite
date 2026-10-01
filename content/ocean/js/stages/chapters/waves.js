@@ -8,7 +8,10 @@
 import { FLAT_BAND } from '../graph.js';
 import { DIRECTIONS_WAVES, GRAPH_FLAT, GRAPH_SHOT, TEACHING, WHITE, range, toggle } from '../recipeKit.js';
 
-const SINE = { amplitude: 2.5, wavelength: 40 };
+// 20 studs: GRAPH_SHOT (recipeKit.js) shows about 80 studs of the plane at 16:9 and about 41 in a
+// 390-pixel phone's top half, so the default shows four wavelengths on a desktop and two on a phone
+// (Task 4), and the λ marker finds two crests between the axes on both (render/graphStage.js).
+const SINE = { amplitude: 2.5, wavelength: 20 };
 // The sine steps never sum the bank, but they carry sum-of-sines' count and spread, so the blend into
 // it meets the bank at its own 3 waves along one axis when the source snaps in (not 8 waves half
 // fanned out, which would then line up while the visitor scrolled on; piece C Task 8 minor).
@@ -50,7 +53,9 @@ export const WAVES = Object.freeze({
 		title: 'Waves going somewhere',
 		engine: { ...TEACHING, source: 'bank', bank: { count: DIRECTIONS_WAVES, fan: 1 } },
 		look: { ...WHITE, overlay: { kind: 'directions', spacing: 4 } },
-		shot: { position: [0, 45, 70], target: [0, 0, -10] },
+		// High three-quarter from step 4's dry side (x < 0), so headings near +z cross the frame as
+		// arrows rather than pointing into the lens (lane C's arrows; trialled by lane C's reviewer).
+		shot: { position: [-60, 55, 20], target: [0, 0, -10] },
 		sliders: [range('fan', 'Spread', 'engine.bank.fan', { min: 0, max: 1, step: 0.01, value: 1 })],
 	},
 	'many-waves': {
