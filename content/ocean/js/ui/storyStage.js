@@ -78,7 +78,10 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	const graph = createGraphStage({ view, ocean, look, reducedMotion });
 	const overlays = createSurfaceOverlays({ view, ocean });
 	// Task 14: the graph keeps its words out from under the page's pills, its panels and the math box.
-	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), document.querySelector('.step .panel'), document.getElementById('mathbox'), graph.keepClear);
+	// It measures the first step's panel for the whole column: every panel stands in that one column
+	// (tests/ocean/e2e/layout.spec.js checks it at three wide sizes). The page keeps its stage for its
+	// whole life; dispose() stops the watch for whatever would tear the stage down.
+	const stopKeepClear = watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), document.querySelector('.step .panel'), document.getElementById('mathbox'), graph.keepClear);
 	const focusNow = [0, 0];
 	// True while the graph's backdrop is at least GRAPH_HOLD opaque: the visitor's orbit and the
 	// phone's tilt are held then, so nobody drags the camera off the graph.
@@ -479,5 +482,5 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		tiltClock = null;
 	};
 
-	return Object.freeze({ setScroll, beforeStep, afterStep, holdsPicture: () => holding, sliders, setSlider, press, charts, hooks, useTilt });
+	return Object.freeze({ setScroll, beforeStep, afterStep, holdsPicture: () => holding, sliders, setSlider, press, charts, hooks, useTilt, dispose: stopKeepClear });
 }

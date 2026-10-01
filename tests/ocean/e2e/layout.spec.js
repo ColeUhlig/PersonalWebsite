@@ -110,6 +110,24 @@ test('on desktop the panels sit in the left third over the full-screen ocean', a
 	expect(panel.x + panel.width).toBeLessThanOrEqual(1366 / 3);
 });
 
+// Task 14 review item 4: the graph keeps its words clear of the panels by measuring only the first
+// step's panel (ui/keepClear.js, watched from ui/storyStage.js), which is right only while every
+// step's panel stands in that same column. On wide screens of three sizes they all do.
+for (const { width, height } of [{ width: 1366, height: 767 }, { width: 1024, height: 768 }, { width: 1920, height: 1080 }]) {
+	test(`every step's panel stands in one column at ${width} × ${height}, the one the graph keeps clear of`, async ({ page }) => {
+		await page.setViewportSize({ width, height });
+		await page.goto('/ocean/');
+		const columns = await page.evaluate(() => [...document.querySelectorAll('.step .panel')].map((panel) => {
+			const r = panel.getBoundingClientRect();
+			return { step: panel.closest('.step').dataset.stepId, left: r.left, right: r.right };
+		}));
+		expect(columns.length).toBe(STEP_COUNT);
+		const [first] = columns;
+		const off = columns.filter((c) => Math.abs(c.left - first.left) > 0.5 || Math.abs(c.right - first.right) > 0.5);
+		expect(off, `the first panel spans ${first.left} to ${first.right}`).toEqual([]);
+	});
+}
+
 test('no panel scrolls inside itself: a tall panel grows with the page (1366 x 767)', async ({ page }) => {
 	await page.goto('/ocean/');
 	for (const [name, text] of [['closed', false], ['math open', true]]) {

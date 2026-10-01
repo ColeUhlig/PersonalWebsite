@@ -34,8 +34,8 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	const graph = createGraphStage({ view, ocean, look });
 	const overlays = createSurfaceOverlays({ view, ocean });
 	// Task 14: the graph keeps its words out from under the page's pills (the dev route shows no panel
-	// over the canvas, so the height axis keeps its own place).
-	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), null, document.getElementById('mathbox'), graph.keepClear);
+	// over the canvas, so the height axis keeps its own place). dispose() stops the watch.
+	const stopKeepClear = watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), null, document.getElementById('mathbox'), graph.keepClear);
 	const focusNow = [0, 0];
 
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so
@@ -64,6 +64,7 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	const phaseArrows = () => arrowsAt(ocean.live.params, ocean.live.seed, ocean.t);
 
 	return {
+		dispose: stopKeepClear,
 		// Before Ocean.step: the recipe's settings reach the engine and its look and shot the scene,
 		// so the rings follow the shot's target in the same frame.
 		// A frame the engine refuses (the director has already gone back to the values it last took)
