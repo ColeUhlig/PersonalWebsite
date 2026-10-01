@@ -17,7 +17,9 @@
 // own default face power of 2 is not).
 import { STEP_IDS } from '../stages/steps.js';
 
-const entry = (tex, changed) => Object.freeze({ tex, changed });
+// `bar` is the phone bar's one line: the same equations, in an order that puts the step's point
+// first where the line is cut short (foam); by default the same as `tex`.
+const entry = (tex, changed, bar = tex) => Object.freeze({ tex, changed, bar });
 
 export const MATH_STEPS = Object.freeze({
 	sine: entry(
@@ -45,7 +47,7 @@ export const MATH_STEPS = Object.freeze({
 		'The same sum with more of the bank in it, tallest waves first.',
 	),
 	unlit: entry(
-		String.raw`y = \sum_i A_i \sin\theta_i, \qquad \text{colour} = \htmlClass{fresh}{\text{white}}`,
+		String.raw`\text{colour} = \htmlClass{fresh}{c_{\text{white}}}`,
 		'No light yet: every point is drawn the same white, so the shape disappears.',
 	),
 	normals: entry(
@@ -123,6 +125,7 @@ export const MATH_STEPS = Object.freeze({
 	foam: entry(
 		String.raw`\htmlClass{fresh}{J = (1 + c\,\partial_x D_x)(1 + c\,\partial_z D_z) - (c\,\partial_x D_z)^2}, \quad \htmlClass{fresh}{f} \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \htmlClass{fresh}{\beta\,\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)`,
 		'Where the surface folds, foam grows, and everywhere it fades a little every step.',
+		String.raw`\htmlClass{fresh}{f} \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \htmlClass{fresh}{\beta\,\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big), \quad \htmlClass{fresh}{J = (1 + c\,\partial_x D_x)(1 + c\,\partial_z D_z) - (c\,\partial_x D_z)^2}`,
 	),
 	glow: entry(
 		String.raw`E = \htmlClass{fresh}{\htmlClass{t-glow}{\kappa}\,\max(0,\ -\mathbf{s}\cdot\mathbf{v})^{3}\,\big(\tfrac{1}{2} - \tfrac{1}{2}\,\htmlClass{t-sun}{s_y}\big)}, \quad \text{glow} = E \cdot M(h)`,

@@ -126,6 +126,8 @@
 		display: flex;
 		align-items: center;
 		box-shadow: none;
+		/* Opaque, bar and sheet alike: panel text scrolling under it must not show behind the maths. */
+		background: var(--body-bg);
 	}
 
 	.mathbox-head,
@@ -139,21 +141,21 @@
 		min-width: 0;
 	}
 
-	/* One line, small, fading out at the right rather than wrapping. */
+	/* One line, small; a line that runs past the edge fades out there rather than wrapping. */
 	.mathbox-eq {
 		margin: 0;
 		white-space: nowrap;
 		overflow: hidden;
+	}
+
+	.mathbox.is-overflowing .mathbox-eq {
 		-webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
 		mask-image: linear-gradient(to right, #000 85%, transparent);
 	}
 
 	.mathbox .tex-rendered {
-		font-size: 0.8rem;
-	}
-
-	.mathbox .tex-rendered {
 		padding: 0;
+		font-size: 0.8rem;
 	}
 
 	.mathbox .tex-rendered > .katex {
@@ -184,8 +186,6 @@
 	.mathbox.is-open {
 		height: auto;
 		bottom: 0;
-		/* Opaque: the panel under the sheet must not show through its text. */
-		background: var(--body-bg);
 		display: block;
 		overflow-y: auto;
 		padding: 12px var(--gutter) 20px;

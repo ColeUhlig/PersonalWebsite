@@ -66,3 +66,21 @@ test("the sentences carry no digits, so the copy check never needs a source for 
 	try { mathFor('flat-plane'); } catch (error) { message = error.message; }
 	expect.truthy(message.includes('flat-plane'), 'an unknown id is refused');
 });
+
+// Fix round 1 (Task 2 review): the phone's one-line bar may order an entry's equations differently
+// (foam puts its update first, so a narrow bar shows it), but it is the same maths.
+test("the bar's one line is the same equations, highlights and colours, with foam's update first", () => {
+	const parts = (tex) => tex.split(/,\s*\\q?quad\s*/).map((part) => part.trim()).sort().join('|');
+	for (const id of STEP_IDS) {
+		const { tex, bar } = mathFor(id);
+		expect.truthy(typeof bar === 'string' && balanced(bar), `${id} has a bar line`);
+		expect.equal(parts(bar), parts(tex), `${id}: the bar holds the same equations`);
+		expect.equal(freshCount(bar), freshCount(tex), `${id}: the same highlights`);
+	}
+	expect.truthy(mathFor('foam').bar.startsWith(String.raw`\htmlClass{fresh}{f}`), "foam's bar opens on the update");
+	expect.truthy(mathFor('foam').tex.startsWith(String.raw`\htmlClass{fresh}{J`), 'the card and sheet keep J first');
+});
+
+test("the unlit step's colour is the panel's c_white, highlighted", () => {
+	expect.equal(mathFor('unlit').tex, String.raw`\text{colour} = \htmlClass{fresh}{c_{\text{white}}}`, 'unlit');
+});

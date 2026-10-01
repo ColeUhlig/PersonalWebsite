@@ -93,14 +93,13 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 	let reportedRender = false;
 
 	// The equation as KaTeX's markup, or as its TeX source when KaTeX is not here (or throws). The
-	// phone's bar holds one line, so there it is set inline and unstacked (fading out at the right);
-	// the card and the open sheet stack its equations one per line.
-	function render(entry) {
+	// phone's bar holds one line, so there it is the entry's bar line (page/mathSteps.js), set inline
+	// and unstacked; the card and the open sheet stack the full equations one per line.
+	function typeset(entry, bar) {
 		if (katex) {
 			try {
 				const target = element('div', { className: 'tex-rendered' });
-				const bar = narrow.matches && !isOpen;
-				katex.render(bar ? entry.tex : stackEquations(entry.tex), target, bar ? BAR_OPTIONS : KATEX_OPTIONS);
+				katex.render(bar ? entry.bar : stackEquations(entry.tex), target, bar ? BAR_OPTIONS : KATEX_OPTIONS);
 				eq.replaceChildren(target);
 				return;
 			} catch (error) {
@@ -110,8 +109,22 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 				}
 			}
 		}
-		code.textContent = entry.tex;
+		code.textContent = bar ? entry.bar : entry.tex;
 		eq.replaceChildren(code);
+	}
+
+	// Runs only when the entry, KaTeX, the sheet or the breakpoint changes, never per frame. On the bar
+	// it measures once whether the line runs past the edge, and only then fades the edge (mathbox.css).
+	function render(entry) {
+		const bar = narrow.matches && !isOpen;
+		typeset(entry, bar);
+		root.classList.toggle('is-overflowing', bar && eq.scrollWidth > eq.clientWidth + 1);
+	}
+
+	// The bar stays quiet (it would announce every step scrolled past); the card and the open sheet
+	// announce what changed.
+	function setLive() {
+		changed.setAttribute('aria-live', narrow.matches && !isOpen ? 'off' : 'polite');
 	}
 
 	function glow() {
@@ -178,12 +191,23 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 		// The sheet stacks the equations the bar runs on one line.
 		if (was !== isOpen && current) render(current);
 		open.setAttribute('aria-expanded', String(isOpen));
-		if (isOpen) {
+		setLive();
+		if (isOpen && !was) {
 			body.hidden = false;
+			document.addEventListener('keydown', onEscape);
 			close.focus();
-		} else {
+		} else if (!isOpen) {
 			body.hidden = collapsed && !narrow.matches;
+			document.removeEventListener('keydown', onEscape);
 		}
+	}
+
+	// While the sheet is open, Escape closes it wherever focus is, and gives focus back to the bar.
+	function onEscape(event) {
+		if (event.key !== 'Escape' || !isOpen) return;
+		event.preventDefault();
+		setOpen(false);
+		open.focus();
 	}
 
 	open.addEventListener('click', () => {
@@ -193,24 +217,23 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 		setOpen(false);
 		open.focus();
 	});
-	root.addEventListener('keydown', (event) => {
-		if (event.key === 'Escape' && isOpen) {
-			event.preventDefault();
-			setOpen(false);
-			open.focus();
-		}
+	// The sheet is not modal: focus leaving it for something else on the page (Tab past Close) closes
+	// it, so focus never lands on what the sheet covers. Focus going nowhere (a tap on empty page)
+	// leaves it open.
+	root.addEventListener('focusout', (event) => {
+		if (isOpen && event.relatedTarget && !root.contains(event.relatedTarget)) setOpen(false);
 	});
 	// Crossing the breakpoint (a rotated phone, a resized window) closes the sheet, applies the
-	// desktop collapse again and redraws the entry for the new layout.
+	// desktop collapse again and redraws the entry for the new layout, without a fresh glow.
 	narrow.addEventListener('change', () => {
 		setOpen(false);
 		setCollapsed(collapsed, false);
-		const keep = current;
-		current = null;
-		show(keep);
+		setLive();
+		if (current) render(current);
 	});
 	toggle.addEventListener('click', () => setCollapsed(!collapsed));
 	setCollapsed(collapsed, false);
+	setLive();
 	watchYield(root);
 	watchReading((reading) => show(entryFor(reading)));
 

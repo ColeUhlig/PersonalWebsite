@@ -16,7 +16,7 @@ export function entryFor(reading) {
 		return null;
 	}
 	const id = idOf(reading.step);
-	return Object.freeze({ step: reading.step, id, tex: MATH_STEPS[id].tex, changed: MATH_STEPS[id].changed });
+	return Object.freeze({ step: reading.step, id, tex: MATH_STEPS[id].tex, changed: MATH_STEPS[id].changed, bar: MATH_STEPS[id].bar });
 }
 
 export function readCollapsed(storage) {

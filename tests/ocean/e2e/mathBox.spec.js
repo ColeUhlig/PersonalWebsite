@@ -151,6 +151,22 @@ for (const width of [320, 390]) {
 			expect(Math.abs(bar.y - 380)).toBeLessThanOrEqual(1);
 			expect(Math.round(bar.height)).toBe(44);
 			expect(bar.width).toBeLessThanOrEqual(width);
+			// Fix round 1: opaque, so panel text scrolling under the bar never shows behind the maths.
+			const alpha = await box(page).evaluate((el) => {
+				const parts = getComputedStyle(el).backgroundColor.match(/[\d.]+/g).map(Number);
+				return parts.length > 3 ? parts[3] : 1;
+			});
+			expect(alpha).toBe(1);
+			// The right edge fades only when the line runs past it: sine fits, highlights never does.
+			await page.waitForFunction(() => window.__mathbox.state() === 'rendered', null, { timeout: 30_000 });
+			await expect(box(page)).not.toHaveClass(/is-overflowing/);
+			await page.evaluate(() => window.__mathbox.show('highlights'));
+			await expect(box(page)).toHaveClass(/is-overflowing/);
+			// The bar shows foam's update, the step's point, before its Jacobian.
+			await page.evaluate(() => window.__mathbox.show('foam'));
+			const first = await page.locator('#mathbox .katex-html .fresh').first().textContent();
+			expect(first.replace(/[\s\u200b]/g, '')).toBe('f');
+			await page.evaluate(() => window.__mathbox.show('sine'));
 			for (const id of ['sine', 'slopes', 'layers']) {
 				await page.evaluate((step) => document.querySelector(`section[data-step-id="${step}"]`).scrollIntoView(), id);
 				await page.waitForTimeout(200);
@@ -165,11 +181,18 @@ for (const width of [320, 390]) {
 		test('opens to a sheet by tap and by Enter, closes by Escape and by its button, and gives focus back', async ({ page }) => {
 			await page.goto('/ocean/');
 			await scrollToId(page, 'diffuse', 0.1);
-			await page.locator('#mathbox .mathbox-open').tap();
+			const opener = page.locator('#mathbox .mathbox-open');
+			await expect(opener).toHaveAttribute('aria-expanded', 'false');
+			await expect(page.locator('#mathbox .mathbox-changed')).toHaveAttribute('aria-live', 'off');
+			const bar = await box(page).boundingBox();
+			await opener.tap();
 			await expect(box(page)).toHaveClass(/is-open/);
+			await expect(opener).toHaveAttribute('aria-expanded', 'true');
+			await expect(page.locator('#mathbox .mathbox-changed')).toHaveAttribute('aria-live', 'polite');
 			await expect(page.locator('#mathbox .mathbox-close')).toBeFocused();
 			await expect(page.locator('#mathbox .mathbox-sentence')).toBeVisible();
 			const sheet = await box(page).boundingBox();
+			expect(Math.abs(sheet.y - bar.y), "the sheet's top is the bar's").toBeLessThanOrEqual(1);
 			expect(Math.abs(sheet.y + sheet.height - 760)).toBeLessThanOrEqual(1);
 			await page.keyboard.press('Escape');
 			await expect(box(page)).not.toHaveClass(/is-open/);
@@ -178,7 +201,38 @@ for (const width of [320, 390]) {
 			await expect(box(page)).toHaveClass(/is-open/);
 			await page.locator('#mathbox .mathbox-close').tap();
 			await expect(box(page)).not.toHaveClass(/is-open/);
+			await expect(opener).toHaveAttribute('aria-expanded', 'false');
 			expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth)).toBe(true);
+		});
+
+		// Fix round 1: the sheet is not modal. Tabbing out of it closes it, so focus never lands on
+		// something the sheet covers, and Escape still works wherever focus is while it is open.
+		test('tabbing out of the open sheet closes it; focus never sits under the sheet', async ({ page }) => {
+			await page.goto('/ocean/');
+			await scrollToId(page, 'diffuse', 0.1);
+			await page.locator('#mathbox .mathbox-open').tap();
+			await expect(box(page)).toHaveClass(/is-open/);
+			for (let i = 0; i < 3; i++) {
+				await page.keyboard.press('Tab');
+				const where = await page.evaluate(() => {
+					const root = document.getElementById('mathbox');
+					const active = document.activeElement;
+					const inside = root.contains(active);
+					const rect = active.getBoundingClientRect();
+					const x = rect.left + rect.width / 2;
+					const y = rect.top + rect.height / 2;
+					const onScreen = x >= 0 && y >= 0 && x < window.innerWidth && y < window.innerHeight;
+					const top = onScreen ? document.elementFromPoint(x, y) : null;
+					return { inside, open: root.classList.contains('is-open'), covered: !inside && top !== null && root.contains(top) };
+				});
+				expect(where.open === false || where.inside, `tab ${i + 1}: closed, or focus still in the box`).toBe(true);
+				expect(where.covered, `tab ${i + 1}: focus is not under the sheet`).toBe(false);
+			}
+			await page.locator('#mathbox .mathbox-open').tap();
+			await expect(box(page)).toHaveClass(/is-open/);
+			await page.evaluate(() => document.activeElement.blur());
+			await page.keyboard.press('Escape');
+			await expect(box(page)).not.toHaveClass(/is-open/);
 		});
 	});
 }

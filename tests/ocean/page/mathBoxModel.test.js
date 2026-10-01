@@ -18,6 +18,7 @@ test('the opening shows nothing; a step shows its own entry', () => {
 	const entry = entryFor({ phase: 'step', step: stepOf('slopes'), progress: 0.4 });
 	expect.equal(entry.id, 'slopes', 'the id');
 	expect.equal(entry.tex, mathFor('slopes').tex, 'its equation');
+	expect.equal(entry.bar, mathFor('slopes').bar, "and the phone bar's line");
 	expect.truthy(Object.isFrozen(entry), 'frozen');
 });
 
