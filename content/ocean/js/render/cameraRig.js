@@ -12,11 +12,6 @@ export const SHOTS = Object.freeze({
 	crest: Object.freeze({ position: [0, 5, 25], target: [0, 1, -15] }),
 });
 
-// Piece C: how far the visitor may orbit from the target in the story, in studs, which keeps the
-// sky dome, the fog and the horizon in the range they were tuned for. The farthest story shot,
-// the layers step's high view, stands about 398 studs from its target (page/orbitLimits.js).
-export { STORY_MAX_DISTANCE };
-
 export function createCameraRig(camera, dom, config) {
 	const shot = SHOTS[config.camera];
 	camera.position.set(...shot.position);
@@ -96,7 +91,8 @@ export function createCameraRig(camera, dom, config) {
 		},
 		// Piece C: the story's orbit. No zoom, so the wheel scrolls the page (OrbitControls returns
 		// before preventDefault when zoom is off); no pan, since the rings follow the target; a limited
-		// reach. A touch-first screen gets no orbit at all, so a swipe over the ocean scrolls. A screen
+		// reach (page/orbitLimits.js STORY_MAX_DISTANCE), which keeps the sky dome, the fog and the
+		// horizon in the range they were tuned for. A touch-first screen gets no orbit at all, so a swipe over the ocean scrolls. A screen
 		// with any touch pointer (a touch laptop) keeps the orbit for its mouse, but a vertical swipe
 		// still scrolls the page.
 		limitForStory({ coarsePointer, anyCoarsePointer = coarsePointer }) {

@@ -489,10 +489,10 @@ function transformChart(figure, story, onLayout) {
 		if (wanted !== gridSize()) start();
 	});
 	return {
-		// Times again for a grid size other than the one shown (or always, when forced); off screen,
-		// the timing waits until the chart is next on screen.
-		draw({ force = false } = {}) {
-			if (!force && wanted === gridSize()) return;
+		// Times again for a grid size other than the one shown; off screen, the timing waits until
+		// the chart is next on screen.
+		draw() {
+			if (wanted === gridSize()) return;
 			if (visible()) {
 				start();
 			} else {
@@ -564,9 +564,6 @@ export function mountCharts(story, { onLayout = () => {} } = {}) {
 	each('spectrum', (c) => c.draw());
 	watchWidth(drawn);
 	return Object.freeze({
-		redraw() {
-			for (const name of Object.keys(charts)) each(name, (c) => c.draw({ force: true }));
-		},
 		hooks: Object.freeze({
 			useTransforms: (fn) => charts.transforms[0]?.chart.useTransforms(fn),
 		}),

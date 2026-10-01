@@ -2,7 +2,7 @@
 // orbit and the ease back to the next step's shot.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { createShotControl, DRIFT_PERIOD_SECONDS, MAX_RETURN_SECONDS, resolveShot, RETURN_SECONDS, RETURN_STUDS_PER_SECOND } from '../../../content/ocean/js/page/shotControl.js';
+import { createShotControl, MAX_RETURN_SECONDS, resolveShot, RETURN_SECONDS, RETURN_STUDS_PER_SECOND } from '../../../content/ocean/js/page/shotControl.js';
 import { DRIFT_PERIOD, shotPosition } from '../../../content/ocean/js/stages/drift.js';
 import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
@@ -20,7 +20,7 @@ const length = (v) => Math.hypot(...v);
 test('a still shot resolves to itself; a drift circles its target once every four minutes', () => {
 	const still = resolveShot({ ...SHOT, move: 'still' }, 100);
 	close(still.position, SHOT.position, 'still');
-	const quarter = resolveShot({ position: [10, 5, 0], target: [0, 0, 0], move: 'drift' }, DRIFT_PERIOD_SECONDS / 4);
+	const quarter = resolveShot({ position: [10, 5, 0], target: [0, 0, 0], move: 'drift' }, DRIFT_PERIOD / 4);
 	close(quarter.position, [0, 5, 10], 'a quarter turn');
 	close(quarter.target, [0, 0, 0], 'target fixed');
 });
@@ -76,7 +76,6 @@ test('with the clock stopped (ease: false) a return goes straight to the shot, a
 // and the story's resolveShot must put the camera in the same place.
 test("the story's drift is A3's drift, to the last bit", () => {
 	const finale = recipeFor(STEP_COUNT).shot;
-	expect.equal(DRIFT_PERIOD_SECONDS, DRIFT_PERIOD, 'one period');
 	for (const seconds of [0, 0.37, 10, 61.5, 239.9, 1000]) {
 		const resolved = resolveShot(finale, seconds);
 		expect.equal(resolved.position.join(','), shotPosition(finale, seconds).join(','), `at ${seconds} s`);

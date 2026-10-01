@@ -9,16 +9,13 @@
 // jump of more than a step) goes straight to the shot, and so does everything under reduced motion
 // (returnSeconds 0) or while the play clock is stopped (ease: false): the ease reads the clock, so
 // with no clock it would never arrive.
-import { DRIFT_PERIOD, shotPosition } from '../stages/drift.js';
+import { shotPosition } from '../stages/drift.js';
 
 export const RETURN_SECONDS = 1.2;
 // A return longer than RETURN_SECONDS at this speed, in studs a second along the way round, takes
 // longer, up to MAX_RETURN_SECONDS.
 export const RETURN_STUDS_PER_SECOND = 150;
 export const MAX_RETURN_SECONDS = 3;
-// The finale's drift: once round the target every 240 s. The drift itself is A3's stages/drift.js
-// (the one the camera rig and the clearance check use); resolveShot hands it on.
-export const DRIFT_PERIOD_SECONDS = DRIFT_PERIOD;
 
 const smoothstep = (x) => x * x * (3 - 2 * x);
 const lerp = (a, b, w) => a + (b - a) * w;
