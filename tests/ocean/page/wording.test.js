@@ -55,3 +55,11 @@ test('the recap has a line for every card, in story order', async () => {
 	const distinct = lines.filter((id, i) => i === 0 || id !== lines[i - 1]);
 	expect.equal(distinct.join(','), CARD_STEP_IDS.join(','), 'one run of lines per card, in story order');
 });
+
+// Task 15 (the Task 14 review's item 1): step 15 keeps step 14's waves on its big graph, summed into
+// one curve (realOcean.js: the same bank, no faint components), while its words were all about the
+// chord in the small chart. The paragraph says what the big graph is and how it relates to the chord.
+test("the chord step says what its big graph shows", () => {
+	const words = text(sections.find((s) => s.id === 'fourier').inner);
+	expect.truthy(/big graph/i.test(words) && /last step's waves/i.test(words) && /one curve/i.test(words), `step 15 explains its big graph: "${words.slice(0, 200)}..."`);
+});
