@@ -1,8 +1,9 @@
 // The look a stage recipe asks for, applied to the ocean's meshes (A3; not a twin): which material
-// the surface wears -- flat white (step 1's plane and the unlit steps 2 and 3), the lighting terms
-// one at a time (C2 steps 10 to 13: render/termsMaterial.js), the sea colour lit by three's standard
-// material or unlit (kept for any recipe that asks for `sea`), or the painted
-// Roblox-mode materials (step 7 on) -- the wireframe over it, the fog and the sun. A material
+// the surface wears -- flat white (the graph and wave steps from sine to many-waves, then unlit,
+// normals and slopes, frequency and fourier), the lighting terms one at a time (diffuse, highlights,
+// gerstner and tiling: render/termsMaterial.js), the sea colour lit by three's standard material or
+// unlit (no C2 recipe asks for `sea`; kept for any that does), or the painted Roblox-mode materials
+// (jonswap to the finale) -- the wireframe over it, the fog and the sun. A material
 // change swaps the meshes' material references; nothing is rebuilt, and the painted materials keep
 // their textures and glow for when they come back. The wireframe is one extra mesh per patch,
 // sharing the patch's geometry as its child (so it moves and hides with it), built the first time
@@ -20,11 +21,12 @@ const WHITE = Object.freeze([0.95, 0.95, 0.94]);
 const WIRE = Object.freeze([0.11, 0.17, 0.21]);
 const WIRE_OPACITY = 0.55;
 // View depths (studs) over which the wireframe fades out (fix round 1). Past a few hundred studs the
-// grid's lines crowd into grey moire bands that read as swells on step 1's flat plane; the fade keeps
-// the 8-stud ring's grid readable (its far edge sits about 300 studs from step 1's camera).
+// grid's lines crowd into grey moire bands that read as swells on a flat white plane; the fade keeps
+// the 8-stud ring's grid readable (its far edge sat about 300 studs from
+// piece C's first-step camera, where this was tuned).
 const WIRE_FADE = Object.freeze([120, 360]);
 // The lit sea's roughness: shiny enough for the sun's highlight and the sky's Fresnel to read on
-// the Gerstner waves of steps 4 to 6.
+// the Gerstner waves (piece C's lit steps; no C2 recipe wears it).
 const SEA_ROUGHNESS = 0.3;
 const MODES = Object.freeze(['white', 'sea-lit', 'sea-flat', 'painted', 'terms']);
 

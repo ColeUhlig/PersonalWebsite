@@ -1,12 +1,18 @@
 // The lighting terms as a material (piece C2; lane D owns this file; spec 10.6): page/lightTerms.js's
-// arithmetic in GLSL, line for line, so each term the math box shows switches on alone on the screen:
-// with all off the flat sea colour, then sky ambient plus Lambert, then the Blinn-Phong highlight,
-// then Schlick's Fresnel mixing in a sky colour by the reflected ray's height. It reads the vertex
-// normals the engine writes from the waves' exact slopes (stageControl.js writes them for 'terms'),
-// takes the scene's fog, and clips like every other surface material (clipping: true, so the stage
-// look's setClip reaches it). Only the teaching steps wear it; the painted Roblox-mode materials are
-// never touched. It demonstrates the terms in the browser only: Roblox scripts cannot write shaders,
-// so the Roblox build gets these terms from the engine's own lighting, not from this.
+// arithmetic in GLSL, line for line (tests/ocean/e2e/lightTerms.spec.js reads one fragment back and
+// holds it to the reference), so each term the math box shows switches on alone on the screen: with
+// all off the flat sea colour; the water's own colour c_d = c_sea (a + k_sun max(0, n.s)) with the sky
+// ambient; the Blinn-Phong highlight c_s = k_spec (n.h)^p, added to it while Fresnel is off; and
+// with Fresnel on, c = (1 - F) c_d + F (c_s + c_sky), Schlick's F weighting the sun's glint and the
+// sky together. c_sky is a two-colour gradient (horizon to zenith) by the reflected ray's height,
+// not the scene's sky: sampling the PMREM environment from a ShaderMaterial would mean copying
+// three's cube-UV defines and following each rebuild when the stage sun settles, for a teaching
+// step that only needs to show where the sky enters. It reads the vertex normals the engine writes
+// from the waves' exact slopes (stageControl.js writes them for 'terms'), takes the scene's fog, and
+// clips like every other surface material (clipping: true, so the stage look's setClip reaches
+// it). Only the teaching steps wear it; the painted Roblox-mode materials are never touched. It
+// demonstrates the terms in the browser only: Roblox scripts cannot write shaders, so the Roblox
+// build gets these terms from the engine's own lighting, not from this.
 import * as THREE from 'three';
 import * as Lighting from './lighting.js';
 import { TERMS } from '../page/lightTerms.js';
@@ -54,19 +60,22 @@ void main() {
 	vec3 n = normalize(vNormalW);
 	vec3 v = normalize(cameraPosition - vWorld);
 	vec3 s = normalize(sunDirection);
-	vec3 colour = seaColour;
+	vec3 diffuse = seaColour;
 	if (terms.x > 0.5) {
 		vec3 ambient = mix(ambientGround, ambientSky, 0.5 + 0.5 * n.y) * ambientStrength;
-		colour = seaColour * (ambient + sunColour * sunStrength * max(dot(n, s), 0.0));
+		diffuse = seaColour * (ambient + sunColour * sunStrength * max(dot(n, s), 0.0));
 	}
+	vec3 specular = vec3(0.0);
 	if (terms.y > 0.5) {
 		vec3 h = normalize(s + v);
-		colour += sunColour * specularStrength * pow(max(dot(n, h), 0.0), shininess);
+		specular = sunColour * specularStrength * pow(max(dot(n, h), 0.0), shininess);
 	}
+	vec3 colour = diffuse + specular;
 	if (terms.z > 0.5) {
 		float F = f0 + (1.0 - f0) * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 5.0);
 		vec3 r = reflect(-v, n);
-		colour = mix(colour, mix(skyHorizon, skyZenith, clamp(r.y, 0.0, 1.0)), F);
+		vec3 sky = mix(skyHorizon, skyZenith, clamp(r.y, 0.0, 1.0));
+		colour = (1.0 - F) * diffuse + F * (specular + sky);
 	}
 	gl_FragColor = vec4(colour, 1.0);
 	#include <tonemapping_fragment>

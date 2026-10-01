@@ -49,6 +49,24 @@ test('the highlight peaks where the sun reflects straight at the eye', () => {
 	expect.truthy(elsewhere[0] - base.sea[0] < 0.05 * TERMS.specular, 'little elsewhere');
 });
 
+// Fix round 1: Fresnel weights the reflection, the sun's glint with the sky, and (1 - F) the water's own
+// colour, so the glint is F times its strength alone, not (1 - F) times.
+test('with every term on, Fresnel weights the glint and the sky together', () => {
+	const s = unit([1, 1, 0]);
+	const v = unit([-1, 1, 0]);
+	const n = [0, 1, 0];
+	const all = shade({ ...base, n, v, s, terms: { diffuse: true, specular: true, fresnel: true } });
+	const noGlint = shade({ ...base, n, v, s, terms: { diffuse: true, specular: false, fresnel: true } });
+	const F = schlick(Math.SQRT1_2, TERMS.f0);
+	const lambert = Math.SQRT1_2;
+	const sky = base.skyHorizon.map((c, i) => c + (base.skyZenith[i] - c) * Math.SQRT1_2); // r = (0.71, 0.71, 0)
+	all.forEach((c, i) => {
+		const diffuse = base.sea[i] * (base.ambientSky[i] * TERMS.ambient + TERMS.sun * lambert);
+		expect.near(c, (1 - F) * diffuse + F * (TERMS.specular + sky[i]), 1e-9, `colour ${i}`);
+		expect.near(c - noGlint[i], F * TERMS.specular, 1e-9, `the glint is F-weighted ${i}`);
+	});
+});
+
 test('Fresnel mixes in the sky: little looking down, nearly all of it at grazing', () => {
 	const terms = { ...off, fresnel: true };
 	const down = shade({ ...base, n: [0, 1, 0], v: [0, 1, 0], s: [0, 1, 0], terms });

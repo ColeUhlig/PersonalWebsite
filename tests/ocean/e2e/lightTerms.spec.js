@@ -2,7 +2,7 @@
 // changes the sea, the material clips with the graph's band, and the page without ?step, before the
 // first scroll, is A2's painted Roblox mode exactly.
 import { test, expect } from '@playwright/test';
-import { grid, load, meanDiff, spread, stage, story, watchErrors, waitFrames } from './helpers/stage.js';
+import { grid, load, mean, meanDiff, spread, stage, story, watchErrors, waitFrames } from './helpers/stage.js';
 import { oceanRunning } from './helpers/story.js';
 import { FOG_DENSITY, SUN_DIRECTION } from '../../../content/ocean/js/render/lighting.js';
 
@@ -65,7 +65,8 @@ test('step 11: the highlight and Fresnel each change the sea when switched off',
 
 // At 0.45 of the blend from the tiling step into the flat graph the camera is still high and the
 // band is about 70 studs either side of x = 0, narrower than the ground in view: the frame's sides
-// must show no sea.
+// must show the pale, flat backdrop and no sea (fix round 1: a shader that ignored the clip planes
+// passed the old left-against-middle check on the sun's glitter alone).
 test('the terms material clips with the graph band (the blend from the tiling step into the graph)', async ({ page }) => {
 	await load(page, 'step=tiling&progress=0.45&freeze=12', 20);
 	const look = await stage(page, 'look');
@@ -75,10 +76,81 @@ test('the terms material clips with the graph band (the blend from the tiling st
 	const band = (await stage(page, 'graph')).band;
 	expect(band[1]).toBeLessThan(100);
 	const cells = await grid(page);
-	const column = (from, to) => {
+	const columns = (from, to) => {
 		const values = [];
 		for (let row = 0; row < 36; row++) for (let x = from; x < to; x++) values.push(cells[row * 64 + x]);
-		return values.reduce((a, b) => a + b, 0) / values.length;
+		return values;
 	};
-	expect(Math.abs(column(0, 8) - column(24, 40)), 'the left eighth is not the sea in the middle').toBeGreaterThan(5);
+	for (const [name, from] of [['left', 0], ['right', 56]]) {
+		const side = columns(from, from + 8);
+		expect(mean(side), `the ${name} eighth is pale`).toBeGreaterThan(150);
+		expect(spread(side), `the ${name} eighth is flat`).toBeLessThan(10);
+	}
+});
+
+// Fix round 1: the shader against its reference, term by term. One fragment of a quad with a chosen
+// normal is drawn offscreen into a linear float target (no tone mapping, no fog, no colour space),
+// read back and compared with page/lightTerms.js's shade() for the same uniforms. The second normal
+// leans so that n.v, n.s and the reflected ray's height all differ from their stand-ins.
+test('the shader is page/lightTerms.js, term by term', async ({ page }) => {
+	await load(page, 'step=unlit&freeze=12', 5);
+	const rows = await page.evaluate(async () => {
+		const THREE = await import('three');
+		const { createTermsMaterial } = await import('/ocean/js/render/termsMaterial.js');
+		const { shade } = await import('/ocean/js/page/lightTerms.js');
+		const unit = (a) => {
+			const l = Math.hypot(...a);
+			return a.map((x) => x / l);
+		};
+		const renderer = new THREE.WebGLRenderer({ canvas: document.createElement('canvas') });
+		const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.FloatType });
+		const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+		camera.position.set(0, 0, 10);
+		camera.lookAt(0, 0, 0);
+		const geometry = new THREE.PlaneGeometry(4, 4);
+		const material = createTermsMaterial({ seaColour: new THREE.Color().setRGB(0.1, 0.3, 0.4, THREE.SRGBColorSpace), sunDirection: [0, 1, 0] });
+		const scene = new THREE.Scene();
+		scene.add(new THREE.Mesh(geometry, material));
+		const u = material.uniforms;
+		const rgb = (c) => [c.r, c.g, c.b];
+		const v = [0, 0, 1];
+		const mirrorNormal = unit([0.3, 0.4, 0.85]);
+		const along = 2 * mirrorNormal[2];
+		const cases = [
+			{ n: mirrorNormal, s: unit(mirrorNormal.map((x, i) => x * along - v[i])) },
+			{ n: unit([0.2, 0.9, 0.4]), s: unit([-0.5, 0.5, 0.3]) },
+		];
+		const termSets = [0, 1, 2, 3, 4, 5, 6, 7].map((bits) => ({ diffuse: !!(bits & 1), specular: !!(bits & 2), fresnel: !!(bits & 4) }));
+		const out = new Float32Array(4);
+		const rows = [];
+		for (const { n, s } of cases) {
+			const normals = geometry.attributes.normal;
+			for (let i = 0; i < normals.count; i++) normals.setXYZ(i, n[0], n[1], n[2]);
+			normals.needsUpdate = true;
+			material.setSun(s);
+			for (const terms of termSets) {
+				material.setTerms(terms);
+				renderer.setRenderTarget(target);
+				renderer.render(scene, camera);
+				renderer.readRenderTargetPixels(target, 0, 0, 1, 1, out);
+				const expected = shade({
+					n, v, s, terms,
+					sea: rgb(u.seaColour.value),
+					sunColour: rgb(u.sunColour.value),
+					ambientSky: rgb(u.ambientSky.value),
+					ambientGround: rgb(u.ambientGround.value),
+					skyHorizon: rgb(u.skyHorizon.value),
+					skyZenith: rgb(u.skyZenith.value),
+				});
+				rows.push({ label: `${JSON.stringify(n.map((x) => +x.toFixed(2)))} ${JSON.stringify(terms)}`, got: [out[0], out[1], out[2]], expected });
+			}
+		}
+		renderer.dispose();
+		target.dispose();
+		return rows;
+	});
+	expect(rows).toHaveLength(16);
+	for (const { label, got, expected } of rows) {
+		got.forEach((value, i) => expect(Math.abs(value - expected[i]), `${label} channel ${i}: ${value} against ${expected[i]}`).toBeLessThan(2e-3));
+	}
 });
