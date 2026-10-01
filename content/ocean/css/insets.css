@@ -1,1 +1,59 @@
 /* The texture insets of steps 22, 23 and 25 (piece C2; lane F owns this file). */
+.inset {
+	margin: 14px 0;
+}
+
+.inset-body {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.inset-body > .inset-line {
+	grid-column: 1 / -1;
+}
+
+.inset[data-inset="sampling"] .inset-body {
+	grid-template-columns: 1fr;
+	justify-items: start;
+}
+
+.inset canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	box-sizing: border-box;
+	aspect-ratio: 1;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	image-rendering: pixelated;
+}
+
+.inset[data-inset="sampling"] canvas {
+	width: 240px;
+	max-width: 100%;
+	image-rendering: auto;
+}
+
+.inset-label,
+.inset-range,
+.inset-line {
+	margin: 4px 0 0;
+	font-size: 0.8rem;
+	color: var(--ink-dim);
+}
+
+.inset-range {
+	display: block;
+	font-variant-numeric: tabular-nums;
+}
+
+.inset-line {
+	font-variant-numeric: tabular-nums;
+}
+
+.inset figcaption {
+	margin-top: 8px;
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+}
