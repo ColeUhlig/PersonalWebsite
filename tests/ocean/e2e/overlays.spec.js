@@ -3,7 +3,8 @@
 import { test, expect } from '@playwright/test';
 import { load, stage, watchErrors, waitFrames } from './helpers/stage.js';
 import { oceanRunning, scrollToId } from './helpers/story.js';
-import { GRID } from '../../../content/ocean/js/page/overlayModel.js';
+import { COLOURS, GRID, PALETTE_HEX } from '../../../content/ocean/js/page/overlayModel.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { DIRECTIONS_WAVES } from '../../../content/ocean/js/stages/recipeKit.js';
 
 let errors;
@@ -104,4 +105,25 @@ test('the readout under step 9 is live, follows the slider, and is empty in the 
 	await page.locator('section[data-step-id="slopes"] [data-slider="spacing"] input').fill('14');
 	await expect(page.locator('[data-readout="slopes"]')).not.toHaveText(before, { timeout: 10_000 });
 	await expect(page.locator('[data-readout="slopes"]')).toContainText('14 studs');
+});
+
+// Fix round 2: the instance colours go up to the GPU when the overlay's kind changes, never on a
+// frame that only moves the arrows. Fails if they are re-sent every frame, and fails if they are never
+// re-sent after the first (the second arrow would keep the last step's colour).
+test('the arrow colours are uploaded once per kind, and follow a change of kind', async ({ page }) => {
+	await load(page, 'step=slopes&freeze=12', 10);
+	const slopes = await stage(page, 'overlays');
+	expect(slopes.colours).toEqual([PALETTE_HEX[COLOURS.NORMAL], PALETTE_HEX[COLOURS.DIFFERENCE]]);
+	await waitFrames(page, 10);
+	const still = await stage(page, 'overlays');
+	expect(still.colourUploads).toBe(slopes.colourUploads);
+	await stage(page, 'set', stepOf('normals'), 0);
+	await page.waitForFunction(() => window.__ocean.stage.overlays().kind === 'normals', null, { timeout: 30_000 });
+	await waitFrames(page, 10);
+	const normals = await stage(page, 'overlays');
+	expect(normals.kind).toBe('normals');
+	expect(normals.colours).toEqual([PALETTE_HEX[COLOURS.NORMAL], PALETTE_HEX[COLOURS.NORMAL]]);
+	expect(normals.colourUploads).toBeGreaterThan(still.colourUploads);
+	await waitFrames(page, 10);
+	expect((await stage(page, 'overlays')).colourUploads).toBe(normals.colourUploads);
 });

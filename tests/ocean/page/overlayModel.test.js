@@ -6,7 +6,7 @@ import * as expect from '../expect.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import { DIRECTIONS_WAVES } from '../../../content/ocean/js/stages/recipeKit.js';
-import { ARROW_STRIDE, COLOURS, GRID, MAX_ARROWS, MAX_DIRECTIONS, NORMAL_LENGTH, differenceSlope, directionArrows, normalArrows, readoutText, slopeArrows } from '../../../content/ocean/js/page/overlayModel.js';
+import { ARROW_STRIDE, COLOURS, DIFFERENCE_LENGTH, FRAME_LENGTH, FRAME_LIFT, GRID, MAX_ARROWS, MAX_DIRECTIONS, NORMAL_LENGTH, PALETTE_HEX, differenceSlope, directionArrows, normalArrows, readoutText, slopeArrows } from '../../../content/ocean/js/page/overlayModel.js';
 
 const arrow = (out, i) => Array.from(out.subarray(i * ARROW_STRIDE, (i + 1) * ARROW_STRIDE));
 const unit = (v) => {
@@ -67,6 +67,14 @@ test('normals: a grid of exact normals on the surface, and T, B square to n with
 	expect.near(dot(n, bv), 0, 1e-9, 'B square to n');
 	const cross = [bv[1] * tv[2] - bv[2] * tv[1], bv[2] * tv[0] - bv[0] * tv[2], bv[0] * tv[1] - bv[1] * tv[0]];
 	expect.near(dot(unit(cross), n), 1, 1e-9, 'n is along B x T');
+	// Fix round 2: T and B are longer than the normals and start FRAME_LIFT up the centre normal, so
+	// they stand clear of it and of the grid round it.
+	expect.truthy(FRAME_LENGTH > NORMAL_LENGTH, `T and B (${FRAME_LENGTH}) longer than a normal (${NORMAL_LENGTH})`);
+	expect.near(Math.hypot(t[3] - t[0], t[4] - t[1], t[5] - t[2]), FRAME_LENGTH, 1e-9, 'T length');
+	expect.near(Math.hypot(b[3] - b[0], b[4] - b[1], b[5] - b[2]), FRAME_LENGTH, 1e-9, 'B length');
+	for (const [name, v] of [['T', t], ['B', b]]) {
+		[0, 1, 2].forEach((j) => expect.near(v[j], centre[j] + n[j] * FRAME_LIFT, 1e-9, `${name} base ${j} on the centre normal`));
+	}
 });
 
 // Task 5 review, fix round 1: at spread 0 every heading is +z, so arrows from one hub would lie on
@@ -144,6 +152,14 @@ test('the central difference on one sine is exactly A k cos(theta) sin(kh)/(kh),
 	expect.equal(result.count, 2 * GRID * GRID, 'an exact and a difference arrow per point');
 	expect.equal(arrows[6], COLOURS.NORMAL, 'exact first');
 	expect.equal(arrows[ARROW_STRIDE + 6], COLOURS.DIFFERENCE, 'then the difference');
+	// Fix round 2: the difference arrow is the longer of the pair, so where the two all but coincide
+	// (small h) its head still shows past the exact one's.
+	expect.truthy(DIFFERENCE_LENGTH > NORMAL_LENGTH + 0.6, 'the difference head clears the exact head');
+	for (let i = 0; i < result.count; i++) {
+		const [bx, by, bz, tx, ty, tz, colour] = arrow(arrows, i);
+		const want = colour === COLOURS.DIFFERENCE ? DIFFERENCE_LENGTH : NORMAL_LENGTH;
+		expect.near(Math.hypot(tx - bx, ty - by, tz - bz), want, 1e-9, `arrow ${i} length`);
+	}
 });
 
 // Review Focus 5 (the model's half; the browser's is in overlays.spec.js).
@@ -166,4 +182,10 @@ test('the readout says the gap and the spacing, live numbers only', () => {
 	expect.equal(readoutText({ meanAngle: 3.217, spacing: 4 }), 'On this sea just now, the two arrows differ by 3.2° on average, sampling 4 studs either side.');
 	expect.equal(readoutText({ meanAngle: 0.0412, spacing: 0.5 }), 'On this sea just now, the two arrows differ by 0.041° on average, sampling 0.5 studs either side.');
 	expect.equal(readoutText({ meanAngle: null, spacing: 4 }), '');
+});
+
+test('one colour per role and wave, as six-digit hex', () => {
+	expect.truthy(PALETTE_HEX.length >= COLOURS.WAVE + MAX_DIRECTIONS, 'a colour for every heading');
+	expect.truthy(PALETTE_HEX.every((hex) => /^#[0-9a-f]{6}$/.test(hex)), 'hex colours');
+	expect.equal(new Set(PALETTE_HEX).size, PALETTE_HEX.length, 'all distinct');
 });

@@ -3,11 +3,11 @@
 // length in proportion to the wave's; the surface's normals on a grid round the focus, the exact ones
 // the engine's own WaveSampler gives from the waves' slopes (chop 0, as these steps run, so a grid
 // point is a vertex of the finest ring: they sit on the 2-stud lattice); the tangent
-// T = (1, dy/dx, 0) and binormal B = (0, dy/dz, 1) at the grid's centre; and step 9: at each grid
-// point the exact normal and the one the central difference gives from heights `h` studs either side
-// along x and z, and their mean angle in degrees; `readoutText` words it for the panel. Arrows go
-// into a Float64Array, ARROW_STRIDE numbers each: base x, y, z, tip x, y, z, colour. Nothing
-// allocates per call.
+// T = (1, dy/dx, 0) and binormal B = (0, dy/dz, 1) at the grid's centre, drawn from the tip of its
+// normal; and step 9: at each grid point the exact normal and the one the central difference gives
+// from heights `h` studs either side along x and z, and their mean angle in degrees; `readoutText`
+// words it for the panel. Arrows go into a Float64Array, ARROW_STRIDE numbers each: base x, y, z,
+// tip x, y, z, colour. Nothing allocates per call.
 import * as WaveSampler from '../core/waveSampler.js';
 
 export const ARROW_STRIDE = 7;
@@ -17,6 +17,20 @@ export const MAX_DIRECTIONS = 8;
 export const MAX_ARROWS = 2 * GRID * GRID + MAX_DIRECTIONS + 2;
 export const COLOURS = Object.freeze({ NORMAL: 0, TANGENT: 1, BINORMAL: 2, DIFFERENCE: 3, WAVE: 4 });
 export const NORMAL_LENGTH = 3;
+// The tangent and binormal: longer than the normals, and starting FRAME_LIFT studs up the centre
+// normal (at its tip), so on a phone they stand clear of it and of the 48 normals round it.
+export const FRAME_LENGTH = 6;
+export const FRAME_LIFT = NORMAL_LENGTH;
+// The central-difference arrow is a little longer than the exact one beside it, so where the two all
+// but coincide (a small h) its head still shows past the exact head (0.6 studs long).
+export const DIFFERENCE_LENGTH = 3.75;
+// One colour per COLOURS entry, then one per heading: the normal (a darker accent), the tangent and
+// binormal (term colours), the central difference (orange), and the waves, all clear against the
+// white teaching sea. The renderer builds its colours from these, and the browser tests read them.
+export const PALETTE_HEX = Object.freeze([
+	'#1aa392', '#d9891a', '#d6457a', '#ef6c1a',
+	'#e4572e', '#17a2a0', '#c9a000', '#5a9b2f', '#2e86ab', '#a23b72', '#f18f01', '#6a4c93',
+]);
 // Studs the arrows start above the surface, so their bases are not buried in it.
 const LIFT = 0.15;
 // Studs the heading hub floats above the surface.
@@ -93,14 +107,17 @@ export function normalArrows(waves, t, focus, out) {
 		}
 	}
 	const s = sampleAt(waves, t, cx, cz);
-	const y = s[1] + LIFT;
+	// T and B start on the centre normal, FRAME_LIFT up it.
+	const fx = cx + s[3] * FRAME_LIFT;
+	const fy = s[1] + LIFT + s[4] * FRAME_LIFT;
+	const fz = cz + s[5] * FRAME_LIFT;
 	// The normal lies along (-dy/dx, 1, -dy/dz), so each slope is minus a horizontal part over the vertical one.
 	const sx = -s[3] / s[4];
 	const sz = -s[5] / s[4];
 	const tl = Math.hypot(1, sx);
 	const bl = Math.hypot(sz, 1);
-	write(out, n, cx, y, cz, cx + NORMAL_LENGTH / tl, y + (sx * NORMAL_LENGTH) / tl, cz, COLOURS.TANGENT);
-	write(out, n + 1, cx, y, cz, cx, y + (sz * NORMAL_LENGTH) / bl, cz + NORMAL_LENGTH / bl, COLOURS.BINORMAL);
+	write(out, n, fx, fy, fz, fx + FRAME_LENGTH / tl, fy + (sx * FRAME_LENGTH) / tl, fz, COLOURS.TANGENT);
+	write(out, n + 1, fx, fy, fz, fx, fy + (sz * FRAME_LENGTH) / bl, fz + FRAME_LENGTH / bl, COLOURS.BINORMAL);
 	return n + 2;
 }
 
@@ -139,7 +156,7 @@ export function slopeArrows(waves, t, focus, h, out, result) {
 			const dz = -SLOPES[1] / length;
 			sum += Math.acos(Math.min(1, Math.max(-1, nx * dx + ny * dy + nz * dz)));
 			write(out, n, x, y, z, x + nx * NORMAL_LENGTH, y + ny * NORMAL_LENGTH, z + nz * NORMAL_LENGTH, COLOURS.NORMAL);
-			write(out, n + 1, x, y, z, x + dx * NORMAL_LENGTH, y + dy * NORMAL_LENGTH, z + dz * NORMAL_LENGTH, COLOURS.DIFFERENCE);
+			write(out, n + 1, x, y, z, x + dx * DIFFERENCE_LENGTH, y + dy * DIFFERENCE_LENGTH, z + dz * DIFFERENCE_LENGTH, COLOURS.DIFFERENCE);
 			n += 2;
 		}
 	}

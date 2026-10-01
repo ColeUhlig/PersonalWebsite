@@ -7,15 +7,10 @@
 // (it never should be) is drawn at zero size and reported through probe().finite. With no overlay
 // (every other step) a frame returns at once once the meshes are hidden: no sampling, no upload, no draw.
 import * as THREE from 'three';
-import { ARROW_STRIDE, MAX_ARROWS, directionArrows, normalArrows, slopeArrows } from '../page/overlayModel.js';
+import { ARROW_STRIDE, COLOURS, MAX_ARROWS, PALETTE_HEX, directionArrows, normalArrows, slopeArrows } from '../page/overlayModel.js';
 
-const srgb = (hex) => new THREE.Color().setStyle(hex, THREE.SRGBColorSpace);
-// Normal (a darker accent), tangent and binormal (term colours), the central difference (orange),
-// then one colour per wave heading: all clear against the white teaching sea.
-const PALETTE = [
-	srgb('#1aa392'), srgb('#d9891a'), srgb('#d6457a'), srgb('#ef6c1a'),
-	srgb('#e4572e'), srgb('#17a2a0'), srgb('#c9a000'), srgb('#5a9b2f'), srgb('#2e86ab'), srgb('#a23b72'), srgb('#f18f01'), srgb('#6a4c93'),
-];
+// The model's colours (one per role, then one per wave heading), as three.js colours.
+const PALETTE = PALETTE_HEX.map((hex) => new THREE.Color().setStyle(hex, THREE.SRGBColorSpace));
 const HEAD_LENGTH = 0.6;
 // How much thicker the heading arrows are than the normals: they are seen from about 90 studs away
 // (the directions shot), the normals from about 40, and must read at 390 px wide.
@@ -23,6 +18,23 @@ const HEADING_THICKNESS = 5;
 // The normals' (and the tangent's, binormal's and difference's) shafts against the base cylinder: a
 // shaft of one is about a pixel wide on a phone.
 const NORMAL_SHAFT = 1.5;
+// The tangent and binormal: thicker still, so the one frame on the grid reads among its normals.
+const FRAME_SHAFT = 2.5;
+const FRAME_HEAD = 1.6;
+// The central-difference arrow: thinner than the exact one beside it, its head smaller, so where the
+// two coincide the exact one shows round it and the difference's longer tip shows past it.
+const DIFFERENCE_SHAFT = 1;
+const DIFFERENCE_HEAD = 0.85;
+// Studs the normals' grid moves right of the camera's focus on a canvas wider than tall, where the
+// step's panel sits over the left of the picture (the grid points stay on the 2-stud lattice and well
+// inside the finest ring, whose half-width is 32 studs at High).
+const GRID_SHIFT = 9;
+// Head and shaft girths by role (COLOURS: normal, tangent, binormal, difference); every heading
+// (COLOURS.WAVE and up) takes HEADING_THICKNESS for both.
+const HEADS = Object.freeze([1, FRAME_HEAD, FRAME_HEAD, DIFFERENCE_HEAD]);
+const SHAFTS = Object.freeze([NORMAL_SHAFT, FRAME_SHAFT, FRAME_SHAFT, DIFFERENCE_SHAFT]);
+const headOf = (role) => (role >= COLOURS.WAVE ? HEADING_THICKNESS : HEADS[role]);
+const shaftOf = (role) => (role >= COLOURS.WAVE ? HEADING_THICKNESS : SHAFTS[role]);
 const UP = new THREE.Vector3(0, 1, 0);
 
 export function createSurfaceOverlays({ view, ocean }) {
@@ -53,6 +65,10 @@ export function createSurfaceOverlays({ view, ocean }) {
 	const matrix = new THREE.Matrix4();
 	const nothing = new THREE.Matrix4().makeScale(0, 0, 0);
 	const slope = { count: 0, meanAngle: 0 };
+	const right = new THREE.Vector3();
+	const gridFocus = [0, 0];
+	const colour = new THREE.Color();
+	let colourUploads = 0;
 	let kind = null;
 	let spacing = 4;
 	let count = 0;
@@ -90,13 +106,26 @@ export function createSurfaceOverlays({ view, ocean }) {
 		heads.setMatrixAt(i, matrix.compose(tip, turn, size));
 	}
 
+	// The grid's centre: the focus, moved GRID_SHIFT studs to the camera's right on a wide canvas.
+	function shiftGrid(focus) {
+		const camera = view.camera;
+		const shift = camera.aspect > 1 ? GRID_SHIFT : 0;
+		right.setFromMatrixColumn(camera.matrixWorld, 0);
+		right.y = 0;
+		const length = right.length();
+		const scale = length > 0 ? shift / length : 0;
+		gridFocus[0] = focus[0] + right.x * scale;
+		gridFocus[1] = focus[1] + right.z * scale;
+	}
+
 	function draw(t, focus) {
 		const waves = ocean.source === 'waves' ? ocean.waves : null;
 		meanAngle = null;
 		if (kind === null || waves === null) return 0;
 		if (kind === 'directions') return directionArrows(waves, t, focus, arrows);
-		if (kind === 'normals') return normalArrows(waves, t, focus, arrows);
-		slopeArrows(waves, t, focus, spacing, arrows, slope);
+		shiftGrid(focus);
+		if (kind === 'normals') return normalArrows(waves, t, gridFocus, arrows);
+		slopeArrows(waves, t, gridFocus, spacing, arrows, slope);
 		meanAngle = slope.meanAngle;
 		return slope.count;
 	}
@@ -111,10 +140,11 @@ export function createSurfaceOverlays({ view, ocean }) {
 			if (kind === null && count === 0) return;
 			count = draw(t, focus);
 			finite = true;
-			const head = kind === 'directions' ? HEADING_THICKNESS : 1;
-			const shaft = kind === 'directions' ? HEADING_THICKNESS : NORMAL_SHAFT;
 			const recolour = kind !== colouredKind || count > colouredCount;
-			for (let i = 0; i < count; i++) place(i, head, shaft, recolour);
+			for (let i = 0; i < count; i++) {
+				const role = arrows[i * ARROW_STRIDE + 6];
+				place(i, headOf(role), shaftOf(role), recolour);
+			}
 			shafts.count = count;
 			heads.count = count;
 			shafts.visible = count > 0;
@@ -128,10 +158,15 @@ export function createSurfaceOverlays({ view, ocean }) {
 				heads.instanceColor.needsUpdate = true;
 				colouredKind = kind;
 				colouredCount = count;
+				colourUploads += 1;
 			}
 		},
+		// `colours`: the first two arrows' colours as their instance buffer holds them; `colourUploads`:
+		// how many times the colours have been sent to the GPU.
 		probe() {
-			return { kind, arrows: count, spacing, meanAngle, finite, first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null };
+			const colours = [];
+			for (let i = 0; i < Math.min(count, 2); i++) colours.push(`#${shafts.getColorAt(i, colour).getHexString(THREE.SRGBColorSpace)}`);
+			return { kind, arrows: count, spacing, meanAngle, finite, first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, colourUploads };
 		},
 	};
 }
