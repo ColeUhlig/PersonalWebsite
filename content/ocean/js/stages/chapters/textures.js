@@ -10,11 +10,12 @@ export const TEXTURES = Object.freeze({
 	sampling: { title: 'Reading between the grid points', engine: SEA, shot: { position: [0, 30, 60], target: [0, 0, 0] } },
 	mesh: {
 		title: 'The mesh',
-		engine: SEA,
+		// A still white sea (no chop, no paint) so the wire's rings and their step in spacing read.
+		engine: { ...SEA, chop: 0 },
 		// Thicker fog past the wire grid's fade (render/stageLook.js WIRE_FADE): past about 600 studs
 		// a grid's lines crowd into grey moire bands (A3 fix round 1, piece C's old step 1).
-		look: { wireframe: true, fog: 0.0015 },
-		shot: { position: [0, 40, 70], target: [0, 0, 0] },
+		look: { material: 'white', wireframe: true, fog: 0.0015 },
+		shot: { position: [0, 32, 48], target: [0, 0, 0] },
 		sliders: [toggle('wireframe', 'Wireframe', 'look.wireframe', true)],
 	},
 	painted: { title: 'Painted maps', engine: SEA, shot: { position: [0, 20, 45], target: [0, 1, -20] } },
