@@ -219,6 +219,10 @@ export function clampPolar(pose, min, max, out = newPose()) {
  * object every frame, so nothing is allocated). The baseline is the first reading, and is taken
  * again when the screen turns, on reset(), and at the end of the ease back after a step change.
  * While the clock is stopped (a paused sea) the offset holds, and a step change cuts it to zero.
+ * C2 (Task 0 fix round 1): frame(key, seconds, held) also takes whether the flat graph holds the
+ * camera. A change of `held` eases the offset back like a step change does; while held the offset
+ * then stays at zero whatever the phone does, and once released it follows again from a fresh
+ * baseline, so neither edge cuts the camera.
  */
 export function createTiltFollower() {
 	const reading = { alpha: 0, beta: Number.NaN, gamma: Number.NaN };
@@ -231,6 +235,7 @@ export function createTiltFollower() {
 	let returning = false;
 	let elapsed = 0;
 	let lastKey = null;
+	let lastHeld = false;
 
 	function rebase() {
 		baseline.alpha = reading.alpha;
@@ -271,14 +276,15 @@ export function createTiltFollower() {
 			reading.gamma = Number.NaN;
 			rebase();
 		},
-		frame(key, seconds) {
-			if (lastKey !== null && key !== lastKey) {
+		frame(key, seconds, held = false) {
+			if ((lastKey !== null && key !== lastKey) || held !== lastHeld) {
 				returning = true;
 				elapsed = 0;
 				from.yaw = current.yaw;
 				from.pitch = current.pitch;
 			}
 			lastKey = key;
+			lastHeld = held;
 			const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, MAX_STEP_SECONDS);
 			if (returning) {
 				elapsed = dt > 0 ? elapsed + dt : RETURN_SECONDS;
@@ -289,6 +295,9 @@ export function createTiltFollower() {
 					current.yaw = from.yaw * left;
 					current.pitch = from.pitch * left;
 				}
+				return current;
+			}
+			if (held) {
 				return current;
 			}
 			if (dt > 0) {
