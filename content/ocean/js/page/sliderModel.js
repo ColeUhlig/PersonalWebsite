@@ -15,7 +15,6 @@ export const TERM_BY_SLIDER = Object.freeze({
 	speed: 't-speed',
 	waveCount: 't-count',
 	sunAzimuth: 't-sun',
-	shading: null,
 	chop: 't-chop',
 	wind: 't-wind',
 	fetch: 't-fetch',

@@ -38,7 +38,8 @@ test('numbers lerp between; fetch and fog on a log scale; the sun the short way 
 	const sun = blendRecipes(applySliders(at('diffuse'), { sunAzimuth: 350 }), applySliders(at('diffuse'), { sunAzimuth: 10 }), 0.5);
 	expect.near(sun.look.sun.azimuth, 0, 1e-9, 'through north, not round the long way');
 	const shot = blendRecipes(at('gerstner'), at('tiling'), 0.5);
-	expect.equal(shot.shot.position.join(','), '-20,157,35', 'the camera halfway up (crest [-40, 14, -20], look-down [0, 300, 90])');
+	const halfway = at('gerstner').shot.position.map((v, i) => (v + at('tiling').shot.position[i]) / 2);
+	shot.shot.position.forEach((v, i) => expect.near(v, halfway[i], 1e-9, `the camera halfway from the crest shot to the look-down [${i}]`));
 });
 
 // Task 8 minor (piece C), kept for C2: the sine steps carry sum-of-sines' bank, so the blend into it
