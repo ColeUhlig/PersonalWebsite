@@ -63,6 +63,12 @@ export function startStory({ reducedMotion = false, load = loadScrollTrigger } =
 	}
 
 	function update() {
+		// ScrollTrigger scrolls the page to the top while it refreshes, to measure: a reading taken
+		// then is not where the visitor is (it would read as the opening and cut the camera), so it
+		// waits for the refresh to finish ('refresh' below reads again).
+		if (scrollTrigger?.isRefreshing) {
+			return;
+		}
 		const next = readScroll(measured, window.scrollY + readingLine(window.innerHeight, narrow.matches));
 		const same = next.phase === reading.phase && next.step === reading.step;
 		if (same && Math.abs(next.progress - reading.progress) < 1e-4) {
@@ -155,6 +161,7 @@ export function startStory({ reducedMotion = false, load = loadScrollTrigger } =
 		// The whole page, 0 to the last scroll position, as the native listener reads it, so the
 		// reading keeps moving past the story's end (the footer).
 		ScrollTrigger.create({ trigger: document.documentElement, start: 0, end: 'max', onUpdate: update, onRefresh: relayout });
+		ScrollTrigger.addEventListener('refresh', update);
 		scrollTrigger = ScrollTrigger;
 		engine = 'gsap';
 		window.removeEventListener('scroll', onScroll);

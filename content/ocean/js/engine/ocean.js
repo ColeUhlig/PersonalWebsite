@@ -60,6 +60,14 @@ import {
 
 export const REPORT_WINDOW = REPORT_EVERY_FRAMES;
 
+// Piece C: a paused sea costs less than a moving one. While the page says its play clock is paused
+// (deps.paused) and neither the clock's time nor the stage settings change, this many frames are
+// enough for every cascade, retune, rejoin and painter turn to catch up with the held time; after
+// them the ocean RESTS: no evolve request, no blend, no Paint. The rings, the horizon and the glow
+// still follow the camera, the frame count and the report go on. Without deps.paused it never
+// rests, so a frozen clock (?freeze) works as it always has.
+export const REST_AFTER_FRAMES = 120;
+
 // Which fields the per-frame blend has to produce: all eight, since the painter's foam reads the
 // Jacobian fields.
 const BLEND_FIELDS = FieldStore.FIELD_NAMES;
@@ -203,8 +211,13 @@ function tierLine(ocean, probeMs) {
  * @param {number} [deps.probeMs] skips the probe with this result when nothing forces a tier
  * @param {string | null} [deps.deviceTier] the phone rule's tier (config.js tierForDevice), or null
  * @param {{ warn: Function, info?: Function }} [deps.log]
+ * @param {() => boolean} [deps.paused] whether the page's play clock is paused (piece C; see
+ *   REST_AFTER_FRAMES); never, by default
  */
-export function create(config, { spawnCascade, spawnPainter, now, probeMs, deviceTier = null, log = console }) {
+export function create(config, { spawnCascade, spawnPainter, now, probeMs, deviceTier = null, log = console, paused = () => false }) {
+	if (typeof paused !== 'function') {
+		throw new TypeError(`Ocean.create: paused must be a function, got ${typeof paused}`);
+	}
 	// The sea the sliders can change while the ocean runs. It starts as the config's and is read by
 	// every cascade Configure and retune, the surface write and the glow.
 	const live = { params: config.params, chop: config.chop, seed: SEED, scatter: config.scatter };
@@ -260,6 +273,9 @@ export function create(config, { spawnCascade, spawnPainter, now, probeMs, devic
 		t: 0,
 		sink: null,
 		now,
+		paused,
+		// Piece C: frames in a row with the clock paused and nothing changed (REST_AFTER_FRAMES).
+		rest: { frames: 0, t: null, settings: null },
 		stage,
 		// The report's running totals and their values at the last report.
 		elapsed: 0,
@@ -396,14 +412,15 @@ export function step(ocean, dtSeconds, focus, eye, sun) {
 	ocean.t = t;
 	ocean.teachT = StageControl.teachTime(ocean);
 	const parts = ocean.parts;
-	// A part switched off by the stage costs nothing: not called at all.
-	if (parts.cascades) {
+	const resting = restingNow(ocean, t);
+	// A part switched off by the stage costs nothing: not called at all. Nor does one at rest.
+	if (parts.cascades && !resting) {
 		timed(ocean, 'evolve', () => evolveStage(ocean, t));
 		timed(ocean, 'blend', () => blendStage(ocean));
 	}
 	// One map to the painter, from the fields that were just blended. Sent BEFORE the vertices are
 	// written so a worker paints alongside the write stage; the client charges `paint` itself.
-	if (parts.painter) {
+	if (parts.painter && !resting) {
 		PainterClient.step(ocean.painter, ocean.frame, t, ocean.store);
 	}
 	// Every ring follows what the camera LOOKS AT; each snaps that focus to its own lattice. The
@@ -437,6 +454,23 @@ export function step(ocean, dtSeconds, focus, eye, sun) {
 	if (ocean.frame % REPORT_EVERY_FRAMES === 0) {
 		ocean.lastReport = buildReport(ocean);
 	}
+}
+
+// Piece C: whether this frame rests (REST_AFTER_FRAMES). Anything still owed keeps the work going:
+// a retune or a rejoin, a cascade worker or the painters not yet ready.
+function restingNow(ocean, t) {
+	const rest = ocean.rest;
+	const still = ocean.paused()
+		&& t === rest.t
+		&& ocean.stageSettings === rest.settings
+		&& !ocean.retune.pending.includes(true)
+		&& ocean.rejoin.every((state) => state === null)
+		&& ocean.cascades.readyCount() === ocean.store.count
+		&& PainterClient.ready(ocean.painter);
+	rest.frames = still ? rest.frames + 1 : 0;
+	rest.t = t;
+	rest.settings = ocean.stageSettings;
+	return rest.frames > REST_AFTER_FRAMES;
 }
 
 /**
@@ -587,5 +621,7 @@ export function status(ocean) {
 		fetch: ocean.live.params.fetch,
 		seed: ocean.live.seed,
 		foamCover: ocean.painter.foamCover,
+		// Piece C: the paused sea's cascades and painters are at rest (REST_AFTER_FRAMES).
+		resting: ocean.rest.frames > REST_AFTER_FRAMES,
 	};
 }

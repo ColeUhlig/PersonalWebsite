@@ -9,6 +9,8 @@ import { mountControls } from './controls.js';
 import { mountLiveTiming, TIMING_SLIDER, TIMING_STEP } from './liveTiming.js';
 import { startMath } from './math.js';
 import { mountCharts } from './charts.js';
+import { mountFootage, mountLiveNumbers, mountMotionButton, mountPlayButton, mountRenderToggle, showLiveStarting, showLiveUnavailable } from './finale.js';
+import { mountProofPanelWhenNear } from './proofLazy.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -65,6 +67,26 @@ export function startPage({ route, reducedMotion, clock }) {
 			}
 		},
 	});
+	// Task 9: the finale. Play, footage and the proof panel need no ocean; the live numbers, the
+	// render toggle and the motion button do. Until the ocean runs, the live block says it is
+	// starting; without one it says there is nothing to measure. The proof panel is embedded: the
+	// finale's block gives it its heading, introduction and glass.
+	finalePart('Play button', () => mountPlayButton(document.getElementById('play')));
+	finalePart('footage', () => mountFootage(document.getElementById('footage'), { onShown: () => story.relayout() }));
+	finalePart('proof panel', () => {
+		window.__proof = mountProofPanelWhenNear(document.getElementById('proof'), { panelDeps: { embedded: true } });
+	});
+	finalePart('live numbers', () => showLiveStarting(document.getElementById('live')));
+	features.push({
+		attachOcean(handle) {
+			mountLiveNumbers(document.getElementById('live'), handle, { paused: () => !clock.playing() });
+			mountRenderToggle(document.querySelector('[data-render-mode]'), handle);
+			mountMotionButton(document.getElementById('motion'), clock);
+		},
+		oceanUnavailable() {
+			showLiveUnavailable(document.getElementById('live'));
+		},
+	});
 	// Features end.
 	document.body.dataset.ocean = 'loading';
 	return Object.freeze({
@@ -87,6 +109,16 @@ function startSafely(start) {
 	} catch (error) {
 		console.error('[ocean] the scroll story could not start', error);
 		return inertStory();
+	}
+}
+
+// One of the finale's parts that needs no ocean, started on its own: one that throws is logged and
+// the rest still start.
+function finalePart(name, start) {
+	try {
+		start();
+	} catch (error) {
+		console.error(`[ocean] the finale's ${name} could not start`, error);
 	}
 }
 

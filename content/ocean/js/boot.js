@@ -51,6 +51,7 @@ async function startLiveOcean() {
 			config,
 			route,
 			now: clock.now,
+			paused: () => !clock.playing(),
 			reducedMotion,
 			onPersistentError: () => showNotice(NOTICES.frames),
 		});

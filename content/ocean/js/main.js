@@ -5,7 +5,8 @@
 // imports it dynamically once WebGL is known to work, so a CDN failure cannot stop the page; the
 // frame loop schedules its next frame before running this one, so an exception cannot stop it
 // (page/frameGuard.js); the renderer follows a change of device pixel ratio; and the ocean reads
-// the page's pausable clock (engine/playClock.js) through `now`.
+// the page's pausable clock (engine/playClock.js) through `now`, and rests its cascades and
+// painters while that clock is paused (`paused`; engine/ocean.js REST_AFTER_FRAMES).
 import * as Ocean from './engine/ocean.js';
 import { tierForDevice } from './engine/config.js';
 import { createFrameGuard } from './page/frameGuard.js';
@@ -26,7 +27,7 @@ function deviceTier() {
 	});
 }
 
-export function startOcean({ config, route, now, reducedMotion = false, onPersistentError = () => {} }) {
+export function startOcean({ config, route, now, paused = () => false, reducedMotion = false, onPersistentError = () => {} }) {
 	const canvas = document.getElementById('ocean');
 	const view = createScene(canvas);
 	const rig = createCameraRig(view.camera, canvas, config);
@@ -34,6 +35,7 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 		spawnCascade: () => new Worker(new URL('./workers/cascade.worker.js', import.meta.url), { type: 'module' }),
 		spawnPainter: () => new Worker(new URL('./workers/painter.worker.js', import.meta.url), { type: 'module' }),
 		now,
+		paused,
 		deviceTier: deviceTier(),
 	});
 	const materials = createMaterials(ocean, view.renderer);
@@ -129,5 +131,13 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 	}
 	requestAnimationFrame(frame);
 
-	return Object.freeze({ ...parts, canvas, reducedMotion, stage: dev ? dev.hooks : null, story });
+	return Object.freeze({
+		...parts,
+		canvas,
+		reducedMotion,
+		stage: dev ? dev.hooks : null,
+		story,
+		status: () => Ocean.status(ocean),
+		report: () => Ocean.report(ocean),
+	});
 }
