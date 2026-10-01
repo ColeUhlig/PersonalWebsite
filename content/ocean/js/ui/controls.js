@@ -15,6 +15,7 @@
 // page, ui/charts.js) stays disabled through every refresh.
 import { TERM_BY_SLIDER, formatValue, fromInput, inputRange, toInput } from '../page/sliderModel.js';
 import { clampSlider } from '../stages/sliders.js';
+import { element } from './dom.js';
 
 export const UNAVAILABLE_NOTE = "Not on this device's lighter tier";
 
@@ -23,13 +24,6 @@ const DOWN_KEYS = new Set(['ArrowLeft', 'ArrowDown']);
 // A radio group's keys (ARIA): Right and Down to the next option, Left and Up to the previous one.
 const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown']);
 const PREVIOUS_KEYS = new Set(['ArrowLeft', 'ArrowUp']);
-
-function element(tag, props = {}, children = []) {
-	const node = document.createElement(tag);
-	Object.assign(node, props);
-	node.append(...children);
-	return node;
-}
 
 // The term's colour dot, or nothing for a slider with no term in its math.
 function swatches(slider) {

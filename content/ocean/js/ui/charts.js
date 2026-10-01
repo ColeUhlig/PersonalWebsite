@@ -22,11 +22,9 @@
 import { arrowEnd, linePath, niceTicks } from '../page/chartGeometry.js';
 import { SPECTRUM, peakLabelSpot, spectrumPlot, spectrumScales } from '../page/spectrumLayout.js';
 import { stepOf } from '../stages/steps.js';
+import { chartWidth, safely, svg, watchVisible } from './dom.js';
 import { fasterJudge, formatMs, formatSteps, formatTiny, operationRatio, roundSpeedup, timeTransforms, tooSlowToTime } from '../page/transformTiming.js';
 
-const NS = 'http://www.w3.org/2000/svg';
-const MIN_WIDTH = 200; // below a 320 px phone's chart body (about 222 px), so its 12 px text stays 12 px
-const FALLBACK_WIDTH = 320;
 // About this wide per character at 12 px, for a text the browser cannot measure (not laid out).
 const CHAR_WIDTH = 6.6;
 const SPECTRUM_REDRAW_MS = 100;
@@ -40,24 +38,11 @@ const JUDGING_N = 32;
 const SLOW_NOTE_ID = `control-${stepOf('fft')}-transformN-slow`;
 const SLOW_NOTE = (n) => `${n} × ${n} is too slow to time here without freezing the page.`;
 
-function svg(tag, attributes = {}, text = null) {
-	const node = document.createElementNS(NS, tag);
-	for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
-	if (text !== null) node.textContent = text;
-	return node;
-}
-
 function note(text) {
 	const p = document.createElement('p');
 	p.className = 'chart-note';
 	p.textContent = text;
 	return p;
-}
-
-// The width, in CSS pixels, the chart's SVG is drawn at.
-function widthOf(figure) {
-	const width = Math.round(figure.querySelector('.chart-body').clientWidth);
-	return width > 0 ? Math.max(width, MIN_WIDTH) : FALLBACK_WIDTH;
 }
 
 // Replaces the chart's body with a fresh SVG (and the notes under it); returns the SVG.
@@ -78,19 +63,6 @@ function afterPaint() {
 	return new Promise((resolve) => {
 		requestAnimationFrame(() => setTimeout(resolve, 0));
 	});
-}
-
-// Calls onShow each time `figure` comes on screen and onHide when it leaves; returns whether it is
-// on screen now.
-function whileVisible(figure, onShow, onHide = () => {}) {
-	let visible = false;
-	new IntersectionObserver((entries) => {
-		const now = entries.some((entry) => entry.isIntersecting);
-		if (now && !visible) onShow();
-		if (!now && visible) onHide();
-		visible = now;
-	}).observe(figure);
-	return () => visible;
 }
 
 // `fn` at most once per `ms`, the last call always landing (a trailing call after the wait).
@@ -171,7 +143,7 @@ function spectrumChart(figure, story, onLayout) {
 	}
 	function draw() {
 		const curve = story.charts.spectrum();
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const plot = spectrumPlot(width);
 		const scales = spectrumScales(curve, story.charts.spectrumCeiling(), plot);
 		const label = `peak: waves ${curve.peakWavelength.toFixed(0)} studs long`;
@@ -222,7 +194,7 @@ function phaseChart(figure, story, onLayout) {
 	let reported = false;
 	// The figure's size at its width: four rings a row, two rows (the engine's eight arrows).
 	function layout() {
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const column = width / 4;
 		const radius = Math.min(32, column / 2 - 6);
 		const row = radius * 2 + 32;
@@ -287,7 +259,7 @@ function phaseChart(figure, story, onLayout) {
 	}
 	// Turning: the loop runs only while on screen. Still: drawn once more on show, never looped.
 	let shown = false;
-	const visible = whileVisible(figure, () => {
+	const visible = watchVisible(figure, () => {
 		shown = true;
 		cancelAnimationFrame(frame);
 		if (motion === 'still') guardedTurn();
@@ -354,20 +326,20 @@ function transformChart(figure, story, onLayout) {
 	}
 
 	function showWaiting() {
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const root = canvasFor(figure, width, HEIGHT, 'Both ways are timed in your browser when this chart comes on screen', ['Both ways are timed in your browser when this chart comes on screen.']);
 		bars(root, width, [['Wave by wave', 0, '', 'chart-bar-naive'], ['FFT', 0, '', 'chart-bar-fft']], 1);
 	}
 
 	function showMeasuring(n) {
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const root = canvasFor(figure, width, HEIGHT, `Timing a ${n} by ${n} grid both ways in your browser`, [`Timing a ${n} × ${n} grid both ways in your browser…`]);
 		bars(root, width, [['Wave by wave', 0, '…', 'chart-bar-naive'], ['FFT', 0, '…', 'chart-bar-fft']], 1);
 		onLayout();
 	}
 
 	function showDisturbed(n, verdict) {
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const ops = verdict.operations;
 		const fewer = roundSpeedup(verdict.ratio).toLocaleString('en-US');
 		const root = canvasFor(figure, width, HEIGHT, `${n} by ${n} grid: the timing was disturbed, so the bars count steps: ${formatSteps(ops.naive)} wave by wave, ${formatSteps(ops.fft)} for the FFT`, [
@@ -378,7 +350,7 @@ function transformChart(figure, story, onLayout) {
 	}
 
 	function showMeasured(n, result) {
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const faster = roundSpeedup(result.speedup).toLocaleString('en-US');
 		const fewer = roundSpeedup(operationRatio(result)).toLocaleString('en-US');
 		const root = canvasFor(figure, width, HEIGHT, `${n} by ${n} grid: wave by wave ${formatMs(result.naiveMs)}, FFT ${formatMs(result.fftMs)}, about ${faster} times faster`, [
@@ -513,7 +485,7 @@ function transformChart(figure, story, onLayout) {
 	const start = () => measure().catch(failed);
 	figure.dataset.state = 'waiting';
 	showWaiting();
-	const visible = whileVisible(figure, () => {
+	const visible = watchVisible(figure, () => {
 		if (wanted !== gridSize()) start();
 	});
 	return {
@@ -535,16 +507,6 @@ function transformChart(figure, story, onLayout) {
 	};
 }
 
-// Runs one chart's work, logging a throw so one chart's fault never stops the others.
-function safely(name, work, fallback = null) {
-	try {
-		return work();
-	} catch (error) {
-		console.error(`[ocean] the ${name} chart failed`, error);
-		return fallback;
-	}
-}
-
 // Redraws a chart when its width changes (one SVG unit per CSS pixel); changes in a frame land once.
 function watchWidth(drawn) {
 	if (typeof ResizeObserver === 'undefined') return;
@@ -556,7 +518,7 @@ function watchWidth(drawn) {
 			const width = Math.round(entry.contentRect.width);
 			const before = widths.get(entry.target);
 			widths.set(entry.target, width);
-			if (before !== undefined && before !== width) safely(name, () => chart.resize());
+			if (before !== undefined && before !== width) safely(`the ${name} chart failed`, () => chart.resize());
 		}
 	});
 	for (const body of byBody.keys()) observer.observe(body);
@@ -572,12 +534,12 @@ export function mountCharts(story, { onLayout = () => {} } = {}) {
 	for (const figure of all) {
 		const name = figure.dataset.chart;
 		if (!MAKERS[name]) continue;
-		const chart = safely(name, () => MAKERS[name](figure, story, onLayout));
+		const chart = safely(`the ${name} chart failed`, () => MAKERS[name](figure, story, onLayout));
 		if (!chart) continue;
 		charts[name].push({ figure, chart });
 		drawn.push({ name, figure, chart });
 	}
-	const each = (name, fn) => charts[name].forEach(({ chart }) => safely(name, () => fn(chart)));
+	const each = (name, fn) => charts[name].forEach(({ chart }) => safely(`the ${name} chart failed`, () => fn(chart)));
 	const BY_STEP = { [stepOf('jonswap')]: 'spectrum', [stepOf('random-sea')]: 'phase', [stepOf('time')]: 'phase', [stepOf('fft')]: 'transforms' };
 	const drawSpectrum = throttled(() => each('spectrum', (c) => c.draw()), SPECTRUM_REDRAW_MS);
 	let queued = new Set();

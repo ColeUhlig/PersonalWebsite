@@ -18,6 +18,7 @@ import * as Cascade from '../core/cascade.js';
 import { mod } from '../core/luau.js';
 import { NORMAL_BLOCK_TEXELS, NORMAL_IMAGE_TEXELS } from '../engine/config.js';
 import { FIELD_VIEWS, ZOOM, downsample, fieldToRgba, magnitude, walkPoint, zoomLayout } from '../page/fieldViews.js';
+import { element, safely, watchVisible } from './dom.js';
 
 const REDRAW_MS = 250;
 const SAMPLING_PX = 240;
@@ -33,13 +34,6 @@ const PAINTED = Object.freeze([
 	Object.freeze({ name: 'normal', label: 'Ripples (the normal map)' }),
 ]);
 
-function element(tag, props = {}, children = []) {
-	const node = document.createElement(tag);
-	Object.assign(node, props);
-	node.append(...children);
-	return node;
-}
-
 const studs = (value) => `${value.toFixed(2)} studs`;
 // Task 15: a range's widest usual form, written hidden at mount to hold the inset's height.
 const RESERVED_RANGE = '-00.00 to 00.00';
@@ -47,29 +41,27 @@ const trim = (value) => String(Number(value.toFixed(2)));
 
 // Runs `draw` every `ms` while `figure` is on screen. A throw is logged once, as `name`'s, and stops
 // the redraws for good (final review Minor 9): uncaught, it would repeat on every tick.
-function whileVisible(figure, ms, draw, name) {
+function redrawWhileVisible(figure, ms, draw, name) {
 	let timer = 0;
 	let stopped = false;
+	const stop = () => {
+		clearInterval(timer);
+		timer = 0;
+	};
 	const guarded = () => {
 		try {
 			draw();
 		} catch (error) {
 			stopped = true;
-			clearInterval(timer);
-			timer = 0;
+			stop();
 			console.error(`[ocean] the ${name} inset stopped`, error);
 		}
 	};
-	new IntersectionObserver((entries) => {
-		const visible = entries.some((entry) => entry.isIntersecting);
-		if (visible && timer === 0 && !stopped) {
-			timer = setInterval(guarded, ms);
-			guarded();
-		} else if (!visible && timer !== 0) {
-			clearInterval(timer);
-			timer = 0;
-		}
-	}).observe(figure);
+	watchVisible(figure, () => {
+		if (stopped || timer !== 0) return;
+		timer = setInterval(guarded, ms);
+		guarded();
+	}, stop);
 }
 
 function fieldsInset(figure, ocean, onLayout) {
@@ -128,7 +120,7 @@ function fieldsInset(figure, ocean, onLayout) {
 		draws += 1;
 		state = { ...next, draws };
 	}
-	whileVisible(figure, REDRAW_MS, draw, 'fields');
+	redrawWhileVisible(figure, REDRAW_MS, draw, 'fields');
 	return { state: () => state };
 }
 
@@ -249,7 +241,7 @@ function samplingInset(figure, ocean, onLayout) {
 			column: blend.column, column1: blend.column1, point: zoom.point[0], edge: zoom.edge, draws,
 		};
 	}
-	whileVisible(figure, REDRAW_MS, draw, 'sampling');
+	redrawWhileVisible(figure, REDRAW_MS, draw, 'sampling');
 	return { state: () => state };
 }
 
@@ -311,7 +303,7 @@ function paintedInset(figure, materials, config, onLayout) {
 		for (const cell of cells) drawPaintedCell(cell, materials.textures[cell.map.name], image);
 		draws += 1;
 	}
-	whileVisible(figure, REDRAW_MS, draw, 'painted');
+	redrawWhileVisible(figure, REDRAW_MS, draw, 'painted');
 	const each = (read) => Object.fromEntries(cells.map((c) => [c.map.name, read(c)]));
 	return {
 		state: () => (draws > 0 ? {
@@ -324,26 +316,16 @@ function paintedInset(figure, materials, config, onLayout) {
 	};
 }
 
-// One inset, started on its own: one that throws is logged and the others still start.
-function safely(name, start) {
-	try {
-		return start();
-	} catch (error) {
-		console.error(`[ocean] the ${name} inset could not start`, error);
-		return null;
-	}
-}
-
 // `watchReading` is part of the contract and unused here: each inset follows its own visibility.
 export function mountInsets({ handle, watchReading, onLayout = () => {} }) {
 	const ocean = handle.ocean;
 	const insets = {};
 	const fields = document.querySelector('figure.inset[data-inset="fields"]');
 	const sampling = document.querySelector('figure.inset[data-inset="sampling"]');
-	if (fields) insets.fields = safely('fields', () => fieldsInset(fields, ocean, onLayout));
-	if (sampling) insets.sampling = safely('sampling', () => samplingInset(sampling, ocean, onLayout));
+	if (fields) insets.fields = safely('the fields inset could not start', () => fieldsInset(fields, ocean, onLayout));
+	if (sampling) insets.sampling = safely('the sampling inset could not start', () => samplingInset(sampling, ocean, onLayout));
 	const painted = document.querySelector('figure.inset[data-inset="painted"]');
-	if (painted && handle.materials?.textures) insets.painted = safely('painted', () => paintedInset(painted, handle.materials, handle.config, onLayout));
+	if (painted && handle.materials?.textures) insets.painted = safely('the painted inset could not start', () => paintedInset(painted, handle.materials, handle.config, onLayout));
 	return Object.freeze({
 		hooks: Object.freeze({
 			drawn: () => Object.keys(insets).filter((name) => insets[name]?.state() != null),

@@ -13,8 +13,8 @@
 import * as WaveBanks from '../engine/waveBanks.js';
 import { TONES, amplitudes, chord, forward, lineProfile, peaks } from '../page/frequencyMath.js';
 import { stepOf } from '../stages/steps.js';
+import { chartWidth, safely, svg } from './dom.js';
 
-const NS = 'http://www.w3.org/2000/svg';
 const HEIGHT = 300;
 const PAD = Object.freeze({ left: 44, right: 12, top: 12, bottom: 34 });
 const GAP = 40; // between the two plots
@@ -22,20 +22,6 @@ const GAP = 40; // between the two plots
 // below it), further in steps of AXIS_STEP if a spike ever lies beyond, so no spike is ever dropped.
 const MIN_AXIS = 16;
 const AXIS_STEP = 4;
-const MIN_WIDTH = 200; // below a 320 px phone's chart body (about 222 px), so its 12 px text stays 12 px
-const FALLBACK_WIDTH = 320;
-
-function svg(tag, attributes = {}, text = null) {
-	const node = document.createElementNS(NS, tag);
-	for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, String(value));
-	if (text !== null) node.textContent = text;
-	return node;
-}
-
-function widthOf(figure) {
-	const width = Math.round(figure.querySelector('.chart-body').clientWidth);
-	return width > 0 ? Math.max(width, MIN_WIDTH) : FALLBACK_WIDTH;
-}
 
 // The two plots' boxes for a chart `width` wide.
 function boxes(width) {
@@ -119,7 +105,7 @@ function frequencyChart(figure, story, ocean, onLayout) {
 		const waves = WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), 0), count);
 		const profile = lineProfile(waves, ocean.teachT);
 		const heights = amplitudes(forward(profile));
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const { top, bottom } = boxes(width);
 		const root = canvasFor(figure, width, FREQUENCY_LABEL, [SNAPSHOT_NOTE]);
 		frame(root, top, 'height (studs)');
@@ -137,7 +123,7 @@ function frequencyChart(figure, story, ocean, onLayout) {
 	// Task 15: the chart's box at mount, empty, with its note: the height it will draw at, so its
 	// first drawing (on screen) moves nothing under the reader.
 	function reserve() {
-		canvasFor(figure, widthOf(figure), FREQUENCY_LABEL, [SNAPSHOT_NOTE]);
+		canvasFor(figure, chartWidth(figure), FREQUENCY_LABEL, [SNAPSHOT_NOTE]);
 	}
 	return { draw, reserve, state: () => state };
 }
@@ -150,7 +136,7 @@ function fourierChart(figure, story, onLayout) {
 		const values = story.sliders(step);
 		const notes = ['note1', 'note2', 'note3'].map((id) => values.find((s) => s.id === id).value);
 		const result = chord(notes);
-		const width = widthOf(figure);
+		const width = chartWidth(figure);
 		const { top, bottom } = boxes(width);
 		const root = canvasFor(figure, width, FOURIER_LABEL);
 		frame(root, top, 'sound');
@@ -168,18 +154,9 @@ function fourierChart(figure, story, onLayout) {
 	}
 	// Task 15: the chart's box at mount, empty (see frequencyChart's reserve).
 	function reserve() {
-		canvasFor(figure, widthOf(figure), FOURIER_LABEL);
+		canvasFor(figure, chartWidth(figure), FOURIER_LABEL);
 	}
 	return { draw, reserve, state: () => state };
-}
-
-// Runs a chart's drawing, logging a throw so one chart's fault never stops the other.
-function safely(name, work) {
-	try {
-		work();
-	} catch (error) {
-		console.error(`[ocean] the ${name} chart failed`, error);
-	}
 }
 
 export function mountFrequencyCharts({ story, ocean, onLayout = () => {} }) {
@@ -188,9 +165,9 @@ export function mountFrequencyCharts({ story, ocean, onLayout = () => {} }) {
 	const fourierFigure = document.querySelector('figure.chart[data-chart="fourier"]');
 	if (frequencyFigure) charts.frequency = { figure: frequencyFigure, chart: frequencyChart(frequencyFigure, story, ocean, onLayout), step: stepOf('frequency') };
 	if (fourierFigure) charts.fourier = { figure: fourierFigure, chart: fourierChart(fourierFigure, story, onLayout), step: stepOf('fourier') };
-	for (const { chart } of Object.values(charts)) safely('reserve', () => chart.reserve());
+	for (const { chart } of Object.values(charts)) safely('the reserve chart failed', () => chart.reserve());
 	const drawn = new Set();
-	const draw = (name) => safely(name, () => {
+	const draw = (name) => safely(`the ${name} chart failed`, () => {
 		charts[name].chart.draw();
 		drawn.add(name);
 	});

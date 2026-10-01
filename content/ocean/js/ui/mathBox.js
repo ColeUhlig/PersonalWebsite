@@ -19,6 +19,7 @@ import { FRESH_SECONDS, entryFor, readCollapsed, readableTex, writeCollapsed } f
 import { mathFor } from '../page/mathSteps.js';
 import { NARROW_QUERY } from '../page/scrollMap.js';
 import { stepOf } from '../stages/steps.js';
+import { element } from './dom.js';
 
 const TITLE = 'The math so far';
 const CHANGED_LABEL = 'What changed: ';
@@ -27,13 +28,6 @@ const YIELD_TO = '.step-finale .block, footer.site';
 const YIELD_MARGIN = '0px 0px -50% 0px';
 // The bar's one line: inline style keeps fractions short enough for its height.
 const BAR_OPTIONS = Object.freeze({ ...KATEX_OPTIONS, displayMode: false });
-
-function element(tag, props = {}, children = []) {
-	const node = document.createElement(tag);
-	Object.assign(node, props);
-	node.append(...children);
-	return node;
-}
 
 function safeStorage() {
 	try {
