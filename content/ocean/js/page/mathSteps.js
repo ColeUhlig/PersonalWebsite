@@ -119,7 +119,7 @@ export const MATH_STEPS = Object.freeze({
 		'Rings of points around the camera, each twice as coarse as the one inside it, snapped to a fixed grid.',
 	),
 	painted: entry(
-		String.raw`\text{ripple map bytes} = \htmlClass{fresh}{\tfrac{1}{2}(n_x,\ n_z,\ n_y) + \tfrac{1}{2}}`,
+		String.raw`\text{ripple rgb} = \htmlClass{fresh}{\tfrac{1}{2}(n_x,\ n_z,\ n_y) + \tfrac{1}{2}}`,
 		'Workers paint the colour, the glow mask and the ripples into images, and Roblox wraps them onto the mesh.',
 	),
 	foam: entry(
