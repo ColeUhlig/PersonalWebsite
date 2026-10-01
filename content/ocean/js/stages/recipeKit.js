@@ -21,6 +21,12 @@ export const PHASE_ARROWS = Object.freeze([false, 'still', 'turning']);
 // The recipe fields the engine reads (EngineSettings without `normals` and `warm`).
 export const ENGINE_FIELDS = Object.freeze(['source', 'sine', 'bank', 'chop', 'sea', 'seed', 'layers', 'maps', 'foam', 'foamKnobs', 'glow', 'glowStrength']);
 
+// View depths (studs) over which the surface's wireframe fades out (render/stageLook.js; A3 fix
+// round 1): past a few hundred studs a grid's lines crowd into grey moire bands that read as swells
+// on a flat white plane. Tuned so the 8-stud ring's grid stays readable from piece C's first-step
+// camera. A recipe may widen it (Task 14: the mesh step, whose camera stands higher and further back).
+export const WIRE_FADE = Object.freeze([120, 360]);
+
 export const BASE = deepFreeze({
 	engine: Object.fromEntries(ENGINE_FIELDS.map((name) => [name, DEFAULT_SETTINGS[name]])),
 	look: {
@@ -28,6 +34,7 @@ export const BASE = deepFreeze({
 		shading: true,
 		wireframe: false,
 		fog: FOG_DENSITY,
+		wireFade: [...WIRE_FADE],
 		sun: { azimuth: PLACE_SUN.azimuth, elevation: PLACE_SUN.elevation },
 		terms: { diffuse: true, specular: true, fresnel: true },
 		graph: { ...GRAPH_OFF },

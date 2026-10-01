@@ -34,6 +34,29 @@ test("each step's look reaches the meshes: white under its grid, the terms mater
 	}
 });
 
+// Task 14: the mesh step teaches its rings on a calm white sea (under a stud high), its wireframe
+// drawn out to the recipe's wider fade; another wireframe step keeps A3's fade.
+test('the mesh step: a calm white sea under the wire, and the wire drawn out to its own fade', async ({ page }) => {
+	test.setTimeout(180_000);
+	const recipes = async () => page.evaluate(async () => {
+		const { recipeFor } = await import('/ocean/js/stages/recipes.js');
+		const { stepOf } = await import('/ocean/js/stages/steps.js');
+		return { mesh: recipeFor(stepOf('mesh')).look.wireFade, sine: recipeFor(stepOf('sine')).look.wireFade };
+	});
+	let errors = await load(page, 'step=mesh&freeze=12', 60);
+	const fades = await recipes();
+	const look = await page.evaluate(() => window.__ocean.stage.look());
+	expect(look.mode).toBe('white');
+	expect(look.wireframe).toBe(true);
+	expect(look.wireFade).toEqual(fades.mesh);
+	expect((await page.evaluate(() => window.__ocean.stage.surface())).maxAbsY).toBeLessThan(1);
+	expect(errors).toEqual([]);
+	errors = await load(page, 'step=sine&freeze=12', 10);
+	expect((await page.evaluate(() => window.__ocean.stage.look())).wireFade).toEqual(fades.sine);
+	expect(fades.sine).not.toEqual(fades.mesh);
+	expect(errors).toEqual([]);
+});
+
 test("the camera stands where the blended recipe's shot says", async ({ page }) => {
 	await load(page, 'step=gerstner&progress=0.5&freeze=12', 5);
 	const position = await page.evaluate(() => window.__ocean.camera.position.toArray());

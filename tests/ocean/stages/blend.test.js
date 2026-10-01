@@ -124,8 +124,8 @@ test('C2 fields: spread, graph opacity and scale lerp; the band lerps on a log s
 	const { BASE } = await import('../../../content/ocean/js/stages/recipeKit.js');
 	const { FLAT_BAND, NO_CLIP } = await import('../../../content/ocean/js/stages/graph.js');
 	const recipe = (step, look, engine = {}, charts = {}) => ({ ...BASE, step, id: `r${step}`, title: 't', look: { ...BASE.look, ...look }, engine: { ...BASE.engine, ...engine }, charts: { ...BASE.charts, ...charts } });
-	const a = recipe(1, { graph: { opacity: 1, yScale: 4, near: FLAT_BAND, far: FLAT_BAND, components: true }, overlay: { kind: null, spacing: 2 }, terms: { diffuse: true, specular: false, fresnel: false } }, { bank: { count: 3, fan: 0 } }, { phaseArrows: 'still', notes: [true, false, true] });
-	const b = recipe(2, { graph: { opacity: 0, yScale: 1, near: NO_CLIP, far: NO_CLIP, components: false }, overlay: { kind: 'slopes', spacing: 8 }, terms: { diffuse: true, specular: true, fresnel: true } }, { bank: { count: 7, fan: 1 } }, { phaseArrows: 'turning', notes: null });
+	const a = recipe(1, { wireFade: [120, 360], graph: { opacity: 1, yScale: 4, near: FLAT_BAND, far: FLAT_BAND, components: true }, overlay: { kind: null, spacing: 2 }, terms: { diffuse: true, specular: false, fresnel: false } }, { bank: { count: 3, fan: 0 } }, { phaseArrows: 'still', notes: [true, false, true] });
+	const b = recipe(2, { wireFade: [420, 1080], graph: { opacity: 0, yScale: 1, near: NO_CLIP, far: NO_CLIP, components: false }, overlay: { kind: 'slopes', spacing: 8 }, terms: { diffuse: true, specular: true, fresnel: true } }, { bank: { count: 7, fan: 1 } }, { phaseArrows: 'turning', notes: null });
 	const quarter = blendRecipes(a, b, 0.25);
 	expect.near(quarter.engine.bank.fan, 0.25, 1e-12, 'fan lerps');
 	expect.near(quarter.look.graph.opacity, 0.75, 1e-12, 'opacity lerps');
@@ -134,6 +134,7 @@ test('C2 fields: spread, graph opacity and scale lerp; the band lerps on a log s
 	expect.near(quarter.look.graph.far, FLAT_BAND * (NO_CLIP / FLAT_BAND) ** 0.25, 1e-9, 'far is geometric');
 	expect.equal(quarter.look.graph.components, true, 'components snap: first half');
 	expect.near(quarter.look.overlay.spacing, 3.5, 1e-12, 'spacing lerps');
+	expect.equal(quarter.look.wireFade.join(','), '195,540', 'the wire fade lerps (Task 14)');
 	expect.equal(quarter.look.overlay.kind, null, 'kind snaps');
 	expect.equal(JSON.stringify(quarter.look.terms), JSON.stringify(a.look.terms), 'terms snap');
 	expect.equal(quarter.charts.phaseArrows, 'still', 'phase arrows snap');

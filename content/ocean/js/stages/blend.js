@@ -12,7 +12,7 @@
 //   * C2: the spread (`bank.fan`), the graph's opacity and height scale lerp; its band (near, far) lerps
 //     on a log scale, so the sea fills in mostly in the second half of a blend; the overlay's spacing
 //     lerps; the overlay kind, the graph's components, the lighting terms, the phase-arrow motion and
-//     step 15's tones snap with the rest.
+//     step 15's tones snap with the rest; the wireframe's fade depths lerp (Task 14).
 import { mod } from '../core/luau.js';
 import { deepFreeze } from './paths.js';
 
@@ -88,6 +88,7 @@ export function blendRecipes(a, b, progress) {
 			shading: near.look.shading,
 			wireframe: near.look.wireframe,
 			fog: logLerp(a.look.fog, b.look.fog, p),
+			wireFade: [lerp(a.look.wireFade[0], b.look.wireFade[0], p), lerp(a.look.wireFade[1], b.look.wireFade[1], p)],
 			sun: { azimuth: angleLerp(a.look.sun.azimuth, b.look.sun.azimuth, p), elevation: lerp(a.look.sun.elevation, b.look.sun.elevation, p) },
 			terms: near.look.terms,
 			graph: {

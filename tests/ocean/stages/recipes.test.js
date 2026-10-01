@@ -10,6 +10,7 @@ import { getPath } from '../../../content/ocean/js/stages/paths.js';
 import * as Recipes from '../../../content/ocean/js/stages/recipes.js';
 import { KINDS, clampSlider } from '../../../content/ocean/js/stages/sliders.js';
 import { STEP_IDS, stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { presets } from '../../../content/ocean/js/core/tier.js';
 
 const R = Recipes.RECIPES;
 const at = (id) => R[stepOf(id) - 1];
@@ -38,6 +39,7 @@ test("every recipe's engine part is settings the engine accepts, and every look 
 		expect.truthy(Recipes.OVERLAYS.includes(look.overlay.kind), `${recipe.id} overlay`);
 		expect.truthy(look.overlay.spacing > 0, `${recipe.id} spacing`);
 		expect.truthy(look.fog > 0, `${recipe.id} fog`);
+		expect.truthy(Array.isArray(look.wireFade) && look.wireFade.length === 2 && look.wireFade[0] > 0 && look.wireFade[1] > look.wireFade[0], `${recipe.id} wire fade`);
 		expect.truthy(['diffuse', 'specular', 'fresnel'].every((t) => typeof look.terms[t] === 'boolean'), `${recipe.id} terms`);
 		const g = look.graph;
 		expect.truthy(g.opacity >= 0 && g.opacity <= 1 && g.yScale >= 1 && g.near > 0 && g.far > 0 && typeof g.components === 'boolean', `${recipe.id} graph`);
@@ -178,6 +180,32 @@ test('the tiling step flies up and looks steeply down under the A2 fog; the lit 
 		for (const slider of recipe.sliders.filter((s) => s.bind.startsWith('look.sun.'))) {
 			expect.equal(slider.default, getPath(recipe, slider.bind), `${recipe.id} ${slider.id} starts at the recipe's sun`);
 		}
+	}
+});
+
+// Task 14: the mesh step teaches its rings, nested squares each twice as coarse as the one inside
+// (2, 4, 8 and 16 studs on High; 4 and 8 on Medium). The wireframe fades out with view depth, so
+// from its shot the wire must still be fully drawn out to the far edge of High's 8-stud ring (where
+// the 16-stud ring starts), and the camera looks steeply down so the rings read as squares, not as
+// a strip near the horizon. Every other step keeps A3's fade.
+test('the mesh step looks steeply down at its rings with the wire drawn out to the 16-stud ring', async () => {
+	const { WIRE_FADE } = await import('../../../content/ocean/js/stages/recipeKit.js');
+	const mesh = at('mesh');
+	const { position, target } = mesh.shot;
+	const view = target.map((t, i) => t - position[i]);
+	const length = Math.hypot(...view);
+	const forward = view.map((v) => v / length);
+	expect.truthy(forward[1] < -Math.sin(Math.PI / 4), `looks down at least 45 degrees (direction y ${forward[1].toFixed(2)})`);
+	const level = Math.hypot(forward[0], forward[2]);
+	const ahead = [forward[0] / level, 0, forward[2] / level];
+	const eightRing = presets.High.rings.find((ring) => ring.spacing === 8);
+	// The 8-stud ring's far edge straight ahead of the target, one snap further to be safe.
+	const reach = eightRing.halfExtent + 2 * eightRing.spacing;
+	const farEdge = target.map((t, i) => t + ahead[i] * reach);
+	const depth = farEdge.reduce((sum, v, i) => sum + (v - position[i]) * forward[i], 0);
+	expect.truthy(mesh.look.wireFade[0] >= depth, `the fade starts at ${mesh.look.wireFade[0]} studs, past the 8-stud ring's far edge at ${depth.toFixed(0)}`);
+	for (const recipe of R.filter((r) => r.id !== 'mesh')) {
+		expect.equal(recipe.look.wireFade.join(','), WIRE_FADE.join(','), `${recipe.id} keeps A3's fade`);
 	}
 });
 

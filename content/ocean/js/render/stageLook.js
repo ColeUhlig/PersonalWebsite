@@ -8,7 +8,8 @@
 // their textures and glow for when they come back. The wireframe is one extra mesh per patch,
 // sharing the patch's geometry as its child (so it moves and hides with it), built the first time
 // it is asked for and hidden, not removed, when it is switched off; it fades out with view depth
-// (WIRE_FADE) so the far grid does not crowd into moire. The horizon quads get the
+// (the recipe's look.wireFade, stages/recipeKit.js WIRE_FADE for most steps) so the far grid does
+// not crowd into moire. The horizon quads get the
 // material but no wireframe: two triangles 2,048 studs wide would draw one huge diagonal.
 // C2: the `terms` material (lane D's render/termsMaterial.js, a shader that switches each lighting
 // term on alone and follows the stage sun) and `setClip`, which clips every surface material to the
@@ -20,17 +21,13 @@
 // graph steps wear white; the painted and terms materials are never in a band except for the one
 // frame of a fling, and keep their skirts.
 import * as THREE from 'three';
+import { WIRE_FADE } from '../stages/recipeKit.js';
 import { sunDirection } from '../stages/sun.js';
 import { createTermsMaterial } from './termsMaterial.js';
 
 const WHITE = Object.freeze([0.95, 0.95, 0.94]);
 const WIRE = Object.freeze([0.11, 0.17, 0.21]);
 const WIRE_OPACITY = 0.55;
-// View depths (studs) over which the wireframe fades out (fix round 1). Past a few hundred studs the
-// grid's lines crowd into grey moire bands that read as swells on a flat white plane; the fade keeps
-// the 8-stud ring's grid readable (its far edge sat about 300 studs from
-// piece C's first-step camera, where this was tuned).
-const WIRE_FADE = Object.freeze([120, 360]);
 // The lit sea's roughness: shiny enough for the sun's highlight and the sky's Fresnel to read on
 // the Gerstner waves (piece C's lit steps; no C2 recipe wears it).
 const SEA_ROUGHNESS = 0.3;
@@ -86,10 +83,12 @@ export function createStageLook({ view, meshes, materials, config, surface = nul
 	const wireMaterial = new THREE.MeshBasicMaterial({ color: srgb(WIRE), wireframe: true, transparent: true, opacity: WIRE_OPACITY, toneMapped: false });
 	// The skirt cut's uniforms, shared by the white material and the wireframe.
 	const skirt = { skirtY: { value: -1e6 }, skirtHide: { value: 0 } };
+	// The wireframe's fade depths, set from each frame's look.
+	const wireFade = { value: new THREE.Vector2(WIRE_FADE[0], WIRE_FADE[1]) };
 	shared.white.onBeforeCompile = (shader) => cutSkirts(shader, skirt);
 	wireMaterial.onBeforeCompile = (shader) => {
 		cutSkirts(shader, skirt);
-		shader.uniforms.wireFade = { value: new THREE.Vector2(WIRE_FADE[0], WIRE_FADE[1]) };
+		shader.uniforms.wireFade = wireFade;
 		shader.vertexShader = shader.vertexShader
 			.replace('#include <common>', '#include <common>\nvarying float vWireDepth;')
 			.replace('#include <project_vertex>', '#include <project_vertex>\n\tvWireDepth = -mvPosition.z;');
@@ -160,6 +159,7 @@ export function createStageLook({ view, meshes, materials, config, surface = nul
 			shared.terms.setTerms(look.terms);
 		}
 		setWireframe(look.wireframe);
+		wireFade.value.set(look.wireFade[0], look.wireFade[1]);
 		view.setFog(look.fog);
 		const sun = look.sun;
 		if (sun.azimuth !== sunAzimuth || sun.elevation !== sunElevation) {
@@ -201,6 +201,7 @@ export function createStageLook({ view, meshes, materials, config, surface = nul
 			environment: view.environmentState(),
 			clipped: clip !== null,
 			skirtsHidden: skirt.skirtHide.value === 1,
+			wireFade: [wireFade.value.x, wireFade.value.y],
 			terms: mode === 'terms' ? shared.terms.terms() : null,
 			// A ShaderMaterial ignores clipping planes unless its `clipping` flag is on.
 			termsClips: shared.terms.clipping === true && shared.terms.clippingPlanes === clip,
