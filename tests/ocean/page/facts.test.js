@@ -80,6 +80,40 @@ test("the tiling step sums the bank's 4 tallest waves", async () => {
 	expect.equal(recipeFor(stepOf('tiling')).engine.bank.count, 4, 'four waves');
 });
 
+// C2 lane G, step 6: copySources.js quotes this test's name. Measured on the bank as the engine sums
+// it (after every wavevector is snapped to the 256-stud lattice, which turns a heading a little),
+// against the one heading the recipe fans round: +z, the way the teaching sea rolls.
+test("the teaching bank's headings lie within 45° either side of one heading", () => {
+	const bank = WaveBanks.teachingBank();
+	expect.equal(WaveBanks.TEACHING_RECIPE.spread, 45, 'the recipe spread');
+	let widest = 0;
+	for (let wave = 0; wave < bank.count; wave++) {
+		const o = wave * 6;
+		if (bank.packed[o + 2] === 0) continue;
+		widest = Math.max(widest, Math.abs(Math.atan2(bank.packed[o + 4], bank.packed[o + 5])) * (180 / Math.PI));
+	}
+	expect.truthy(widest > 0 && widest <= 45, `widest heading ${widest} degrees from +z`);
+});
+
+// C2 lane G: chapter one's words that no digit carries, so the copy check cannot see them. Step 1
+// says "Two knobs" (height and length) and "four times taller"; step 5 says Spread at zero lines
+// the waves up; step 13 says the tiling step's waves sit at full spread.
+test('the sine step has two knobs, height and length, and the graph draws heights four times taller', () => {
+	const sine = recipeFor(stepOf('sine'));
+	expect.equal(sine.sliders.map((s) => s.id).join(','), 'amplitude,wavelength', 'two knobs');
+	expect.equal(sine.look.graph.yScale, 4, 'four times taller');
+	expect.equal(recipeFor(stepOf('moving-sine')).look.graph.yScale, 4, 'four times taller while it moves');
+	expect.equal(recipeFor(stepOf('sum-of-sines')).look.graph.yScale, 4, 'four times taller in the sum');
+});
+
+test('Spread at zero lays every teaching wave along one heading, and the tiling step is at full spread', () => {
+	const line = WaveBanks.withFan(WaveBanks.teachingBank(), 0);
+	for (let wave = 0; wave < line.count; wave++) expect.near(line.packed[wave * 6 + 4], 0, 1e-12, `wave ${wave} along +z`);
+	expect.equal(recipeFor(stepOf('directions')).sliders[0].id, 'fan', 'the directions step has the Spread slider');
+	expect.equal(recipeFor(stepOf('directions')).sliders[0].min, 0, 'it goes down to zero');
+	expect.equal(recipeFor(stepOf('tiling')).engine.bank.fan, 1, 'full spread on the tiling step');
+});
+
 // The arrows are built the way the page builds them (devStage.js: createPhaseArrows with the sea,
 // seed and tier), and charts.js hands the cascade LOOP_PERIOD, which quantises every omega. So the
 // whole set comes back to where it started after 120 s, and not after any shorter whole fraction.

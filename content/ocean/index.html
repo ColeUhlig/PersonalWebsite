@@ -50,12 +50,12 @@
 			<article class="panel">
 				<p class="chapter">Chapter one · One wave</p>
 				<h2 id="step-1-title">One sine wave</h2>
-				<p>Placeholder: one still sine curve on a dark graph; change its height and length.</p>
+				<p>Let's start with no ocean at all, just a graph. This is a sine wave: a height that rises and falls as you move along. Two knobs describe it: how tall it gets, and how far it is from one crest to the next. I've drawn the heights four times taller than they really are so you can see them.</p>
 				<div class="controls" data-controls="1" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin\!\big(\htmlClass{t-len}{k}\,x - \htmlClass{t-speed}{\omega}\,t\big), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
-					<p class="math-note">A is the height, λ the length from crest to crest, and the wave travels at ω/k.</p>
+					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin(\htmlClass{t-len}{k}\,x), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
+					<p class="math-note">A is the height and λ the length from crest to crest. k turns that length into how quickly the sine cycles as you move along x: once every λ studs.</p>
 				</details>
 			</article>
 		</section>
@@ -63,12 +63,12 @@
 		<section class="step" id="step-2" data-step="2" data-step-id="moving-sine" aria-labelledby="step-2-title">
 			<article class="panel">
 				<h2 id="step-2-title">Make it move</h2>
-				<p>Placeholder: the curve slides along; set its speed.</p>
+				<p>Now let the clock run. At every moment the curve is drawn a little further along, so the whole wave slides sideways without changing shape. The Speed slider sets how fast.</p>
 				<div class="controls" data-controls="2" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin\!\big(\htmlClass{t-len}{k}\,x - \htmlClass{t-speed}{\omega}\,t\big), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
-					<p class="math-note">A is the height, λ the length from crest to crest, and the wave travels at ω/k.</p>
+					<p class="math-note">ω is how quickly the wave cycles in time, so the crests travel at ω/k studs a second. That speed is what the slider sets.</p>
 				</details>
 			</article>
 		</section>
@@ -76,12 +76,12 @@
 		<section class="step" id="step-3" data-step="3" data-step-id="sum-of-sines" aria-labelledby="step-3-title">
 			<article class="panel">
 				<h2 id="step-3-title">Adding waves together</h2>
-				<p>Placeholder: waves laid along one line, each faint, their sum bold.</p>
+				<p>One wave looks like a machine. Add a few with different heights, lengths and speeds and the sum starts to wander like water. These are the tallest waves of the Roblox ocean I started from, laid along one line for now: each one faint, their sum in bold. The slider adds them one at a time, tallest first.</p>
 				<div class="controls" data-controls="3" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(\mathbf{k}_i\cdot\mathbf{x} - \omega_i t + \varphi_i)</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>y = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(k_i x - \omega_i t + \varphi_i)</code></div>
+					<p class="math-note">N waves, each with its own height A, wavenumber k, speed ω and starting phase φ, added up point by point.</p>
 				</details>
 			</article>
 		</section>
@@ -89,12 +89,12 @@
 		<section class="step" id="step-4" data-step="4" data-step-id="into-3d" aria-labelledby="step-4-title">
 			<article class="panel">
 				<h2 id="step-4-title">From a line to a surface</h2>
-				<p>Placeholder: the camera swings round and the curve is the edge of a surface.</p>
+				<p>Here's the trick: that graph was never flat. It's the edge of a surface, seen from the side. Nothing in the sum depends on the other direction, so the curve is just stretched sideways into a sheet. The lines on it are the triangles the surface is built from, and every corner where they meet is a point the code has to move.</p>
 				<div class="controls" data-controls="4" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(x, z, t) = \sum_{i=1}^{N} A_i \sin(k_i x - \omega_i t + \varphi_i)</code></div>
-					<p class="math-note">Placeholder.</p>
+					<p class="math-note">The same sum at every z: the height depends on x and time only.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
@@ -115,12 +115,12 @@
 		<section class="step" id="step-5" data-step="5" data-step-id="directions" aria-labelledby="step-5-title">
 			<article class="panel">
 				<h2 id="step-5-title">Waves going somewhere</h2>
-				<p>Placeholder: each wave gets its own heading; arrows show them.</p>
+				<p>Real waves don't all march the same way. Give each one a heading and they start crossing each other. The arrows show where each wave is going; drag Spread down to zero and they all line up again.</p>
 				<div class="controls" data-controls="5" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_i A_i \sin\big(k_i\,(\htmlClass{t-dir}{\hat{\mathbf{d}}_i}\cdot\mathbf{x}) - \omega_i t + \varphi_i\big)</code></div>
-					<p class="math-note">Placeholder.</p>
+					<p class="math-note">x is now a point on the sea, with two coordinates. d̂ is an arrow of length one along a wave's heading, so d̂·x (a dot product) is how far along that heading the point sits.</p>
 				</details>
 			</article>
 		</section>
@@ -128,12 +128,12 @@
 		<section class="step" id="step-6" data-step="6" data-step-id="many-waves" aria-labelledby="step-6-title">
 			<article class="panel">
 				<h2 id="step-6-title">Lots of waves, lots of directions</h2>
-				<p>One wave looks like a machine. Stack up waves with their own directions, lengths and speeds, and it starts to look like water. The waves come from the Roblox ocean I started from, and the slider adds them tallest first.</p>
+				<p>Add more of them and it stops looking regular, at least from down here. Their headings fan out within 45° either side of one heading, the way waves raised by one wind spread out, and this slider goes much further, still adding them tallest first.</p>
 				<div class="controls" data-controls="6" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(\mathbf{k}_i\cdot\mathbf{x} - \omega_i t + \varphi_i)</code></div>
-					<p class="math-note">N waves, each with its own height, direction, length and starting phase. The last few barely show: they're small, and fitting them to the tile's grid stacked a few on top of each other.</p>
+					<p class="math-note">N waves, each with its own height, direction, length and starting phase; the bold k packs the last step's k and heading into one arrow. The last few add little or nothing: they're small, and fitting them to the tile's grid stacked a few on top of each other.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
@@ -145,7 +145,7 @@
 						<dt>What I did</dt>
 						<dd>Kept the count down, and the page keeps fewer still where the small ones wouldn't show.</dd>
 						<dt>The number</dt>
-						<dd>Measured live above, in your browser. In Roblox the same loop runs in Luau, on the CPU, in the same frame as everything else.</dd>
+						<dd>When the ocean is running, the line above is measured live in your browser. In Roblox the same loop runs in Luau, on the CPU, in the same frame as everything else.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -155,12 +155,12 @@
 			<article class="panel">
 				<p class="chapter">Chapter two · Light</p>
 				<h2 id="step-7-title">Shape isn't enough</h2>
-				<p>Placeholder: the wireframe off, a white blob with no form.</p>
+				<p>Take the wireframe away and the shape vanishes. Every point is the same flat white, so nothing tells a crest from a trough; flip the switch to bring the lines back and compare. Shape isn't what makes water look like water. Light is.</p>
 				<div class="controls" data-controls="7" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>c = c_{\text{white}}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>\text{colour} = c_{\text{white}}</code></div>
+					<p class="math-note">Without light every pixel gets the same colour, whatever the surface is doing.</p>
 				</details>
 			</article>
 		</section>
@@ -168,12 +168,12 @@
 		<section class="step" id="step-8" data-step="8" data-step-id="normals" aria-labelledby="step-8-title">
 			<article class="panel">
 				<h2 id="step-8-title">Which way the surface faces</h2>
-				<p>Placeholder: arrows out of the surface show which way it faces.</p>
+				<p>To light a surface you need to know which way each bit of it faces. That direction is called the normal: the arrows sticking straight out of the surface here. At the centre, two more arrows follow the slope, one along x (the tangent) and one along z (the binormal). The arrow at right angles to both of them is the normal; the math calls that a cross product.</p>
 				<div class="controls" data-controls="8" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\mathbf{n} = \frac{(-\partial_x y,\ 1,\ -\partial_z y)}{\lVert(-\partial_x y,\ 1,\ -\partial_z y)\rVert}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>\mathbf{T} = (1,\ \partial_x y,\ 0), \quad \mathbf{B} = (0,\ \partial_z y,\ 1), \quad \mathbf{n} = \frac{\mathbf{B}\times\mathbf{T}}{\lVert\mathbf{B}\times\mathbf{T}\rVert}</code></div>
+					<p class="math-note">The two ∂ terms are the slopes: how much the height changes per stud along x, and along z. T and B lie in the surface, and their cross product points straight out of it. These arrows come from the engine's own wave sums, not from a picture.</p>
 				</details>
 			</article>
 		</section>
@@ -181,13 +181,13 @@
 		<section class="step" id="step-9" data-step="9" data-step-id="slopes" aria-labelledby="step-9-title">
 			<article class="panel">
 				<h2 id="step-9-title">Getting the slope</h2>
-				<p>Placeholder: two arrows per point, measured from neighbours and taken exactly.</p>
+				<p>So where do the slopes come from? You can measure them: read the height a little way either side of a point and divide the difference by the distance between the two. That's a central difference. Or, since every wave is a sine, work the slope out exactly: a sine's slope is a cosine, and adding waves adds their slopes. Each point here gets two normals, one from the measured slope (orange) and one from the exact slope (teal). Widen the spacing and watch them drift apart.</p>
 				<div class="controls" data-controls="9" data-copy-skip="live"></div>
 				<p class="readout" data-readout="slopes" data-copy-skip="live"></p>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\partial_x y \approx \frac{y(x + \htmlClass{t-h}{h}) - y(x - \htmlClass{t-h}{h})}{2\htmlClass{t-h}{h}}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>\partial_x y \approx \frac{y(x + \htmlClass{t-h}{h}) - y(x - \htmlClass{t-h}{h})}{2\htmlClass{t-h}{h}}, \qquad \partial_x y = \sum_i A_i k_i\,\hat{d}_{i,x}\cos\theta_i</code></div>
+					<p class="math-note">h is the sample spacing, θ each wave's angle inside its sine, and d̂ₓ the x part of its heading. The measured slope needs extra heights at every point; the exact one falls out of the same loop that adds the waves up, which is what the engine does for these waves.</p>
 				</details>
 			</article>
 		</section>
@@ -195,12 +195,12 @@
 		<section class="step" id="step-10" data-step="10" data-step-id="diffuse" aria-labelledby="step-10-title">
 			<article class="panel">
 				<h2 id="step-10-title">Sunlight</h2>
-				<p>Placeholder: the sea lit by the sun alone.</p>
+				<p>Now light. The simplest rule: a point is as bright as it faces the sun. Facing it head on, full brightness; edge on, none; plus a little light from the sky everywhere so the shadows aren't black. Swing the sun round with the slider.</p>
 				<div class="controls" data-controls="10" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>L = \max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}})</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>\text{colour} = c_{\text{sea}}\,\big(a + {\max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}})}\big)</code></div>
+					<p class="math-note">n is the normal, s points at the sun and a is the soft light from the sky. n·s (a dot product) is largest facing the sun and zero edge on; the max keeps faces turned away from the sun from going darker than the sky alone.</p>
 				</details>
 			</article>
 		</section>
@@ -208,22 +208,22 @@
 		<section class="step" id="step-11" data-step="11" data-step-id="highlights" aria-labelledby="step-11-title">
 			<article class="panel">
 				<h2 id="step-11-title">Highlights, Fresnel and the sky</h2>
-				<p>Shape alone reads as grey mush; light makes it water. The sun brightens whatever faces it, and a highlight and a reflection of the sky do the rest.</p>
+				<p>Sunlight alone makes the sea look matte, like painted clay. Water also reflects: a hot highlight where the sun bounces straight at you, and the sky itself, mirrored more and more as you look across the surface instead of down into it. That last part is Fresnel. Switch each one off to see what it was doing.</p>
 				<div class="controls" data-controls="11" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>L = \max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}}), \quad \htmlClass{t-spec}{S} = (\mathbf{n}\cdot\mathbf{h})^{p}, \quad \htmlClass{t-fresnel}{F} = F_0 + (1 - F_0)(1 - \mathbf{n}\cdot\mathbf{v})^5</code></div>
-					<p class="math-note">n is the way the surface faces, s points at the sun and v at your eye. L is the plain sunlight, and F (Schlick's Fresnel term) is why water turns into a mirror when you look across it.</p>
+					<div class="tex" data-copy-skip="math"><code>\text{colour} = {(1 - \htmlClass{t-fresnel}{F})}\,c_{\text{sea}}\big(a + {\max(0,\ \mathbf{n}\cdot\mathbf{s})}\big) + {\htmlClass{t-fresnel}{F}\big(\htmlClass{t-spec}{(\mathbf{n}\cdot\mathbf{h})^{p}} + c_{\text{sky}}\big)}, \quad \htmlClass{t-fresnel}{F} = F_0 + (1 - F_0)(1 - \mathbf{n}\cdot\mathbf{v})^5</code></div>
+					<p class="math-note">s points at the sun and v at your eye; h is halfway between them, so the highlight peaks when the sun reflects straight at you, and the power p sets how tight it is. F (Schlick's Fresnel term) is why water turns into a mirror when you look across it: F₀ is the little it reflects looking straight down, and c_sky is the sky's colour in the reflected direction. The highlight is a reflection too, so F weighs it along with the sky, and the sea's own colour gets what is left.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
-						<dd>Placeholder.</dd>
+						<dd>You write this lighting yourself, in a pixel shader, one term at a time.</dd>
 						<dt>In Roblox</dt>
-						<dd>Placeholder.</dd>
+						<dd>No pixel shaders, and Roblox says custom shaders aren't on its roadmap. It lights every surface with its own material model; a game hands it a few images to wrap the surface in (its colour, the fine bumps, how rough and how metallic it is, and where it glows), and Roblox does the rest.</dd>
 						<dt>What I did</dt>
-						<dd>Placeholder.</dd>
+						<dd>Let Roblox do the highlight and the sky reflection, and painted roughness maps so foam looks dull and open water shines. In my Studio captures, Roblox's sky reflection got brighter toward the horizon, the way Fresnel says it should.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -233,7 +233,7 @@
 			<article class="panel">
 				<p class="chapter">Chapter three · Better waves</p>
 				<h2 id="step-12-title">Sharper peaks</h2>
-				<p>Real waves have sharp tops and wide troughs, because the water moves in circles. Slide each point toward the nearest crest as well as up (a Gerstner wave) and the tops pinch into points; push too far and they fold over themselves.</p>
+				<p>Real waves have sharp tops and wide troughs, because the water moves in circles. Slide each point toward the nearest crest as well as up and the tops pinch into points; push too far and they fold over themselves. That's a Gerstner wave, and it's what this page's teaching waves have been all along, with the slide set to zero until now. The original Roblox prototype's waves were Gerstner waves too.</p>
 				<div class="controls" data-controls="12" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
@@ -246,12 +246,12 @@
 		<section class="step" id="step-13" data-step="13" data-step-id="tiling" aria-labelledby="step-13-title">
 			<article class="panel">
 				<h2 id="step-13-title">The tiling problem</h2>
-				<p>Fly up and the trick falls apart. The page keeps only the 4 tallest (the small ones would blur at this distance), and like every wave on this page they fit a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here.</p>
+				<p>Fly up and the trick falls apart. The page keeps only the 4 tallest (the small ones would blur at this distance). I nudged every one of the Roblox ocean's waves (though not the lone sine from the start) so that with the spread full, as it is here, they fit a 256-stud tile exactly: each one fits a whole number of crests across it, both ways. So the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here.</p>
 				<div class="controls" data-controls="13" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_x) = y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_z) = y(\mathbf{x}) \quad\text{when every}\quad {\mathbf{k}_i = \frac{2\pi}{\htmlClass{t-tile}{L}}\,(m_i,\ n_i)}</code></div>
-					<p class="math-note">Waves whose wavevectors sit on that grid all line up again after L studs. Here L is the 256-stud tile.</p>
+					<p class="math-note">e_x and e_z are steps of one stud along x and along z. Waves whose wavevectors sit on that grid all line up again after L studs. Here L is the 256-stud tile.</p>
 				</details>
 			</article>
 		</section>
