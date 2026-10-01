@@ -100,6 +100,10 @@ equations, real numbers and real Roblox code, and nothing overstated.
 
 ## 3. The story, step by step
 
+> **Superseded on 2026-09-30 by section 10, "C2: the extended story".** The 13-step table below is
+> what A3 and piece C built; C2 replaces it with 27 steps in six chapters plus the finale. It is kept
+> as the record of what was built first.
+
 Each step switches parts of the engine on (its "recipe", section 4.3). "Card" is the "Roblox says no" card.
 Numbers are from the Roblox project and are re-checked against the repo when the copy is written.
 
@@ -277,5 +281,167 @@ Each piece gets its own implementation plan when it is reached.
    riskiest piece and catches a twin that disagrees with the Luau before the page is built on it.
 4. **A3 Teaching stages:** the engine side of all 13 steps.
 5. **C The page:** story, panels, sliders, equations, cards, opening, finale.
+5b. **C2 The extended story** (section 10): 27 steps in six chapters plus the finale, the always-on
+   math box, the flat graph that becomes the surface. Built on piece C's page; C's walk and final
+   review wait for it.
 6. **A4 Unleashed.**
 7. **D Roblox side:** M4 merge, film mode, recordings; the public place when Cole says go.
+
+## 10. C2: the extended story (2026-09-30)
+
+**Status:** approved by Cole on 2026-09-30 (evening), after viewing piece C's page on localhost. This
+section supersedes section 3's 13-step table (kept above, marked superseded) and the parts of section 2
+it contradicts (the opening's "first scroll cuts to the flat white plane", the collapsed-only math).
+Everything else in sections 1, 2, 4 to 8 still holds, the honesty rules above all.
+
+### 10.1 Why
+
+Cole, viewing the built page: "it's pretty good. There's just some things that I just don't like. First
+of all, the math is hidden. i want a box in the top right with the math the whole time. I think it just
+goes too fast and glosses over too many things. i would start instead of with a mesh already with just a
+2d sine wave, then a sum of sines in 2d. then we add that to a 3d surface, then we make it go in all
+directions, etc. more like the acerola video. we gotta take it slower and explain more. i dont think we
+even talk about normal vectors or how we created our textures and sampled from them. we glazed over a
+bunch of shit."
+
+### 10.2 Decisions (Cole's answers, 2026-09-30)
+
+- **The restructure:** 27 steps in six chapters plus the finale (28 sections), paced like Acerola's two
+  videos ("How Games Fake Water", then "I Tried Simulating The Entire Ocean"), and an always-on math box.
+  Cole: "Yes, write it up".
+- **The flat opening becomes the surface:** "Side view that becomes 3D". The ocean canvas starts as a
+  flat graph, a side-on view of one curve; in step 4 the camera swings round and the curve turns out to
+  be the edge of a surface. One continuous camera move, no cut.
+- **The opening:** "Keep the hero, then go dark". The page still opens on the finished rough sea with
+  the title as the hook; the first scroll goes into the dark graph, where the build starts from nothing.
+- **The math on a phone:** "Pinned bar, tap to expand". A slim bar under the ocean half always shows the
+  current equation in small type; a tap opens the full box with its term colours.
+- Decided while planning (Claude, from the above and the honesty rules): the finale stays its own step
+  (step 28), so the story is 27 teaching steps plus the finale; steps are named by id (`sine`,
+  `into-3d`, ... `finale`) and their numbers follow from their order; the chapter labels are words
+  ("Chapter one"), so a label never needs a sourced number; no title or copy uses a digit where a word
+  will do ("From a line to a surface", not "Into 3D"), for the same reason.
+
+### 10.3 The math box
+
+- **Desktop (900 px and wider):** a glass card fixed at the top right, under the site link, visible from
+  step 1 to the end (hidden over the opening, which keeps the hero clean). It shows "the equation so far"
+  for the step being read, typeset by KaTeX with the same term colours as the sliders (raw TeX source
+  until KaTeX arrives, and for good if it never does). On entering a step, the terms that step adds glow
+  for about a second (a static tint under reduced motion), and one plain sentence under the equation
+  says what changed. A Hide/Show button collapses it to its title bar for small laptops; the choice is a
+  per-viewer convenience kept in localStorage inside try/catch, so a browser that refuses storage just
+  forgets it.
+- **Phone (under 900 px):** a slim bar pinned at the top of the lower half, directly under the ocean,
+  showing the current equation in small type on one line. A tap (or Enter or Space) opens the full box
+  as a sheet over the lower half, with the same equation, term colours and "what changed" line; a close
+  button or Escape puts it back and returns focus to the bar. The bar's height is added to the lower
+  half's top padding and the scroll padding, so it never covers a panel's first line.
+- The per-panel "The math" details stay, for longer derivations and notes; the box carries the short,
+  cumulative form. KaTeX now loads when the story first reaches step 1 (the box needs it at once), not
+  only when a details line is opened.
+- The box's sentences follow the copy rules: first person or plain, casual, and no number that is not
+  sourced (in practice, the box's sentences carry no digits at all; numbers live in the equations,
+  which are maths).
+
+### 10.4 The flat graph that becomes the surface (steps 1 to 4, and 14 and 15)
+
+- Drawn in the main three.js canvas by a graph stage, not as a separate picture: a dark backdrop that
+  covers the sky and the world, axes in studs, and the curve, computed every frame from the engine's own
+  wave source (`WaveSampler` over the same sine or teaching bank the surface is written from) along the
+  plane the camera faces. Heights on the graph are drawn four times taller than they are, and the
+  height axis says so; by the end of step 4 the curve is drawn at true scale, on the surface's edge.
+- In step 3 each summed wave is also drawn alone as a faint curve under the bold sum.
+- The camera stands side-on: it looks along +x at the plane x = 0, and the waves travel along +z, so
+  the curve slides left to right. It stands a hair above the target, just inside the orbit limit's
+  tilt, so applying the shot never tilts it.
+- The surface is clipped to a band around the graph's plane (the stage look clips every surface
+  material). While the graph shows, the band is a stud wide and the sea is hidden behind the curve; in
+  step 4 the band grows behind the curve as the camera swings up and round, so a sheet unrolls from the
+  curve; into step 5 it grows towards the camera too until the clip is gone. The band grows on a log
+  scale, so the water fills in mostly once the camera is high, and the lens never meets the water
+  (the clearance check counts a camera on the dry side of the band as clear).
+- The teaching bank's headings get a "spread" (`bank.fan`, 0 to 1): at 0 every wave lies along +z with
+  its wavevector rounded to the 256-stud lattice (so the flat graph and its frequency spikes are exact),
+  at 1 the bank is exactly A3's. The spread lerps between neighbouring steps, so in the step 4 to 5
+  blend the waves fan out from one heading to their own, and step 5's slider lets the visitor do it.
+- While the graph shows (its backdrop half or more opaque) the visitor's orbit and the phone's tilt are
+  held, so nobody drags the camera off the graph into the clipped emptiness.
+- Steps 14 and 15 go back to the dark graph ("back to two dimensions") with the bank laid along one
+  axis again, beside the frequency-domain charts.
+
+### 10.5 The opening: the hero, then dark
+
+The opening is the finished rough sea under the deck camera with the title and "Scroll to build it from
+nothing", exactly as piece C built it. The first step is the dark graph: crossing from the opening into
+step 1 cuts the camera to the graph shot, and the graph's backdrop fades in over about a third of a
+second (no fade under reduced motion). Scrolling back up to the opening fades it out again onto the
+finished sea.
+
+### 10.6 Light, split into its terms (steps 7 to 11)
+
+A stage-look material for the teaching steps whose terms switch on one at a time, each matching a term
+in the math box: an unlit white blob (step 7); the sea colour times sky ambient plus Lambert
+`max(0, n·s)` (step 10); plus a Blinn-Phong highlight `(n·h)^p`; plus Schlick's Fresnel `F` mixing in a
+sky colour from the reflected direction, `c = (1 − F) c_lit + F c_sky` (step 11, with a switch for each of the last two). The surface's
+vertex normals are the ones the engine writes from the waves' exact slopes. The painted Roblox-mode
+materials are untouched: the page without `?step`, before the first scroll, is identical to A2.
+
+### 10.7 The steps
+
+"Card" is the "Roblox says no" card. Every number in a card or panel is sourced in the copy check or
+live; a card whose claim has no sourced number has no "The number" row. "Math" is what the math box
+shows, cumulative: each step's equation keeps what the lesson builds on.
+
+| # | id | Step | Visitor sees and controls | Math (box) | Card |
+|---|---|---|---|---|---|
+| | | **Opening** | The finished rough sea, the title, "Scroll to build it from nothing" (as built) | (box hidden) | — |
+| 1 | `sine` | One sine wave | **Chapter one: One wave.** The dark graph: one still sine curve, axes in studs, heights drawn four times taller; markers for the height A and the length λ. Height and Length sliders | `y = A sin(kx)`, `k = 2π/λ` | none |
+| 2 | `moving-sine` | Make it move | The curve slides along. Speed slider | `y = A sin(kx − ωt)` | none |
+| 3 | `sum-of-sines` | Adding waves together | The teaching bank's tallest waves, all laid along one axis: each a faint curve, their sum bold. Waves slider (1 to 8) | `y = Σᵢ Aᵢ sin(kᵢx − ωᵢt + φᵢ)` | none |
+| 4 | `into-3d` | From a line to a surface | The camera swings up and round: the curve was the edge of a white wireframe sheet, the same sum stretched along the other axis, unrolling behind it. Wireframe switch | `y(x, z, t) = Σᵢ Aᵢ sin(kᵢx − ωᵢt + φᵢ)`: nothing depends on z | No vertex shaders (piece C's step 2 card: a script writes every point, 18,144 on the top tier; 3.5 ms with native code, 7.7 ms without) |
+| 5 | `directions` | Waves going somewhere | The sheet fills the view and each wave gets its own heading back; an arrow per wave on the surface fans out. Spread slider (0: all one way; 1: the bank's own headings) | `θᵢ = kᵢ(d̂ᵢ·x) − ωᵢt + φᵢ` | none |
+| 6 | `many-waves` | Lots of waves, lots of directions | More of the bank, tallest first, headings spread around the wind (never "all directions": they lie within 45° either side of one heading). Waves slider with the live timing beside it | `y = Σᵢ₌₁ᴺ Aᵢ sin θᵢ` | Every extra wave is another trip of a Luau loop over every point (piece C's step 3 card; "measured live above") |
+| 7 | `unlit` | Shape isn't enough | **Chapter two: Light.** The wireframe off: a white blob with no form. Wireframe switch | `c = white` | none |
+| 8 | `normals` | Which way the surface faces | Arrows out of the surface on a grid round the camera's target, from the engine's exact normals; at one point the tangent and binormal too | `T = (1, ∂ₓy, 0)`, `B = (0, ∂_z y, 1)`, `n = (B × T)/‖B × T‖` | none |
+| 9 | `slopes` | Getting the slope | Two arrows per point: from the central difference (heights sampled h studs either side) and from the exact derivative; the mean angle between them, live. Sample spacing slider (h) | `∂ₓy ≈ [y(x+h) − y(x−h)]/2h` beside `∂ₓy = Σᵢ Aᵢkᵢd̂ᵢₓ cos θᵢ` | none |
+| 10 | `diffuse` | Sunlight | The sea colour lit by the sun alone (Lambert) plus sky ambient. Sun direction slider | `c = c_sea (a + max(0, n·s))` | none |
+| 11 | `highlights` | Highlights, Fresnel and the sky | Add the highlight, then Fresnel with a sky reflection. Highlight and Fresnel-and-sky switches | `c = (1 − F)(c_sea(a + max(0, n·s)) + (n·h)^p) + F c_sky`, `F = F₀ + (1 − F₀)(1 − n·v)⁵` | What Roblox's own lighting does for me: no pixel shaders, so Roblox's material lighting supplies the highlight, Fresnel and sky reflections and the game sets a roughness (sourced claims only; no number row unless one is sourced) |
+| 12 | `gerstner` | Sharper peaks | **Chapter three: Better waves.** Choppiness (piece C's step 5, side-on). Gerstner is what the teaching bank uses, as the original Roblox prototype did; mention Acerola's preference for another wave shape only if sourced and true to our work | `x′ = x + c Σᵢ d̂ᵢ Aᵢ cos θᵢ` | none |
+| 13 | `tiling` | The tiling problem | Fly up; it repeats (piece C's step 6) | `y(x + L e) = y(x)` | none (the rings card moves to step 24) |
+| 14 | `frequency` | Time and frequency | **Chapter four: The real ocean.** Back to the dark graph with the bank laid along one axis; a panel chart shows the same waves as spikes in the frequency domain, from the engine's FFT over one 256-stud tile. Waves slider | `y(x) = Σ Aᵢ sin(kᵢx + φᵢ)` ⟷ a spike of height Aᵢ at each kᵢ | none |
+| 15 | `fourier` | Taking a chord apart | A panel chart: three tones summed into a chord; the FFT finds three spikes; switch a tone off and the inverse FFT rebuilds the chord without it. A switch per tone | `ŷ = 𝓕{y}`, `y = 𝓕⁻¹{ŷ}` | none |
+| 16 | `jonswap` | Real ocean data | Piece C's step 7: wind and fetch, the spectrum chart; the FFT sea, one layer, no chop yet | JONSWAP `S(ω)` | none |
+| 17 | `random-sea` | A random ocean | New sea button; the tallest waves of the 256-stud layer as arrows, held still: random heights and starting angles as complex numbers | `h̃₀(k) = ½(ξᵣ + iξᵢ)√(S(k)ΔkₓΔk_z)` | none |
+| 18 | `time` | Setting it moving | The arrows turn at the speeds the dispersion gives them (piece C's step 8 wording), looping every 120 s; the sea moves | `h̃(k,t) = h̃₀e^{−iωt} + h̃₀*(−k)e^{iωt}`, `ω = √(gk tanh kd)` | none |
+| 19 | `fft` | The FFT | Piece C's step 9: wave-by-wave sum against the FFT, timed live | `O(N⁴) → O(N² log N)` | No GPU compute (piece C's step 9 card) |
+| 20 | `choppiness` | Choppiness | The FFT sea from the side; a second set of transforms gives the sideways push. Choppiness slider | `D(x,t) = Σ i (k/|k|) h̃ e^{ik·x}`, `x′ = x + cD`: the code's sign (`core/cascade.js`), which moves water toward the crests; Tessendorf writes −i | none |
+| 21 | `layers` | Three layers of waves | Piece C's step 10: layer switches; the layers hide the tiling, they do not remove it | `h = Σⱼ hⱼ` | Workers take turns (piece C's step 10 card) |
+| 22 | `fields` | The answer is a grid of numbers | **Chapter five: Textures.** A panel inset: the 256-stud layer's height, slope and sideways fields as images, live from the engine's field store | `hᵢⱼ, ∂ₓhᵢⱼ, Dₓ,ᵢⱼ` on an N × N grid | none |
+| 23 | `sampling` | Reading between the grid points | An inset zoomed on one point among its four grid neighbours with the bilinear weights, sliding across the tile's edge so the wrap shows; the blended value beside the engine's own sampler's | bilinear blend with indices mod N | No vertex shader, so no texture hardware for this: the four-texel blend is Luau arithmetic for every vertex and layer (number only if sourced) |
+| 24 | `mesh` | The mesh | Wireframe over the painted sea: rings round the camera, snapped to the world grid. Wireframe switch | `Δᵣ = 2^r studs`, centre `Δᵣ round(p/Δᵣ)` | Piece C's step 1 and step 6 cards merged: no GPU mesh you can move, no tessellation; EditableMesh rings; 224 patches in 5 rings; points 2, 4, 8, 16 and 32 studs apart |
+| 25 | `painted` | Painted maps | An inset with the live colour, glow-mask and ripple maps from the painters' real output; two worker threads paint them and each frame hand Roblox one band of colour and the mask or the ripple map in turn | the ripple map's bytes: `(nₓ, n_z, n_y)/2 + ½` (checked against `core/normalTexels.js`) | Piece C's step 4 card, plus the "only plugins can swap textures" sentence from its step 11 card |
+| 26 | `foam` | Foam | **Chapter six: The look.** Piece C's step 11 | Jacobian, accumulation and decay | Piece C's step 11 card, less the sentence that moved to step 25 |
+| 27 | `glow` | Glow | Piece C's step 12 | the scatter term | Piece C's step 12 card |
+| 28 | `finale` | The whole thing | Piece C's finale, unchanged: live numbers, footage, proof panel, Play, recap (updated for the cards that moved), believed list, credits | the step-27 equations, nothing new highlighted | recap |
+
+Steps 1 to 15 run the teaching sources (the sine, then the teaching bank through `WaveSampler`); from step
+16 the wave field is the real FFT pipeline, one layer until step 21 brings in all three. Steps 16 to 19 run
+the FFT sea without chop, so step 20 is where the sideways push arrives.
+
+### 10.8 What stays
+
+The engine, the director (read-only for other steps: `slidersFor`/`valueOf`), the blending, the camera
+and shot control, the hold while reading (each step holds its recipe for the first half of its section),
+the flat-sea hold on jumps into FFT steps, the finale's drift and its ease back, the orbit limits, the
+sliders and the URL knobs held to them, the charts, the copy check, the proof panel, the finale, the
+phone gyroscope, reduced motion (cuts, no blending, no drift), the phone layout (ocean in the top half,
+no horizontal scroll) and site-absolute asset paths. The dev route `?step=N` also takes a step id
+(`?step=into-3d`).
+
+### 10.9 Tests that cover it
+
+Every new shot and every blend between neighbours passes the lens clearance check and the world-edge
+check (with the graph's band and backdrop taken into account); every step has a browser check through
+the dev route; the copy check covers every panel and the math box's sentences; the per-step slider
+swatches match terms in both the panel's math and the box's.
