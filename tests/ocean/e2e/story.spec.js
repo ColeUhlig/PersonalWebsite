@@ -69,6 +69,11 @@ test('opening a maths line moves everything below it, and the reading follows', 
 	const topOf = () => page.evaluate((id) => document.querySelector(id).getBoundingClientRect().top + window.scrollY, section('sum-of-sines'));
 	const before = await topOf();
 	await page.locator(`${section('moving-sine')} details.math summary`).click();
+	// Opening a line typesets every line with KaTeX a moment later, which changes their heights again:
+	// wait for it and a frame of layout, so the scroll below is taken on the page as it will stay
+	// (Task 14: scrolled before the typesetting, the step below moved 12 px after the scroll).
+	await page.waitForSelector(`${section('moving-sine')} .tex-rendered`, { timeout: 30_000 });
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 	const after = await topOf();
 	expect(after - before, 'the step below moved down').toBeGreaterThan(20);
 	for (const [id, progress] of [['sum-of-sines', 0.1], ['glow', 0.9]]) {
