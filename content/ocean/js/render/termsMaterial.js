@@ -10,22 +10,28 @@
 // step that only needs to show where the sky enters. It reads the vertex normals the engine writes
 // from the waves' exact slopes (stageControl.js writes them for 'terms'), takes the scene's fog, and
 // clips like every other surface material (clipping: true, so the stage look's setClip reaches
-// it). Only the teaching steps wear it; the painted Roblox-mode materials are never touched. It
+// it), and cuts the skirts while the band is on, with the stage look's own uniforms. Only the teaching steps wear it; the painted Roblox-mode materials are never touched. It
 // demonstrates the terms in the browser only: Roblox scripts cannot write shaders, so the Roblox
 // build gets these terms from the engine's own lighting, not from this.
 import * as THREE from 'three';
 import * as Lighting from './lighting.js';
 import { TERMS } from '../page/lightTerms.js';
 
+// As render/stageLook.js's SKIRT_TOLERANCE: studs above the skirt's depth that still count as skirted.
+const SKIRT_TOLERANCE = 0.01;
 const srgb = (rgb) => new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
 
 const vertexShader = /* glsl */ `
 #include <common>
 #include <fog_pars_vertex>
 #include <clipping_planes_pars_vertex>
+uniform float skirtY;
 varying vec3 vNormalW;
 varying vec3 vWorld;
+varying float vSkirt;
 void main() {
+	// The skirt cut (render/stageLook.js cutSkirts): a vertex at the skirt's depth marks its triangles.
+	vSkirt = position.y <= skirtY + SKIRT_TOLERANCE ? 1.0 : 0.0;
 	vec4 world = modelMatrix * vec4(position, 1.0);
 	vWorld = world.xyz;
 	vNormalW = normalize(mat3(modelMatrix) * normal);
@@ -53,10 +59,13 @@ uniform float shininess;
 uniform float specularStrength;
 uniform float f0;
 uniform vec3 terms;
+uniform float skirtHide;
 varying vec3 vNormalW;
 varying vec3 vWorld;
+varying float vSkirt;
 void main() {
 	#include <clipping_planes_fragment>
+	if (skirtHide > 0.5 && vSkirt > 0.0) discard;
 	vec3 n = normalize(vNormalW);
 	vec3 v = normalize(cameraPosition - vWorld);
 	vec3 s = normalize(sunDirection);
@@ -84,7 +93,9 @@ void main() {
 }
 `;
 
-export function createTermsMaterial({ seaColour, sunDirection }) {
+// `skirt`: the stage look's skirt-cut uniforms ({ skirtY, skirtHide }), shared as the same objects
+// so its one write a frame reaches this material too; without them the skirts are never cut.
+export function createTermsMaterial({ seaColour, sunDirection, skirt = null }) {
 	const uniforms = THREE.UniformsUtils.merge([
 		THREE.UniformsLib.fog,
 		{
@@ -103,7 +114,10 @@ export function createTermsMaterial({ seaColour, sunDirection }) {
 			terms: { value: new THREE.Vector3(1, 1, 1) },
 		},
 	]);
-	const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, fog: true, clipping: true });
+	// After the merge, which clones every uniform: these must stay the stage look's own objects.
+	uniforms.skirtY = skirt?.skirtY ?? { value: -1e6 };
+	uniforms.skirtHide = skirt?.skirtHide ?? { value: 0 };
+	const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, fog: true, clipping: true, defines: { SKIRT_TOLERANCE: SKIRT_TOLERANCE.toFixed(3) } });
 	material.setTerms = ({ diffuse, specular, fresnel }) => {
 		uniforms.terms.value.set(diffuse ? 1 : 0, specular ? 1 : 0, fresnel ? 1 : 0);
 	};

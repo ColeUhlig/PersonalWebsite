@@ -18,8 +18,10 @@
 // ring's edge, out of sight from above, but the band cuts them and they showed as short stubs under
 // the curve, which no flat clip can remove. Those triangles lie inside the finer ring's window (a
 // ring's vertices on that window's edge are never skirted), so nothing visible goes with them. The
-// graph steps wear white; the painted and terms materials are never in a band except for the one
-// frame of a fling, and keep their skirts.
+// graph steps wear white. The terms material is clipped through the first half of the tiling to
+// frequency blend, so it cuts the skirts too (the same uniforms, render/termsMaterial.js). The
+// painted materials are clipped through the second half of the fourier to jonswap blend and keep
+// their skirts: the final review saw no stubs there, under a sea already fading behind the backdrop.
 import * as THREE from 'three';
 import { WIRE_FADE } from '../stages/recipeKit.js';
 import { sunDirection } from '../stages/sun.js';
@@ -73,16 +75,16 @@ function cutSkirts(shader, uniforms) {
 // the skirts are never cut.
 export function createStageLook({ view, meshes, materials, config, surface = null }) {
 	const sea = seaColour(config);
+	// The skirt cut's uniforms, shared by the white material, the wireframe and the terms material.
+	const skirt = { skirtY: { value: -1e6 }, skirtHide: { value: 0 } };
 	const shared = {
 		// Pushed back a little in depth so the wireframe drawn at the same depth sits on top of it.
 		white: new THREE.MeshBasicMaterial({ color: srgb(WHITE), toneMapped: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
 		'sea-lit': new THREE.MeshStandardMaterial({ color: sea, roughness: SEA_ROUGHNESS, metalness: 0 }),
 		'sea-flat': new THREE.MeshBasicMaterial({ color: sea }),
-		terms: createTermsMaterial({ seaColour: sea, sunDirection: view.sunDirection }),
+		terms: createTermsMaterial({ seaColour: sea, sunDirection: view.sunDirection, skirt }),
 	};
 	const wireMaterial = new THREE.MeshBasicMaterial({ color: srgb(WIRE), wireframe: true, transparent: true, opacity: WIRE_OPACITY, toneMapped: false });
-	// The skirt cut's uniforms, shared by the white material and the wireframe.
-	const skirt = { skirtY: { value: -1e6 }, skirtHide: { value: 0 } };
 	// The wireframe's fade depths, set from each frame's look.
 	const wireFade = { value: new THREE.Vector2(WIRE_FADE[0], WIRE_FADE[1]) };
 	shared.white.onBeforeCompile = (shader) => cutSkirts(shader, skirt);
@@ -205,6 +207,7 @@ export function createStageLook({ view, meshes, materials, config, surface = nul
 			terms: mode === 'terms' ? shared.terms.terms() : null,
 			// A ShaderMaterial ignores clipping planes unless its `clipping` flag is on.
 			termsClips: shared.terms.clipping === true && shared.terms.clippingPlanes === clip,
+			termsCutsSkirts: shared.terms.uniforms.skirtHide === skirt.skirtHide && shared.terms.uniforms.skirtY === skirt.skirtY,
 		};
 	}
 

@@ -188,3 +188,11 @@ for (const { width, height } of [{ width: 1366, height: 767 }, { width: 390, hei
 		expect(spread).toBeGreaterThanOrEqual(18);
 	});
 }
+
+// Final review Minor 5: the terms material is clipped by the band through the first half of the
+// tiling-to-frequency blend, so it cuts the skirts as the white material and the wireframe do: it
+// shares their skirt uniforms (the same objects, so one write a frame reaches all three).
+test('the terms material shares the skirt cut with the white material and the wireframe', async ({ page }) => {
+	await load(page, 'step=diffuse&freeze=12', 10);
+	expect((await stage(page, 'look')).termsCutsSkirts).toBe(true);
+});
