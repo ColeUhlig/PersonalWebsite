@@ -40,6 +40,36 @@ test("step 22: the 256-stud layer's height, slope and push as live images, with 
 	expect(engine.rows).toBe(fields.n);
 	expect(engine.line).toContain(`${fields.n} × ${fields.n}`);
 	expect(engine.line).toContain(`${fields.size} studs`);
+	// Units, and the push as the surface moves: the sideways field times the live choppiness.
+	expect(engine.line).toContain('Height and push are in studs; slope has no unit');
+	expect(fields.chop).toBeGreaterThan(0);
+	expect(fields.push.min).toBeCloseTo(fields.dispX.min * fields.chop, 9);
+	expect(fields.push.max).toBeCloseTo(fields.dispX.max * fields.chop, 9);
+	await expect(page.locator('figure[data-inset="fields"] .inset-field[data-field="dispX"] .inset-label')).toContainText('at this choppiness');
+});
+
+test("step 22: a pixel of each image is its field's own value in fieldToRgba's colours", async ({ page }) => {
+	test.setTimeout(180_000);
+	await oceanRunning(page);
+	await scrollToId(page, 'fields', 0.2);
+	await expect.poll(() => page.evaluate(() => window.__insets.fields()?.height.max ?? 0), { timeout: 30_000 }).toBeGreaterThan(0);
+	const checks = await page.evaluate(async () => {
+		const { fieldToRgba } = await import('/ocean/js/page/fieldViews.js');
+		// Read the canvases and the hook in one task, so no drawing falls between them.
+		const state = window.__insets.fields();
+		const { column, row } = state.probe;
+		return ['height', 'slopeX', 'dispX'].map((name) => {
+			const canvas = document.querySelector(`figure[data-inset="fields"] .inset-field[data-field="${name}"] canvas`);
+			const pixel = Array.from(canvas.getContext('2d').getImageData(column, row, 1, 1).data);
+			const { min, max, value } = state[name];
+			const expected = new Uint8ClampedArray(4);
+			fieldToRgba(Float64Array.of(value), expected, Math.max(Math.abs(min), Math.abs(max)));
+			return { name, pixel, expected: Array.from(expected) };
+		});
+	});
+	for (const { name, pixel, expected } of checks) {
+		for (let k = 0; k < 4; k++) expect(Math.abs(pixel[k] - expected[k]), `${name} channel ${k}: ${pixel} vs ${expected}`).toBeLessThanOrEqual(1);
+	}
 });
 
 test("step 23: the blend matches the engine's own sampler, and the point crosses the tile's edge", async ({ page }) => {
@@ -54,6 +84,9 @@ test("step 23: the blend matches the engine's own sampler, and the point crosses
 			expect(Math.abs(s.value - s.engine)).toBeLessThan(1e-6);
 			expect(s.weights.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
 			seen.add(s.x > 128 ? 'end' : 'start');
+			// The dashed seam runs through column 0's sample: the point is past it exactly once x has wrapped to 0.
+			expect(s.edge).not.toBeNull();
+			expect(s.point > s.edge).toBe(s.x < 128);
 		}
 		await page.waitForTimeout(250);
 	}
@@ -74,11 +107,13 @@ test('the insets redraw at most four times a second, and not at all off screen',
 	});
 	expect(rate).toBeGreaterThan(1);
 	expect(rate).toBeLessThanOrEqual(4.5);
+	await scrollToId(page, 'fields', 0.2);
+	await expect.poll(() => page.evaluate(() => window.__insets.fields()?.draws ?? 0), { timeout: 30_000 }).toBeGreaterThan(0);
 	await scrollToId(page, 'sine', 0.3);
 	await page.waitForTimeout(500);
-	const away = await page.evaluate(() => [window.__insets.sampling().draws, window.__insets.fields()?.draws ?? 0]);
+	const away = await page.evaluate(() => [window.__insets.sampling().draws, window.__insets.fields().draws]);
 	await page.waitForTimeout(1500);
-	expect(await page.evaluate(() => [window.__insets.sampling().draws, window.__insets.fields()?.draws ?? 0])).toEqual(away);
+	expect(await page.evaluate(() => [window.__insets.sampling().draws, window.__insets.fields().draws])).toEqual(away);
 });
 
 test.describe('on a phone', () => {

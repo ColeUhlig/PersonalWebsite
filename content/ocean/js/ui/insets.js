@@ -10,13 +10,14 @@
 //     (the bytes Roblox is handed: the colour map sRGB, the normal map raw, R from n.x, G from n.z,
 //     B from n.y as core/normalTexels.js packs it), shrunk to one size, each labelled with its
 //     texture's own size.
-// Each redraws only while on screen, at most four times a second. Every number shown is computed in
-// the visitor's browser, inside the figure's .inset-body (data-copy-skip="live"); the words beside
+// Each redraws only while on screen, at most four times a second, and rewrites its numbers every
+// second drawing (twice a second) so they can be read. Every number shown is computed in the visitor's
+// browser, inside the figure's .inset-body (data-copy-skip="live"); the words beside
 // them carry no digits.
 import * as Cascade from '../core/cascade.js';
 import { mod } from '../core/luau.js';
 import { NORMAL_BLOCK_TEXELS, NORMAL_IMAGE_TEXELS } from '../engine/config.js';
-import { FIELD_VIEWS, ZOOM, bilinear, downsample, fieldToRgba, walkPoint, zoomWindow } from '../page/fieldViews.js';
+import { FIELD_VIEWS, ZOOM, downsample, fieldToRgba, magnitude, walkPoint, zoomLayout } from '../page/fieldViews.js';
 
 const REDRAW_MS = 250;
 const SAMPLING_PX = 240;
@@ -24,6 +25,8 @@ const AMBER = '#f2b25c'; // style.css --term-a
 const INK = '#e8eef2'; // --ink
 const BACKING = 'rgba(8, 18, 28, 0.78)';
 const PAINTED_TEXELS = 128;
+// The texel whose colour the fields hook reports, so a test can tie a pixel to its field.
+const PROBE_TEXEL = Object.freeze([20, 10]);
 const PAINTED = Object.freeze([
 	Object.freeze({ name: 'colour', label: 'Colour' }),
 	Object.freeze({ name: 'mask', label: 'Glow mask' }),
@@ -63,7 +66,9 @@ function fieldsInset(figure, ocean, onLayout) {
 		const canvas = element('canvas', { width: n, height: n });
 		canvas.setAttribute('aria-hidden', 'true');
 		const range = element('span', { className: 'inset-range' });
-		const cell = element('div', { className: 'inset-field' }, [canvas, element('p', { className: 'inset-label', textContent: view.label }), range]);
+		const label = view.name === 'dispX' ? `${view.label}, at this choppiness` : view.label;
+		const cell = element('div', { className: 'inset-field' }, [canvas, element('p', { className: 'inset-label', textContent: label }), range]);
+		cell.dataset.field = view.name;
 		return { view, canvas, context: canvas.getContext('2d'), range, cell };
 	});
 	const line = element('p', { className: 'inset-line' });
@@ -71,26 +76,34 @@ function fieldsInset(figure, ocean, onLayout) {
 	onLayout();
 	let state = null;
 	let draws = 0;
+	function resize(size) {
+		n = size;
+		image = new ImageData(n, n);
+		for (const cell of cells) {
+			cell.canvas.width = n;
+			cell.canvas.height = n;
+		}
+	}
 	function draw() {
 		const fields = ocean.store.display[0];
-		if (fields.n !== n) {
-			n = fields.n;
-			image = new ImageData(n, n);
-			for (const cell of cells) {
-				cell.canvas.width = n;
-				cell.canvas.height = n;
-			}
-		}
-		const next = { n, size: fields.size };
+		if (fields.n !== n) resize(fields.n);
+		// The surface moves sideways by chop x dispX (core/surfaceSampler.js), so the push shown is that.
+		const chop = ocean.live.chop;
+		const writeNumbers = draws % 2 === 0;
+		const probe = (PROBE_TEXEL[1] % n) * n + (PROBE_TEXEL[0] % n);
+		const next = { n, size: fields.size, chop, probe: { column: PROBE_TEXEL[0] % n, row: PROBE_TEXEL[1] % n } };
 		for (const cell of cells) {
-			const { min, max } = fieldToRgba(fields[cell.view.name], image.data);
+			const values = fields[cell.view.name];
+			const { min, max } = fieldToRgba(values, image.data);
 			cell.context.putImageData(image, 0, 0);
-			const text = `${min.toFixed(2)} to ${max.toFixed(2)}`;
-			if (cell.range.textContent !== text) cell.range.textContent = text;
-			next[cell.view.name] = { min, max };
+			const shown = cell.view.name === 'dispX' ? [min * chop, max * chop] : [min, max];
+			if (writeNumbers) cell.range.textContent = `${shown[0].toFixed(2)} to ${shown[1].toFixed(2)}`;
+			next[cell.view.name] = { min, max, value: values[probe] };
 		}
-		const words = `Each image is the engine's ${n} × ${n} grid, one number every ${trim(fields.size / n)} studs across ${trim(fields.size)} studs, blue below zero and amber above.`;
-		if (line.textContent !== words) line.textContent = words;
+		next.push = { min: next.dispX.min * chop, max: next.dispX.max * chop };
+		if (writeNumbers) {
+			line.textContent = `Each image is the engine's ${n} × ${n} grid, one number every ${trim(fields.size / n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and push are in studs; slope has no unit. The push is the sideways field times the choppiness, ${chop.toFixed(2)} here.`;
+		}
 		draws += 1;
 		state = { ...next, draws };
 	}
@@ -126,8 +139,10 @@ function drawGrid(context, side, scale, n, zoom, colours) {
 	context.font = `600 ${10 * scale}px system-ui, sans-serif`;
 	context.textBaseline = 'top';
 	for (let i = 0; i < ZOOM; i++) tag(context, scale, String(mod(zoom.first[0] + i, n)), i * cell + 2 * scale, side - 3 * scale, INK, false, true);
-	const edge = n - zoom.first[0];
-	if (zoom.wraps && edge > 0 && edge < ZOOM) {
+	// The seam: sample k sits at u = k, so x at the tile's size (0 again) is sample 0 itself, drawn at
+	// its cell's centre (fieldViews.js zoomLayout).
+	const edge = zoom.edge;
+	if (edge !== null) {
 		context.setLineDash([6 * scale, 4 * scale]);
 		context.strokeStyle = BACKING;
 		context.lineWidth = 3 * scale;
@@ -142,11 +157,12 @@ function drawGrid(context, side, scale, n, zoom, colours) {
 
 // The four texels the point blends, each weight in its texel's outer corner (away from the point,
 // which always sits inside the square joining their centres), the lines to their centres, and the point.
-function drawBlend(context, side, scale, n, blend, zoom) {
+function drawBlend(context, side, scale, n, zoom) {
 	const cell = side / ZOOM;
+	const blend = zoom.blend;
 	const local = (index) => [mod((index % n) - zoom.first[0], n), mod(Math.floor(index / n) - zoom.first[1], n)];
-	const px = (mod(blend.column - zoom.first[0], n) + blend.fu + 0.5) * cell;
-	const py = (mod(blend.row - zoom.first[1], n) + blend.fv + 0.5) * cell;
+	const px = zoom.point[0] * cell;
+	const py = zoom.point[1] * cell;
 	const pad = 3 * scale;
 	context.lineWidth = 2 * scale;
 	context.font = `600 ${11 * scale}px system-ui, sans-serif`;
@@ -192,16 +208,21 @@ function samplingInset(figure, ocean, onLayout) {
 	function draw() {
 		const fields = ocean.store.display[0];
 		walkPoint(ocean.teachT, fields.size, point);
-		const blend = bilinear(fields, point[0], point[1]);
-		const zoom = zoomWindow(fields, point[0], point[1], heights);
-		fieldToRgba(heights, colours);
+		const zoom = zoomLayout(fields, point[0], point[1], heights);
+		const blend = zoom.blend;
+		// The whole field's colour scale, so a texel keeps the shade it has in step 22's image.
+		fieldToRgba(heights, colours, magnitude(fields.height));
 		drawGrid(context, side, scale, fields.n, zoom, colours);
-		drawBlend(context, side, scale, fields.n, blend, zoom);
+		drawBlend(context, side, scale, fields.n, zoom);
 		const engine = Cascade.sampleHeight(fields, point[0], point[1], engineOut)[0];
-		const text = `At x ${point[0].toFixed(2)}, column ${blend.column} blends with column ${blend.column1}. Blended height ${studs(blend.value)}; the engine's own sampler says ${studs(engine)}.`;
-		if (line.textContent !== text) line.textContent = text;
+		if (draws % 2 === 0) {
+			line.textContent = `At x ${point[0].toFixed(2)}, column ${blend.column} blends with column ${blend.column1}. The ${trim(fields.size)}-stud layer's height there is ${studs(blend.value)}; the engine's own sampler says ${studs(engine)}.`;
+		}
 		draws += 1;
-		state = { x: point[0], z: point[1], value: blend.value, engine, weights: blend.weights, wraps: zoom.wraps, column: blend.column, column1: blend.column1, draws };
+		state = {
+			x: point[0], z: point[1], value: blend.value, engine, weights: blend.weights, wraps: zoom.wraps,
+			column: blend.column, column1: blend.column1, point: zoom.point[0], edge: zoom.edge, draws,
+		};
 	}
 	whileVisible(figure, REDRAW_MS, draw);
 	return { state: () => state };

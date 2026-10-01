@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as Cascade from '../../../content/ocean/js/core/cascade.js';
 import * as FieldStore from '../../../content/ocean/js/core/fieldStore.js';
-import { FIELD_VIEWS, ZOOM, bilinear, downsample, fieldToRgba, walkPoint, zoomWindow } from '../../../content/ocean/js/page/fieldViews.js';
+import { FIELD_VIEWS, ZOOM, bilinear, downsample, fieldToRgba, magnitude, walkPoint, zoomLayout, zoomWindow } from '../../../content/ocean/js/page/fieldViews.js';
 
 // A 64 x 64, 256-stud field with a different, deterministic value in every cell.
 function field() {
@@ -27,7 +27,7 @@ test('a field as an image: zero is the pale middle, the extremes blue and amber,
 	expect.truthy(out[12] > out[14], 'positive is amber');
 	const flat = new Uint8ClampedArray(16);
 	fieldToRgba(new Float32Array(4), flat);
-	expect.truthy(Array.from(flat).every(Number.isFinite), 'a flat field is finite');
+	expect.equal(Array.from(flat).join(','), '232,238,242,255,'.repeat(4).slice(0, -1), 'a flat field is the pale zero everywhere');
 	expect.equal(FIELD_VIEWS.map((v) => v.name).join(','), 'height,slopeX,dispX', 'the three fields');
 });
 
@@ -67,4 +67,38 @@ test('downsample averages blocks, keeping a flat colour flat', () => {
 	const small = new Uint8ClampedArray(4 * 4 * 4);
 	downsample(flat, 8, small, 4);
 	expect.truthy(Array.from(small).every((v) => v === 77), 'flat stays flat');
+});
+
+test("the zoom can share the whole field's colour scale, so a texel keeps its shade as the window moves", () => {
+	const fields = field();
+	const whole = new Uint8ClampedArray(64 * 64 * 4);
+	fieldToRgba(fields.height, whole);
+	const scale = magnitude(fields.height);
+	expect.equal(scale, Math.max(...Array.from(fields.height, Math.abs)), 'the largest magnitude');
+	const heights = new Float64Array(ZOOM * ZOOM);
+	const zoomed = new Uint8ClampedArray(ZOOM * ZOOM * 4);
+	for (const x of [255, 2, 130.5]) {
+		const { first } = zoomWindow(fields, x, 77, heights);
+		fieldToRgba(heights, zoomed, scale);
+		for (const [i, j] of [[0, 0], [3, 2], [5, 5]]) {
+			const texel = ((first[1] + j) % 64) * 64 + ((first[0] + i) % 64);
+			expect.equal(Array.from(zoomed.subarray((j * ZOOM + i) * 4, (j * ZOOM + i) * 4 + 4)).join(','), Array.from(whole.subarray(texel * 4, texel * 4 + 4)).join(','), `x ${x}, texel ${i}, ${j}`);
+		}
+	}
+});
+
+test("the point crosses the dashed tile edge exactly when x wraps from the tile's end to 0", () => {
+	const fields = field();
+	const heights = new Float64Array(ZOOM * ZOOM);
+	for (let x = 250; x <= 262; x += 0.125) {
+		const layout = zoomLayout(fields, x, 94.72, heights);
+		const wrapped = (x % 256) < 128;
+		expect.truthy(layout.edge !== null, `an edge on screen at x ${x}`);
+		if (x === 256) expect.equal(layout.point[0], layout.edge, 'on the line at the seam itself');
+		else expect.equal(layout.point[0] > layout.edge, wrapped, `x ${x}: point ${layout.point[0]}, edge ${layout.edge}`);
+	}
+	// Samples are drawn at cell centres: sample k of the window at k + 0.5, the seam on sample 0.
+	const at = zoomLayout(fields, 255, 94.72, heights);
+	expect.equal(at.edge, 3.5, 'the seam on column 0, the window\'s fourth sample');
+	expect.near(at.point[0], 2.75 + 0.5, 1e-12, 'u 63.75 is three quarters past column 63');
 });

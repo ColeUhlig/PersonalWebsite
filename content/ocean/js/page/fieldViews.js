@@ -1,11 +1,13 @@
 // The texture insets' arithmetic (piece C2; lane F owns this file; spec 10.7 steps 22, 23 and 25;
 // browser-free). The FFT's answer is grids of numbers (core/fieldStore.js display fields, n x n per
 // layer): fieldToRgba draws one as an image, blue below zero, pale at zero, amber above, scaled to its
-// own largest magnitude. bilinear is the blend the engine's sampler does (core/cascade.js corners:
+// own largest magnitude (or a scale given, so a zoom can keep the whole field's). bilinear is the blend the engine's sampler does (core/cascade.js corners:
 // floored modulo, a hair below zero folded back, the right and bottom neighbours wrapping to column
 // and row 0), written out with its corners and weights so the sampling inset can show them; its value
 // equals Cascade.sampleHeight's exactly. The sampling inset zooms on a ZOOM x ZOOM window round a
-// point that walks back and forth across the tile's edge, so the wrap is always on screen. downsample
+// point that walks back and forth across the tile's edge, so the wrap is always on screen; zoomLayout
+// places the point and the seam in that window's cells, samples at cell centres, so the seam (x at the
+// tile's size, which is 0 again) runs through sample 0 itself. downsample
 // shrinks a painted texture for the painted-map inset by averaging blocks.
 import { mod } from '../core/luau.js';
 
@@ -19,15 +21,22 @@ const PALE = [232, 238, 242]; // style.css --ink
 const BLUE = [20, 70, 150];
 const AMBER = [242, 178, 92]; // --term-a
 
-/** values (n x n) into RGBA bytes; returns the field's range. */
-export function fieldToRgba(values, out) {
+/** The largest magnitude in `values`: the colour scale fieldToRgba uses by default. */
+export function magnitude(values) {
+	let largest = 0;
+	for (let i = 0; i < values.length; i++) largest = Math.max(largest, Math.abs(values[i]));
+	return largest;
+}
+
+/** values (n x n) into RGBA bytes, scaled to `scale` (default: their own largest magnitude); returns their range. */
+export function fieldToRgba(values, out, scale = 0) {
 	let min = Infinity;
 	let max = -Infinity;
 	for (let i = 0; i < values.length; i++) {
 		if (values[i] < min) min = values[i];
 		if (values[i] > max) max = values[i];
 	}
-	const scale = Math.max(Math.abs(min), Math.abs(max)) || 1;
+	scale = scale || Math.max(Math.abs(min), Math.abs(max)) || 1;
 	for (let i = 0; i < values.length; i++) {
 		const t = Math.max(-1, Math.min(1, values[i] / scale));
 		const to = t < 0 ? BLUE : AMBER;
@@ -75,6 +84,21 @@ export function zoomWindow(fields, x, z, out) {
 		}
 	}
 	return { first, wraps };
+}
+
+/**
+ * The zoom window round (x, z) (heights into `out`) with the point and the tile's seam placed in the
+ * window's cells: sample k of the window is drawn at k + 0.5, the point at its sample coordinate + 0.5,
+ * and the seam on the window's sample of column 0 (null when the window does not cross it).
+ */
+export function zoomLayout(fields, x, z, out) {
+	const n = fields.n;
+	const blend = bilinear(fields, x, z);
+	const { first, wraps } = zoomWindow(fields, x, z, out);
+	const point = [mod(blend.column - first[0], n) + blend.fu + 0.5, mod(blend.row - first[1], n) + blend.fv + 0.5];
+	const seam = n - first[0];
+	const edge = wraps && seam > 0 && seam < ZOOM ? seam + 0.5 : null;
+	return { blend, first, wraps, point, edge };
 }
 
 /** A point swinging three studs either side of the tile's x edge, about every four seconds. */
