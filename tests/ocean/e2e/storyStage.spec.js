@@ -376,13 +376,15 @@ test("New sea on the random-sea step leaves the time step's arrows on the time s
 	const RANDOM = stepOf('random-sea');
 	const TIME = stepOf('time');
 	expect(await story(page, 'seed', TIME)).toBe(at('time').engine.seed);
+	// Each step's arrows before the press, compared with themselves after it (the two steps' seeds
+	// are the lanes' to tune, so the two seas need not match beforehand).
 	const before = await story(page, 'phaseArrows', 0, TIME);
-	expect(await story(page, 'phaseArrows', 0, RANDOM)).toEqual(before);
+	const randomBefore = await story(page, 'phaseArrows', 0, RANDOM);
 	expect(await story(page, 'press', RANDOM, 'seed')).toBe(at('random-sea').engine.seed + 1);
 	expect(await story(page, 'seed', RANDOM)).toBe(at('random-sea').engine.seed + 1);
 	expect(await story(page, 'seed', TIME)).toBe(at('time').engine.seed);
 	expect(await story(page, 'phaseArrows', 0, TIME)).toEqual(before);
-	expect(await story(page, 'phaseArrows', 0, RANDOM)).not.toEqual(before);
+	expect(await story(page, 'phaseArrows', 0, RANDOM)).not.toEqual(randomBefore);
 	expect(errors).toEqual([]);
 });
 

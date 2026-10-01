@@ -95,7 +95,7 @@ test("URL knobs past a slider's range are clamped into it, with a warning", asyn
 	await oceanRunning(page, '/ocean/?wind=90&chop=50');
 	expect(warnings.some((w) => w.includes('wind=90'))).toBe(true);
 	expect(warnings.some((w) => w.includes('chop=50'))).toBe(true);
-	expect(await page.evaluate(() => window.__ocean.status().windSpeed)).toBeLessThanOrEqual(25);
+	expect(await page.evaluate(() => window.__ocean.status().windSpeed)).toBeLessThanOrEqual(sliderOf('jonswap', 'wind').max);
 });
 
 // The ruling that replaced the static "about 27 ms": the many-waves step times the teaching bank's
@@ -164,12 +164,15 @@ test('the fetch slider moves under the arrow keys at both ends, and reads out it
 	await setRange(page, 'jonswap', 'fetch', toInput(fetch, fetch.default));
 	expect(Math.abs((await metres()) - fetch.default)).toBeLessThanOrEqual(500);
 	await input.focus();
+	// Down into the low end where the snap used to undo each press: five times the shortest fetch
+	// (25 km at A3's 5 km minimum).
+	const low = 5 * fetch.min;
 	let presses = 0;
-	while ((await metres()) >= 25300 && presses < 400) {
+	while ((await metres()) >= low && presses < 400) {
 		await page.keyboard.press('ArrowLeft');
 		presses += 1;
 	}
-	expect(await metres(), `after ${presses} presses`).toBeLessThan(25300);
+	expect(await metres(), `after ${presses} presses`).toBeLessThan(low);
 });
 
 test('the grid-size choice is a radio group: one tab stop, arrows and Home/End move the choice', async ({ page }) => {
@@ -240,9 +243,9 @@ test('a refused change is logged and the control shows the held value again', as
 	expect(result.shown).toBe(formatValue(chop, chop.default));
 });
 
-// The clamp is the story's: the dev route (?step=<id>) takes the URL's knobs as they are. Wind 30 is
-// past the story's wind slider, so the dev route builds a taller sea for it than for 25 (its
-// bounds), and never warns about the slider.
+// The clamp is the story's: the dev route (?step=<id>) takes the URL's knobs as they are. A wind
+// 5 m/s past the story's wind slider builds a taller sea on the dev route than the slider's top
+// (its bounds), and never warns about the slider.
 test('the dev route is not clamped to the sliders', async ({ page }) => {
 	const lines = [];
 	page.on('console', (message) => lines.push(message.text()));
@@ -252,8 +255,9 @@ test('the dev route is not clamped to the sliders', async ({ page }) => {
 		await page.waitForFunction(() => (window.__ocean?.status().frame ?? 0) > 5, null, { timeout: 90_000 });
 		return { bounds: lines.find((line) => line.includes(' bounds='))?.match(/bounds=(\S+)/)?.[1], warned: lines.some((line) => line.includes("slider's")) };
 	};
-	const thirty = await boundsFor('/ocean/?step=jonswap&wind=30');
-	const top = await boundsFor('/ocean/?step=jonswap&wind=25');
+	const { max } = sliderOf('jonswap', 'wind');
+	const thirty = await boundsFor(`/ocean/?step=jonswap&wind=${max + 5}`);
+	const top = await boundsFor(`/ocean/?step=jonswap&wind=${max}`);
 	expect(thirty.warned).toBe(false);
 	expect(thirty.bounds).toBeTruthy();
 	expect(thirty.bounds).not.toBe(top.bounds);

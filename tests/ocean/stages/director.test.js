@@ -8,6 +8,7 @@ import * as Ocean from '../../../content/ocean/js/engine/ocean.js';
 import { probeSurface } from '../../../content/ocean/js/engine/surfaceProbe.js';
 import { createDirector } from '../../../content/ocean/js/stages/director.js';
 import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { sliderValue } from '../../../content/ocean/js/stages/sliders.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 
 // Steps by id (piece C2, Task 0).
@@ -19,6 +20,7 @@ const FOURIER = stepOf('fourier');
 const JONSWAP = stepOf('jonswap');
 const RANDOM = stepOf('random-sea');
 const LAYERS = stepOf('layers');
+const TILING = stepOf('tiling');
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const SUN = [-0.9526530504226685, 0.2821884751319885, 0.11323313415050507];
@@ -136,7 +138,7 @@ test('frame() returns the look, the shot and the charts of the blended recipe', 
 	const { director } = build();
 	director.setStep(GERSTNER, 0.5);
 	const out = director.frame();
-	const halfway = recipeFor(GERSTNER).shot.position.map((v, i) => (v + recipeFor(GERSTNER + 1).shot.position[i]) / 2);
+	const halfway = recipeFor(GERSTNER).shot.position.map((v, i) => (v + recipeFor(TILING).shot.position[i]) / 2);
 	out.shot.position.forEach((v, i) => expect.near(v, halfway[i], 1e-9, `halfway between the crest shot and the tiling look-down [${i}]`));
 	expect.equal(out.look.material, 'terms', 'the terms look');
 	expect.equal(out.recipe.from, GERSTNER, 'from');
@@ -219,7 +221,7 @@ test('slidersFor and valueOf read any step without moving the story', () => {
 	director.setSlider('amplitude', 3);
 	director.setStep(RANDOM);
 	expect.equal(director.valueOf(SINE, 'amplitude'), 3, 'a stored value');
-	expect.equal(director.valueOf(SINE, 'wavelength'), 40, 'a default');
+	expect.equal(director.valueOf(SINE, 'wavelength'), sliderValue(recipeFor(SINE), 'wavelength'), "a default, the recipe's own");
 	const two = director.slidersFor(SINE);
 	expect.equal(two.map((s) => s.id).join(','), 'amplitude,wavelength', 'the sine step sliders');
 	expect.equal(two[0].value, 3, 'with values');

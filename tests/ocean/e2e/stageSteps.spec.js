@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { grid, load, lowerHalfMotion, mean, meanDiff, stage, waitFrames, watchErrors } from './helpers/stage.js';
 
 // One browser check per story step (A3, renamed to step ids in piece C2 Task 0), through the dev
@@ -34,6 +36,14 @@ test.afterEach(() => {
 });
 
 const status = (page) => page.evaluate(() => window.__ocean.status());
+// A step's recipe and slider as the recipes declare them: lanes tune these values, so the checks
+// read them rather than copy them (C2 Task 14, from Task 0's fix round 1 review).
+const recipeOf = (id) => recipeFor(stepOf(id));
+const sliderOf = (stepId, id) => recipeOf(stepId).sliders.find((s) => s.id === id);
+// A calm and a strong wind, 14% and 86% of the way along the jonswap step's wind slider.
+const WIND = sliderOf('jonswap', 'wind');
+const CALM_WIND = Math.round(WIND.min + 0.14 * (WIND.max - WIND.min));
+const STRONG_WIND = Math.round(WIND.min + 0.86 * (WIND.max - WIND.min));
 
 for (const tier of TIERS) {
 	const q = (query) => `${query}${tier.query}`;
@@ -183,7 +193,13 @@ for (const tier of TIERS) {
 			expect((await stage(page, 'surface')).maxLateral).toBe(0);
 			const flat = await grid(page, true);
 			const slider = (await stage(page, 'sliders')).find((s) => s.id === 'chop');
-			expect([slider.min, slider.max, slider.default]).toEqual([0, 2, 1.3]);
+			// The page's slider is the recipe's, starting from a flat sea, with travel on both sides of
+			// its default.
+			const declared = sliderOf('gerstner', 'chop');
+			expect([slider.min, slider.max, slider.default]).toEqual([declared.min, declared.max, declared.default]);
+			expect(slider.min).toBe(0);
+			expect(slider.default).toBeGreaterThan(slider.min);
+			expect(slider.max).toBeGreaterThan(slider.default);
 			await stage(page, 'setSlider', 'chop', slider.default);
 			await waitFrames(page, 3);
 			const lateral = (await stage(page, 'surface')).maxLateral;
@@ -214,18 +230,18 @@ for (const tier of TIERS) {
 			});
 			expect(Math.hypot(...position.map((value, i) => value - recipe.shot.position[i]))).toBeLessThan(1);
 			expect((await stage(page, 'look')).fog).toBeCloseTo(recipe.look.fog, 12);
-			expect(position[1]).toBeGreaterThan(200);
+			expect(position[1]).toBeGreaterThan(recipeOf('gerstner').shot.position[1]);
 			expect(direction[1]).toBeLessThan(-0.9);
 		});
 
 		test('jonswap: the FFT with one layer; a stronger wind raises the sea; the spectrum chart has data', async ({ page }) => {
 			test.setTimeout(240_000);
-			await load(page, q('step=jonswap&freeze=12&s.wind=6'), 40);
+			await load(page, q(`step=jonswap&freeze=12&s.wind=${CALM_WIND}`), 40);
 			const state = await status(page);
 			expect(state.source).toBe('fft');
 			expect(state.layers).toEqual(layers(true, false, false));
 			const calm = (await stage(page, 'surface')).maxAbsY;
-			await stage(page, 'setSlider', 'wind', 22);
+			await stage(page, 'setSlider', 'wind', STRONG_WIND);
 			await waitFrames(page, 60);
 			expect((await stage(page, 'surface')).maxAbsY).toBeGreaterThan(calm * 1.5);
 			const spectrum = await stage(page, 'spectrum');
@@ -237,7 +253,7 @@ for (const tier of TIERS) {
 			test.setTimeout(180_000);
 			await load(page, q('step=random-sea&freeze=12'), 40);
 			const before = (await stage(page, 'surface')).sumY;
-			expect(await stage(page, 'press', 'seed')).toBe(8);
+			expect(await stage(page, 'press', 'seed')).toBe(sliderOf('random-sea', 'seed').default + 1);
 			await waitFrames(page, 30);
 			expect(Math.abs((await stage(page, 'surface')).sumY - before)).toBeGreaterThan(1e-3);
 			const arrows = await stage(page, 'phaseArrows');
@@ -247,7 +263,7 @@ for (const tier of TIERS) {
 
 		test('fft: the naive sum and the FFT are timed live and agree', async ({ page }) => {
 			await load(page, q('step=fft&freeze=12'), 10);
-			expect((await stage(page, 'recipe')).charts.transformN).toBe(32);
+			expect((await stage(page, 'recipe')).charts.transformN).toBe(recipeOf('fft').charts.transformN);
 			const result = await stage(page, 'transforms', 16);
 			expect(result.naiveMs).toBeGreaterThan(0);
 			expect(result.fftMs).toBeGreaterThan(0);
