@@ -17,20 +17,30 @@ export function mountOverlayReadout({ handle, watchReading }) {
 		return Object.freeze({ hooks: Object.freeze({ text: () => text }) });
 	}
 
+	// A throw is logged once and stops the updates for good (final review Minor 9): uncaught, it would
+	// repeat twice a second while step 9 is read.
+	let stopped = false;
 	function update() {
-		const probe = handle.story.hooks.overlays();
-		const next = probe.kind === 'slopes' ? readoutText(probe) : text;
-		if (next !== text) {
-			text = next;
-			element.textContent = text;
+		try {
+			const probe = handle.story.hooks.overlays();
+			const next = probe.kind === 'slopes' ? readoutText(probe) : text;
+			if (next !== text) {
+				text = next;
+				element.textContent = text;
+			}
+		} catch (error) {
+			stopped = true;
+			clearInterval(timer);
+			timer = 0;
+			console.error('[ocean] the slope readout stopped', error);
 		}
 	}
 
 	watchReading((reading) => {
 		const here = reading.phase === 'step' && reading.step === step;
-		if (here && timer === 0) {
-			update();
+		if (here && timer === 0 && !stopped) {
 			timer = setInterval(update, UPDATE_MS);
+			update();
 		} else if (!here && timer !== 0) {
 			clearInterval(timer);
 			timer = 0;

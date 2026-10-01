@@ -45,14 +45,26 @@ const studs = (value) => `${value.toFixed(2)} studs`;
 const RESERVED_RANGE = '-00.00 to 00.00';
 const trim = (value) => String(Number(value.toFixed(2)));
 
-// Runs `draw` every `ms` while `figure` is on screen.
-function whileVisible(figure, ms, draw) {
+// Runs `draw` every `ms` while `figure` is on screen. A throw is logged once, as `name`'s, and stops
+// the redraws for good (final review Minor 9): uncaught, it would repeat on every tick.
+function whileVisible(figure, ms, draw, name) {
 	let timer = 0;
+	let stopped = false;
+	const guarded = () => {
+		try {
+			draw();
+		} catch (error) {
+			stopped = true;
+			clearInterval(timer);
+			timer = 0;
+			console.error(`[ocean] the ${name} inset stopped`, error);
+		}
+	};
 	new IntersectionObserver((entries) => {
 		const visible = entries.some((entry) => entry.isIntersecting);
-		if (visible && timer === 0) {
-			draw();
-			timer = setInterval(draw, ms);
+		if (visible && timer === 0 && !stopped) {
+			timer = setInterval(guarded, ms);
+			guarded();
 		} else if (!visible && timer !== 0) {
 			clearInterval(timer);
 			timer = 0;
@@ -116,7 +128,7 @@ function fieldsInset(figure, ocean, onLayout) {
 		draws += 1;
 		state = { ...next, draws };
 	}
-	whileVisible(figure, REDRAW_MS, draw);
+	whileVisible(figure, REDRAW_MS, draw, 'fields');
 	return { state: () => state };
 }
 
@@ -237,7 +249,7 @@ function samplingInset(figure, ocean, onLayout) {
 			column: blend.column, column1: blend.column1, point: zoom.point[0], edge: zoom.edge, draws,
 		};
 	}
-	whileVisible(figure, REDRAW_MS, draw);
+	whileVisible(figure, REDRAW_MS, draw, 'sampling');
 	return { state: () => state };
 }
 
@@ -299,7 +311,7 @@ function paintedInset(figure, materials, config, onLayout) {
 		for (const cell of cells) drawPaintedCell(cell, materials.textures[cell.map.name], image);
 		draws += 1;
 	}
-	whileVisible(figure, REDRAW_MS, draw);
+	whileVisible(figure, REDRAW_MS, draw, 'painted');
 	const each = (read) => Object.fromEntries(cells.map((c) => [c.map.name, read(c)]));
 	return {
 		state: () => (draws > 0 ? {
