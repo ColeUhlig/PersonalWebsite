@@ -428,3 +428,17 @@ for (const { width, height } of [{ width: 1366, height: 767 }, { width: 1024, he
 		});
 	});
 }
+
+// Final review Minor 8: Safari 15 and Firefox before 112 have no CanvasRenderingContext2D.roundRect.
+// The graph's words still draw there (on a square plate): no error, and the words are on the canvas.
+test('the graph words draw on a browser without roundRect', async ({ page }) => {
+	await page.addInitScript(() => {
+		delete CanvasRenderingContext2D.prototype.roundRect;
+	});
+	await load(page, 'step=sine&freeze=12', 30);
+	await waitFrames(page, 5);
+	expect(await page.evaluate(() => typeof CanvasRenderingContext2D.prototype.roundRect)).toBe('undefined');
+	const { labelRects } = await stage(page, 'graph');
+	expect(labelRects.length).toBeGreaterThan(3);
+	expect(await page.evaluate(() => window.__ocean.frameFailures())).toBe(0);
+});

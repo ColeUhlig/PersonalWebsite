@@ -100,7 +100,9 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 			context.globalAlpha = PLATE_ALPHA;
 			context.fillStyle = HALO;
 			context.beginPath();
-			context.roundRect(0, 0, canvas.width, canvas.height, PLATE_RADIUS_PX * SCALE);
+			// Safari 15 and Firefox before 112 have no roundRect: a square plate there.
+			if (context.roundRect) context.roundRect(0, 0, canvas.width, canvas.height, PLATE_RADIUS_PX * SCALE);
+			else context.rect(0, 0, canvas.width, canvas.height);
 			context.fill();
 			context.globalAlpha = 1;
 			context.font = `${FONT_PX * SCALE}px system-ui, sans-serif`;
