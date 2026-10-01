@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { load, stage, watchErrors, waitFrames } from './helpers/stage.js';
 import { oceanRunning, scrollToId } from './helpers/story.js';
-import { COLOURS, GRID, PALETTE_HEX } from '../../../content/ocean/js/page/overlayModel.js';
+import { COLOURS, GRID, NORMAL_ARROWS, PALETTE_HEX } from '../../../content/ocean/js/page/overlayModel.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { DIRECTIONS_WAVES } from '../../../content/ocean/js/stages/recipeKit.js';
 
@@ -43,7 +43,7 @@ test('step 8: a grid of normals and the tangent and binormal, drawn on the white
 	await load(page, 'step=normals&freeze=12', 10);
 	const overlays = await stage(page, 'overlays');
 	expect(overlays.kind).toBe('normals');
-	expect(overlays.arrows).toBe(GRID * GRID + 2);
+	expect(overlays.arrows).toBe(NORMAL_ARROWS);
 	expect(overlays.finite).toBe(true);
 	expect(await colouredPixels(page)).toBeGreaterThan(400);
 });
@@ -114,6 +114,7 @@ test('the arrow colours are uploaded once per kind, and follow a change of kind'
 	await load(page, 'step=slopes&freeze=12', 10);
 	const slopes = await stage(page, 'overlays');
 	expect(slopes.colours).toEqual([PALETTE_HEX[COLOURS.NORMAL], PALETTE_HEX[COLOURS.DIFFERENCE]]);
+	expect(slopes.headColours).toEqual(slopes.colours);
 	await waitFrames(page, 10);
 	const still = await stage(page, 'overlays');
 	expect(still.colourUploads).toBe(slopes.colourUploads);
@@ -123,7 +124,27 @@ test('the arrow colours are uploaded once per kind, and follow a change of kind'
 	const normals = await stage(page, 'overlays');
 	expect(normals.kind).toBe('normals');
 	expect(normals.colours).toEqual([PALETTE_HEX[COLOURS.NORMAL], PALETTE_HEX[COLOURS.NORMAL]]);
+	expect(normals.headColours).toEqual(normals.colours);
 	expect(normals.colourUploads).toBeGreaterThan(still.colourUploads);
 	await waitFrames(page, 10);
 	expect((await stage(page, 'overlays')).colourUploads).toBe(normals.colourUploads);
+});
+
+// Fix round 3: the grid sits a fixed world offset from the focus, so orbiting round the focus moves
+// the camera and never the arrows.
+test('a drag on step 8 turns the camera and leaves every arrow where it stood', async ({ page }) => {
+	test.setTimeout(180_000);
+	await oceanRunning(page);
+	await scrollToId(page, 'normals', 0.3);
+	await page.waitForFunction(() => window.__ocean.story.overlays().kind === 'normals', null, { timeout: 30_000 });
+	await waitFrames(page, 90);
+	const before = await page.evaluate(() => ({ pose: window.__ocean.story.pose(), first: window.__ocean.story.overlays().first }));
+	await page.mouse.move(900, 450);
+	await page.mouse.down();
+	await page.mouse.move(1220, 450, { steps: 16 });
+	await page.mouse.up();
+	await waitFrames(page, 10);
+	const after = await page.evaluate(() => ({ pose: window.__ocean.story.pose(), first: window.__ocean.story.overlays().first }));
+	expect(JSON.stringify(after.pose)).not.toBe(JSON.stringify(before.pose));
+	expect([after.first[0], after.first[2]]).toEqual([before.first[0], before.first[2]]);
 });
