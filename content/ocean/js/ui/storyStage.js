@@ -23,6 +23,11 @@
 // the opening, a reduced-motion step change) would show flat water for those frames. The stage holds
 // the last picture instead (main.js skips the render while holdsPicture() says so) until a layer is
 // sampled, for HOLD_MAX_FRAMES at most.
+// On a touch-first phone the visitor may tilt the phone to swing the camera a little round the
+// shot (Task 9b: ui/tilt.js hands a follower to useTilt, page/tiltLook.js does the maths). The
+// offset is applied to the pose the shot asks for, the opening's included, and the tilt range is
+// worked out from the shot itself, so the offset camera is then held inside it: the floor, the tilt
+// range and the reach hold whatever the phone does. With no offset nothing extra runs.
 import * as Charts from '../engine/charts.js';
 import * as Ocean from '../engine/ocean.js';
 import { probeSurface } from '../engine/surfaceProbe.js';
@@ -33,6 +38,7 @@ import { SHOTS } from '../render/cameraRig.js';
 import { movingReach, polarRange } from '../page/orbitLimits.js';
 import { holdThenBlend, positionOf, smoothPosition, splitPosition } from '../page/scrollMap.js';
 import { createShotControl, resolveShot } from '../page/shotControl.js';
+import { applyOffset, clampPolar, isZeroOffset } from '../page/tiltLook.js';
 
 const TRAIL_LENGTH = 64;
 const MAX_FRAME_SECONDS = 0.25;
@@ -98,6 +104,15 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	let cameraFrames = 0;
 	let cameraTrail = [];
 	const stillShot = { position: null, target: null, move: 'still' };
+	// The phone's tilt (useTilt): its follower, the play clock it last read, the tilted pose
+	// (rewritten each frame it is used), whether the opening was last placed tilted, and, when the
+	// camera was last placed tilted, the pose it was tilted from.
+	let tiltSource = null;
+	let tiltClock = null;
+	const tiltedPose = { position: [0, 0, 0], target: [0, 0, 0] };
+	let tiltedOpening = false;
+	const untiltedPose = { position: [0, 0, 0], target: [0, 0, 0] };
+	let placedTilted = false;
 	const applyOptions = { cut: false, ease: true };
 
 	// The visitor moved the camera: what was last placed is no longer where it stands, so the next
@@ -202,6 +217,29 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 	}
 
+	// The phone's tilt for this frame at step `key` (0 for the opening), or null when there is none:
+	// the follower runs every frame so it sees each step change, on the play clock's seconds.
+	function tiltOffset(key) {
+		if (tiltSource === null) {
+			return null;
+		}
+		const now = Ocean.teachTime(ocean);
+		const seconds = tiltClock === null ? 0 : Math.min(Math.max(now - tiltClock, 0), MAX_FRAME_SECONDS);
+		tiltClock = now;
+		const offset = tiltSource.frame(key, seconds);
+		return isZeroOffset(offset) ? null : offset;
+	}
+
+	// Before the first scroll the camera is A2's opening shot; a tilt swings it round that shot, and
+	// once the tilt is back to nothing the shot itself is put back.
+	function tiltOpening() {
+		const offset = tiltOffset(0);
+		if (offset !== null || tiltedOpening) {
+			place(openingShot, offset);
+			tiltedOpening = offset !== null;
+		}
+	}
+
 	function applyCamera(out, seconds, now) {
 		let shot = out.shot;
 		if (key === 0) {
@@ -215,26 +253,45 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		const target = resolveShot(shot, shotSeconds(shot, now), resolved);
 		applyOptions.cut = cutPending;
 		applyOptions.ease = seconds > 0;
-		// Only a return reads where the camera is (a shot or a cut ignores it).
-		const current = shots.mode() === 'shot' ? null : rig.pose();
+		// Only a return reads where the camera is (a shot or a cut ignores it). A tilted camera returns
+		// from the pose it was tilted from, since the tilt goes on top of whatever the return gives.
+		const current = shots.mode() === 'shot' ? null : currentPose();
 		const pose = shots.frame(key, current, target, seconds, applyOptions);
 		cutPending = false;
+		const offset = tiltOffset(key);
 		if (pose) {
-			place(pose);
+			place(pose, offset);
 		}
 	}
 
-	// Puts the camera at `pose`, and works out its tilt range, only when either changed.
-	function place(pose) {
-		if (samePose(placed, pose) && tiltAspect === view.camera.aspect) {
+	// Where the camera stands for a return, without the phone's tilt (a copy: the return keeps it).
+	function currentPose() {
+		if (placed !== null && placedTilted) {
+			return { position: [...untiltedPose.position], target: [...untiltedPose.target] };
+		}
+		return rig.pose();
+	}
+
+	// Puts the camera at `pose` turned by the phone's tilt `offset` (null for none), and works out
+	// its tilt range, only when either changed. The range is the shot's own (worked out before the
+	// offset), and the tilted camera is held inside it.
+	function place(pose, offset) {
+		const stale = tiltAspect !== view.camera.aspect || !samePose(tiltPose, pose);
+		if (stale) {
+			limitTilt(pose);
+		}
+		const final = offset === null ? pose : clampPolar(applyOffset(pose, offset, tiltedPose), tilt.min, tilt.max, tiltedPose);
+		if (!stale && samePose(placed, final)) {
 			return;
 		}
-		limitTilt(pose);
-		rig.applyShot({ position: pose.position, target: pose.target, move: 'still' }, 0);
+		rig.applyShot({ position: final.position, target: final.target, move: 'still' }, 0);
 		for (let i = 0; i < 3; i++) {
-			placedPose.position[i] = pose.position[i];
-			placedPose.target[i] = pose.target[i];
+			placedPose.position[i] = final.position[i];
+			placedPose.target[i] = final.target[i];
+			untiltedPose.position[i] = pose.position[i];
+			untiltedPose.target[i] = pose.target[i];
 		}
+		placedTilted = offset !== null;
 		placed = placedPose;
 		applied += 1;
 	}
@@ -246,6 +303,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			limitTilt(tiltPose);
 		}
 		if (!started) {
+			if (tiltSource !== null) {
+				tiltOpening();
+			}
 			return;
 		}
 		const now = Ocean.teachTime(ocean);
@@ -362,5 +422,11 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		cameraTrail: () => [...cameraTrail],
 	});
 
-	return Object.freeze({ setScroll, beforeStep, afterStep, holdsPicture: () => holding, sliders, setSlider, press, charts, hooks });
+	// ui/tilt.js hands over the phone's tilt once it is on: { frame(key, seconds) -> { yaw, pitch } }.
+	const useTilt = (source) => {
+		tiltSource = source;
+		tiltClock = null;
+	};
+
+	return Object.freeze({ setScroll, beforeStep, afterStep, holdsPicture: () => holding, sliders, setSlider, press, charts, hooks, useTilt });
 }

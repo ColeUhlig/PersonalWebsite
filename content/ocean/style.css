@@ -119,6 +119,28 @@ header.site a {
 	cursor: pointer;
 }
 
+/* Task 9b: asks for motion access on a phone that needs a tap for it (iOS), so tilting the phone can
+   swing the camera. Stacked above the motion button (about 40 px tall, plus a gap), over the ocean. */
+.tilt {
+	position: fixed;
+	right: var(--gutter);
+	bottom: calc(var(--gutter) + 48px);
+	z-index: 3;
+	padding: 8px 14px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: var(--glass);
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.tilt:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
 .noscript {
 	position: relative;
 	z-index: 1;
@@ -727,6 +749,13 @@ footer.site a {
 		bottom: auto;
 		top: calc(50vh - 48px);
 		top: calc(50svh - 48px);
+	}
+
+	/* Above the motion button, still over the ocean's half. */
+	.tilt {
+		bottom: auto;
+		top: calc(50vh - 96px);
+		top: calc(50svh - 96px);
 	}
 }
 

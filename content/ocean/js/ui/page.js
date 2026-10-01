@@ -11,6 +11,7 @@ import { startMath } from './math.js';
 import { mountCharts } from './charts.js';
 import { mountFootage, mountLiveNumbers, mountMotionButton, mountPlayButton, mountRenderToggle, showLiveStarting, showLiveUnavailable } from './finale.js';
 import { mountProofPanelWhenNear } from './proofLazy.js';
+import { mountTilt } from './tilt.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -90,6 +91,16 @@ export function startPage({ route, reducedMotion, clock }) {
 		},
 		oceanUnavailable() {
 			showLiveUnavailable(document.getElementById('live'));
+		},
+	});
+	// Task 9b: on a touch-first phone, tilting it swings the camera a little round the current shot
+	// (ui/tilt.js), once the ocean runs in story mode. Where the browser needs a tap for motion access
+	// (iOS) a button over the ocean asks. window.__tilt: a test hook (tilt.spec.js).
+	features.push({
+		attachOcean(handle) {
+			if (handle.story) {
+				window.__tilt = mountTilt({ button: document.getElementById('tilt'), story: handle.story });
+			}
 		},
 	});
 	// Features end.
