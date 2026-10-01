@@ -57,3 +57,8 @@
 	font-size: 0.85rem;
 	color: var(--ink-dim);
 }
+
+/* The painted maps are photographs of textures: smooth them as a texture sampler would. */
+.inset[data-inset="painted"] canvas {
+	image-rendering: auto;
+}

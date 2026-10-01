@@ -6,19 +6,29 @@
 //   sampling (step 23): a zoom on one point among its grid neighbours, the four it blends outlined
 //     with their weights, the tile's edge dashed where the window wraps across it, and the blended
 //     height beside the engine's own sampler's (page/fieldViews.js bilinear and Cascade.sampleHeight);
-//   painted (step 25, Task 11): the painters' colour, glow-mask and ripple maps.
+//   painted (step 25): the painters' colour, glow-mask and ripple maps as the materials hold them
+//     (the bytes Roblox is handed: the colour map sRGB, the normal map raw, R from n.x, G from n.z,
+//     B from n.y as core/normalTexels.js packs it), shrunk to one size, each labelled with its
+//     texture's own size.
 // Each redraws only while on screen, at most four times a second. Every number shown is computed in
 // the visitor's browser, inside the figure's .inset-body (data-copy-skip="live"); the words beside
 // them carry no digits.
 import * as Cascade from '../core/cascade.js';
 import { mod } from '../core/luau.js';
-import { FIELD_VIEWS, ZOOM, bilinear, fieldToRgba, walkPoint, zoomWindow } from '../page/fieldViews.js';
+import { NORMAL_BLOCK_TEXELS, NORMAL_IMAGE_TEXELS } from '../engine/config.js';
+import { FIELD_VIEWS, ZOOM, bilinear, downsample, fieldToRgba, walkPoint, zoomWindow } from '../page/fieldViews.js';
 
 const REDRAW_MS = 250;
 const SAMPLING_PX = 240;
 const AMBER = '#f2b25c'; // style.css --term-a
 const INK = '#e8eef2'; // --ink
 const BACKING = 'rgba(8, 18, 28, 0.78)';
+const PAINTED_TEXELS = 128;
+const PAINTED = Object.freeze([
+	Object.freeze({ name: 'colour', label: 'Colour' }),
+	Object.freeze({ name: 'mask', label: 'Glow mask' }),
+	Object.freeze({ name: 'normal', label: 'Ripples (the normal map)' }),
+]);
 
 function element(tag, props = {}, children = []) {
 	const node = document.createElement(tag);
@@ -197,6 +207,67 @@ function samplingInset(figure, ocean, onLayout) {
 	return { state: () => state };
 }
 
+// One painted map's cell: shrunk into `image` and drawn when its texture has taken a new upload
+// since the last drawing; its size line follows the texture's own size.
+function drawPaintedCell(cell, texture, image) {
+	const { width, height } = texture.image;
+	if (cell.width !== width || cell.height !== height) {
+		cell.width = width;
+		cell.height = height;
+		cell.range.textContent = `${width} × ${height} texels`;
+	}
+	if (texture.version === cell.version) return;
+	const data = texture.image.data;
+	if (width === PAINTED_TEXELS) {
+		image.data.set(data);
+	} else {
+		downsample(data, width, image.data, PAINTED_TEXELS);
+	}
+	cell.context.putImageData(image, 0, 0);
+	cell.version = texture.version;
+	const seen = new Set();
+	for (let i = 0; i < image.data.length; i += 4 * 7) seen.add((image.data[i] << 16) | (image.data[i + 1] << 8) | image.data[i + 2]);
+	cell.colours = seen.size;
+}
+
+// The painters' maps as the materials hold them, each shrunk to PAINTED_TEXELS and redrawn only when
+// its texture has taken a new upload since the last drawing.
+function paintedInset(figure, materials, config, onLayout) {
+	const body = figure.querySelector('.inset-body');
+	const image = new ImageData(PAINTED_TEXELS, PAINTED_TEXELS);
+	const cells = PAINTED.map((map) => {
+		const canvas = element('canvas', { width: PAINTED_TEXELS, height: PAINTED_TEXELS });
+		canvas.setAttribute('aria-hidden', 'true');
+		const range = element('span', { className: 'inset-range' });
+		const cell = element('div', { className: 'inset-field' }, [canvas, element('p', { className: 'inset-label', textContent: map.label }), range]);
+		cell.dataset.map = map.name;
+		return { map, canvas, context: canvas.getContext('2d'), range, cell, version: -1, colours: 0, width: 0, height: 0 };
+	});
+	// The normal image is one painted block tiled across it, except under ?calibrate=map
+	// (render/materials.js uploadMaskOrNormal).
+	const block = config?.calibrate === 'map' ? NORMAL_IMAGE_TEXELS : NORMAL_BLOCK_TEXELS;
+	const tiled = block < NORMAL_IMAGE_TEXELS ? ` The ripple map is one ${block} × ${block} block the painter repeats across it.` : '';
+	const line = element('p', { className: 'inset-line', textContent: `Each map is shrunk to ${PAINTED_TEXELS} × ${PAINTED_TEXELS} here; the sizes under them are the textures' own.${tiled}` });
+	body.replaceChildren(...cells.map((c) => c.cell), line);
+	onLayout();
+	let draws = 0;
+	function draw() {
+		for (const cell of cells) drawPaintedCell(cell, materials.textures[cell.map.name], image);
+		draws += 1;
+	}
+	whileVisible(figure, REDRAW_MS, draw);
+	const each = (read) => Object.fromEntries(cells.map((c) => [c.map.name, read(c)]));
+	return {
+		state: () => (draws > 0 ? {
+			versions: each((c) => c.version),
+			colours: each((c) => c.colours),
+			sizes: each((c) => [c.width, c.height]),
+			shown: PAINTED_TEXELS,
+			draws,
+		} : null),
+	};
+}
+
 // One inset, started on its own: one that throws is logged and the others still start.
 function safely(name, start) {
 	try {
@@ -215,12 +286,14 @@ export function mountInsets({ handle, watchReading, onLayout = () => {} }) {
 	const sampling = document.querySelector('figure.inset[data-inset="sampling"]');
 	if (fields) insets.fields = safely('fields', () => fieldsInset(fields, ocean, onLayout));
 	if (sampling) insets.sampling = safely('sampling', () => samplingInset(sampling, ocean, onLayout));
+	const painted = document.querySelector('figure.inset[data-inset="painted"]');
+	if (painted && handle.materials?.textures) insets.painted = safely('painted', () => paintedInset(painted, handle.materials, handle.config, onLayout));
 	return Object.freeze({
 		hooks: Object.freeze({
 			drawn: () => Object.keys(insets).filter((name) => insets[name]?.state() != null),
 			fields: () => insets.fields?.state() ?? null,
 			sampling: () => insets.sampling?.state() ?? null,
-			painted: () => null,
+			painted: () => insets.painted?.state() ?? null,
 		}),
 	});
 }

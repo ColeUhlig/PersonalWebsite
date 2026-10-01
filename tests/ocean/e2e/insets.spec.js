@@ -84,10 +84,10 @@ test('the insets redraw at most four times a second, and not at all off screen',
 test.describe('on a phone', () => {
 	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-	test('the field and sampling insets fit the panel and draw', async ({ page }) => {
+	test('the field, sampling and painted insets fit the panel and draw', async ({ page }) => {
 		test.setTimeout(180_000);
 		await oceanRunning(page);
-		for (const [id, count] of [['fields', 3], ['sampling', 1]]) {
+		for (const [id, count] of [['fields', 3], ['sampling', 1], ['painted', 3]]) {
 			await scrollToId(page, id, 0.2);
 			const canvases = page.locator(`figure[data-inset="${id}"] canvas`);
 			await expect(canvases).toHaveCount(count, { timeout: 30_000 });
@@ -106,5 +106,59 @@ test.describe('on a phone', () => {
 			}
 		}
 		expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+	});
+});
+
+test("step 25: the painters' colour, glow-mask and ripple maps, live", async ({ page }) => {
+	test.setTimeout(180_000);
+	await oceanRunning(page);
+	await scrollToId(page, 'painted', 0.2);
+	await expect(page.locator('figure[data-inset="painted"] canvas')).toHaveCount(3, { timeout: 30_000 });
+	await expect.poll(() => page.evaluate(() => window.__insets.painted()?.colours.colour ?? 0), { timeout: 30_000 }).toBeGreaterThan(50);
+	const first = await page.evaluate(() => window.__insets.painted().versions);
+	await expect.poll(() => page.evaluate(() => window.__insets.painted().versions.colour), { timeout: 10_000 }).toBeGreaterThan(first.colour);
+	const painted = await page.evaluate(() => window.__insets.painted());
+	expect(painted.colours.normal).toBeGreaterThan(20);
+	// Labelled with the textures' own sizes, read from the textures, and the shrink said out loud.
+	expect(painted.sizes).toEqual({ colour: [512, 512], mask: [128, 128], normal: [512, 512] });
+	const words = await page.locator('figure[data-inset="painted"] .inset-body').textContent();
+	for (const [name, [width, height]] of Object.entries(painted.sizes)) {
+		expect(await page.locator(`figure[data-inset="painted"] .inset-field[data-map="${name}"] .inset-range`).textContent()).toContain(`${width} × ${height}`);
+	}
+	expect(words).toContain(`${painted.shown} × ${painted.shown}`);
+});
+
+test('the painted maps redraw at most four times a second, and not at all off screen', async ({ page }) => {
+	test.setTimeout(180_000);
+	await oceanRunning(page);
+	await scrollToId(page, 'painted', 0.2);
+	await expect.poll(() => page.evaluate(() => window.__insets.painted()?.draws ?? 0), { timeout: 30_000 }).toBeGreaterThan(0);
+	const rate = await page.evaluate(async () => {
+		const start = window.__insets.painted().draws;
+		const t0 = performance.now();
+		await new Promise((resolve) => setTimeout(resolve, 3000));
+		return (window.__insets.painted().draws - start) / ((performance.now() - t0) / 1000);
+	});
+	expect(rate).toBeGreaterThan(1);
+	expect(rate).toBeLessThanOrEqual(4.5);
+	await scrollToId(page, 'sine', 0.3);
+	await page.waitForTimeout(500);
+	const away = await page.evaluate(() => window.__insets.painted().draws);
+	await page.waitForTimeout(1500);
+	expect(await page.evaluate(() => window.__insets.painted().draws)).toBe(away);
+});
+
+// Review Focus 4.
+test.describe('on the Medium tier (phones by rule)', () => {
+	test('every inset works on Medium', async ({ page }) => {
+		test.setTimeout(300_000);
+		await oceanRunning(page, '/ocean/?tier=Medium');
+		expect(await page.evaluate(() => window.__ocean.status().tier)).toBe('Medium');
+		for (const [id, probe] of [['fields', 'fields'], ['sampling', 'sampling'], ['painted', 'painted']]) {
+			await scrollToId(page, id, 0.2);
+			await expect.poll(() => page.evaluate((p) => window.__insets[p]() !== null, probe), { timeout: 30_000 }).toBe(true);
+		}
+		const s = await page.evaluate(() => window.__insets.sampling());
+		expect(Math.abs(s.value - s.engine)).toBeLessThan(1e-6);
 	});
 });
