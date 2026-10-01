@@ -456,7 +456,8 @@ function transformChart(figure, story, onLayout) {
 	function chooseJudgingGrid(from) {
 		const back = optionButton(JUDGING_N);
 		const active = document.activeElement;
-		const focusHere = active === null || active === document.body || active === optionButton(from) || gridControl()?.contains(active);
+		// Not from the body (final review, parked item): a reader just scrolling past keeps focus on nothing.
+		const focusHere = active === optionButton(from) || gridControl()?.contains(active);
 		back?.click();
 		if (focusHere) back?.focus({ preventScroll: true });
 	}
