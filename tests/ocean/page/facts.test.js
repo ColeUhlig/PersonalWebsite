@@ -4,9 +4,11 @@ import * as expect from '../expect.js';
 import * as Tier from '../../../content/ocean/js/core/tier.js';
 import * as RingLayout from '../../../content/ocean/js/core/ringLayout.js';
 import * as HorizonState from '../../../content/ocean/js/engine/horizonState.js';
-import { COLOUR_TEXELS, FOAM_TEXELS, LOOP_PERIOD, PHONE_TIER, SEED, readConfig } from '../../../content/ocean/js/engine/config.js';
+import { COLOUR_TEXELS, FOAM_TEXELS, LOOP_PERIOD, PHONE_TIER, SEED, SWELL_SPECS, readConfig } from '../../../content/ocean/js/engine/config.js';
 import * as Charts from '../../../content/ocean/js/engine/charts.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
+import * as WaveField from '../../../content/ocean/js/core/waveField.js';
+import * as Spectrum from '../../../content/ocean/js/core/spectrum.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { cascadeOptions } from '../../../content/ocean/js/proof/proofConfig.js';
 
@@ -83,6 +85,29 @@ test('the phase arrows loop every 120 s', () => {
 		expect.truthy(same(at(t), at(t + 120)), `the arrows at ${t} s and ${t + 120} s`);
 		for (const shorter of [60, 40, 24]) expect.truthy(!same(at(t), at(t + shorter)), `the arrows do not already loop after ${shorter} s`);
 	}
+});
+
+// Step 8's math note (Task 6 fix round 1): core/cascade.js rounds each dispersion frequency down to
+// a multiple of 2 pi / LOOP_PERIOD, so every wave makes a whole number of turns in 120 s and the
+// FFT sea comes back to where it started. Checked on every cell of every layer the High tier runs.
+test("every wave's ω is rounded down to a whole number of turns per 120 s, so the sea repeats every 120 s", () => {
+	const preset = Tier.presets.High;
+	const config = readConfig('');
+	const field = WaveField.create({ params: config.params, n: preset.n, sizes: preset.sizes, seed: SEED, loopPeriod: LOOP_PERIOD, chop: config.chop, swells: SWELL_SPECS.map((spec) => ({ ...spec, amplitude: spec.amplitude * config.swellScale })) });
+	const turn = (2 * Math.PI) / 120;
+	let moving = 0;
+	for (const cascade of field.cascades) {
+		for (let i = 0; i < cascade.omega.length; i++) {
+			const turns = cascade.omega[i] / turn;
+			expect.truthy(Math.abs(turns - Math.round(turns)) < 1e-9, `cell ${i}: ${turns} turns in 120 s`);
+			const k = Math.hypot(cascade.kx[i], cascade.kz[i]);
+			if (k > 0) {
+				expect.truthy(cascade.omega[i] <= Spectrum.omega(k, config.params) + 1e-12, `cell ${i}: rounded down, not up`);
+				moving += turns > 0 ? 1 : 0;
+			}
+		}
+	}
+	expect.truthy(moving > 0, 'some waves turn');
 });
 
 test('the proof panel runs one wave cascade, 64 × 64 cells at seed 7', () => {

@@ -43,7 +43,7 @@ export function startPage({ route, reducedMotion, clock }) {
 				});
 				const timed = step === TIMING_STEP ? root.querySelector(`[data-slider="${TIMING_SLIDER}"]`) : null;
 				if (timed) {
-					mountLiveTiming({ control: timed, story: handle.story, ocean: handle.ocean });
+					mountLiveTiming({ control: timed, story: handle.story, ocean: handle.ocean, watchReading: (listener) => story.onChange(listener) });
 				}
 			}
 			story.relayout();

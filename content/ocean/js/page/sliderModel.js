@@ -1,7 +1,10 @@
 // How a recipe slider (stages/recipes.js) looks as a control (piece C; browser-free): the track an
 // <input type=range> gets (fetch runs on a log scale over LOG_STEPS positions, so each decade of
 // fetch gets the same length of track), the value text beside it, and the term colour that
-// matches the slider to its symbol in "The math" (style.css .t-* classes).
+// matches the slider to its symbol in "The math" (style.css .t-* classes). A slider whose step's
+// math has no symbol for it (step 4's Shading switches the lighting off, it is not a term) maps to
+// null and gets no swatch. tests/ocean/page/sliderModel.test.js checks every class against the
+// step's formula in index.html.
 export const LOG_STEPS = 1000;
 
 export const TERM_BY_SLIDER = Object.freeze({
@@ -11,7 +14,7 @@ export const TERM_BY_SLIDER = Object.freeze({
 	speed: 't-speed',
 	waveCount: 't-count',
 	sunAzimuth: 't-sun',
-	shading: 't-sun',
+	shading: null,
 	chop: 't-chop',
 	wind: 't-wind',
 	fetch: 't-fetch',

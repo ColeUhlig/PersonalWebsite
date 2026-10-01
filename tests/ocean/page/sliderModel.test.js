@@ -1,5 +1,6 @@
 // The slider model's unit tests (piece C, Task 6): tracks, log scale, value text and term colours.
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import * as expect from '../expect.js';
 import { formatValue, fromInput, inputRange, LOG_STEPS, TERM_BY_SLIDER, toInput } from '../../../content/ocean/js/page/sliderModel.js';
 import { RECIPES } from '../../../content/ocean/js/stages/recipes.js';
@@ -32,7 +33,7 @@ test('values read as the panel shows them', () => {
 	expect.equal(formatValue({ kind: 'range', step: 1, unit: '' }, 16), '16', 'no unit');
 });
 
-test('only range sliders have a track, and every recipe slider has a term colour', () => {
+test('only range sliders have a track, and every recipe slider is given a term colour or none', () => {
 	let message = '';
 	try {
 		inputRange({ kind: 'toggle' });
@@ -42,7 +43,22 @@ test('only range sliders have a track, and every recipe slider has a term colour
 	expect.truthy(message.includes('range'), message);
 	for (const recipe of RECIPES) {
 		for (const slider of recipe.sliders) {
-			expect.truthy(typeof TERM_BY_SLIDER[slider.id] === 'string', `step ${recipe.step} slider ${slider.id} has no term colour`);
+			const term = TERM_BY_SLIDER[slider.id];
+			expect.truthy(typeof term === 'string' || term === null, `step ${recipe.step} slider ${slider.id} is not in TERM_BY_SLIDER`);
+		}
+	}
+});
+
+// Fix round 1: a swatch promises the slider's symbol is in its step's formula, in the same colour.
+test("every swatch's term colours a symbol in its own step's formula", () => {
+	const html = readFileSync(new URL('../../../content/ocean/index.html', import.meta.url), 'utf8');
+	for (const recipe of RECIPES) {
+		const section = new RegExp(`<section[^>]*id="step-${recipe.step}"[\\s\\S]*?</section>`).exec(html)?.[0] ?? '';
+		const tex = [...section.matchAll(/<div class="tex"[^>]*><code>([\s\S]*?)<\/code><\/div>/g)].map((m) => m[1]).join(' ');
+		for (const slider of recipe.sliders) {
+			const term = TERM_BY_SLIDER[slider.id];
+			if (term === null) continue;
+			expect.truthy(tex.includes(`\\htmlClass{${term}}`), `step ${recipe.step} slider ${slider.id}: no \\htmlClass{${term}} in its formula`);
 		}
 	}
 });

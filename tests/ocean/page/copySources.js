@@ -40,6 +40,7 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'Here L is the 256-stud tile', source: FACTS, quote: 'the teaching bank sits on the 256-stud tile' },
 	{ phrase: 'the speeds the dispersion gives them, looping every 120 s', source: FACTS, quote: 'the phase arrows loop every 120 s' },
 	{ phrase: 'long waves travel fastest), looping every 120 s', source: FACTS, quote: 'the phase arrows loop every 120 s' },
+	{ phrase: 'The code rounds each ω down to a whole number of turns per 120 s, so the sea repeats every 120 s', source: FACTS, quote: "every wave's ω is rounded down to a whole number of turns per 120 s, so the sea repeats every 120 s" },
 	{ phrase: 'one wave cascade, 64 × 64 cells at seed 7', source: FACTS, quote: 'the proof panel runs one wave cascade, 64 × 64 cells at seed 7' },
 	{ phrase: 'γ = 3.3 sharpens the peak', source: 'site:content/ocean/js/core/spectrum.js', quote: 'gamma: 3.3' },
 	{ phrase: 'This live ocean needs WebGL 2', source: 'site:content/ocean/js/webgl.js', quote: 'asks for WebGL 2 only' },

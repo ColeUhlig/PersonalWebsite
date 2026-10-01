@@ -4,7 +4,9 @@
 // controls are built and again a moment after the slider stops moving, sliced so no stretch of it
 // holds the thread for long, and a newer measurement drops an older one. It is a live number, so
 // its element is marked data-copy-skip="live" and is empty in the served page. It compares itself
-// with nothing: not with Roblox, not with a frame budget.
+// with nothing: not with Roblox, not with a frame budget. It becomes a polite live region only once
+// the reading has reached step 3, so the first measurement is not announced while the visitor is
+// still at the opening.
 import * as WaveBanks from '../engine/waveBanks.js';
 import { recipeFor } from '../stages/recipes.js';
 import { latticePoints, measureBankSum } from '../page/bankTiming.js';
@@ -25,15 +27,26 @@ export function timingText(count, points, ms) {
 }
 
 /**
- * @param {{ control: HTMLElement, story: { sliders: (step: number) => object[] }, ocean: { layout: object } }} options
- *   the wave-count control's element, the story stage, and the running ocean (for its layout)
+ * @param {{ control: HTMLElement, story: { sliders: (step: number) => object[] }, ocean: { layout: object },
+ *   watchReading?: (listener: (reading: { phase: string, step: number }) => void) => () => void }} options
+ *   the wave-count control's element, the story stage, the running ocean (for its layout), and the
+ *   scroll story's onChange (ui/story.js), which tells when step 3 is reached
  */
-export function mountLiveTiming({ control, story, ocean }) {
+export function mountLiveTiming({ control, story, ocean, watchReading = () => () => {} }) {
 	const output = document.createElement('p');
 	output.className = 'control-timing';
 	output.dataset.copySkip = 'live';
-	output.setAttribute('aria-live', 'polite');
 	control.append(output);
+	let stopWatching = null;
+	stopWatching = watchReading((reading) => {
+		if (reading.phase === 'step' && reading.step >= TIMING_STEP && !output.hasAttribute('aria-live')) {
+			output.setAttribute('aria-live', 'polite');
+			stopWatching?.();
+		}
+	});
+	if (output.hasAttribute('aria-live')) {
+		stopWatching();
+	}
 	const points = latticePoints(ocean.layout);
 	const bank = WaveBanks.teachingBank();
 	const chop = recipeFor(TIMING_STEP).engine.chop;
