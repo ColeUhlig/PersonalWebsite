@@ -8,6 +8,7 @@ import { inertStory, startStory } from './story.js';
 import { mountControls } from './controls.js';
 import { mountLiveTiming, TIMING_SLIDER, TIMING_STEP } from './liveTiming.js';
 import { startMath } from './math.js';
+import { mountCharts } from './charts.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -55,6 +56,15 @@ export function startPage({ route, reducedMotion, clock }) {
 	} catch (error) {
 		console.error('[ocean] the math lines could not start', error);
 	}
+	// Task 8: the charts for steps 7 to 9, once the ocean runs in story mode. A chart that changes
+	// height (its first drawing, a new timing) re-measures the story's panels.
+	features.push({
+		attachOcean(handle) {
+			if (handle.story) {
+				mountCharts(handle.story, { onLayout: () => story.relayout() });
+			}
+		},
+	});
 	// Features end.
 	document.body.dataset.ocean = 'loading';
 	return Object.freeze({

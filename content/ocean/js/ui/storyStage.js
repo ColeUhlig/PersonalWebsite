@@ -301,10 +301,21 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	// call, through the cache the dev route uses too. Step 8's sea is its recipe's own (it has no sea
 	// sliders), so a blend from step 7 does not rebuild them every frame.
 	const arrowsAt = Charts.createPhaseArrowCache({ sizes: ocean.preset.sizes, n: ocean.preset.n });
+	// The spectrum chart's fixed top: JONSWAP at the wind and fetch sliders' maxima, so a stronger
+	// wind raises the curve on the chart instead of rescaling the axis.
+	let ceiling = null;
 	const charts = Object.freeze({
 		spectrum() {
 			const params = { ...ocean.live.params, windSpeed: director.valueOf(7, 'wind'), fetch: director.valueOf(7, 'fetch') };
 			return Charts.spectrumCurve(params, { sizes: ocean.preset.sizes, n: ocean.preset.n });
+		},
+		spectrumCeiling() {
+			if (ceiling === null) {
+				const slider = (id) => recipeFor(7).sliders.find((s) => s.id === id);
+				const storm = { ...ocean.live.params, windSpeed: slider('wind').max, fetch: slider('fetch').max };
+				ceiling = Math.max(...Charts.spectrumCurve(storm, { sizes: ocean.preset.sizes, n: ocean.preset.n }).physical);
+			}
+			return ceiling;
 		},
 		phaseArrows() {
 			const sea = recipeFor(8).engine.sea;
