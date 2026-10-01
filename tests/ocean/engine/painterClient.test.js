@@ -230,3 +230,149 @@ test('a worker error event is cancelled so it does not also surface as an uncaug
 	handlers[1]({ message: 'blocked', preventDefault: () => { prevented += 1; } });
 	expect.equal(prevented, 2, 'an error from a replaced worker is cancelled too');
 });
+
+// A painter spawn that records every message type the client posts.
+function recordingSpawn(posted) {
+	return () => {
+		const inner = createInProcessWorker(createPainterWorker);
+		const worker = {
+			onmessage: null,
+			onerror: null,
+			postMessage: (message, transfer) => {
+				posted.push(message.type);
+				inner.postMessage(message, transfer);
+			},
+			terminate: () => inner.terminate(),
+		};
+		inner.onmessage = (event) => worker.onmessage?.(event);
+		inner.onerror = (event) => worker.onerror?.(event);
+		return worker;
+	};
+}
+
+test('update reaches both workers and both kept configs, and puts cleared maps back to rest', async () => {
+	const posted = [];
+	const calls = [];
+	const store = FieldStore.create(N, SIZES);
+	const painter = PainterClient.create({
+		config: mapsConfig(),
+		spawn: recordingSpawn(posted),
+		sink: {
+			uploadColourBand() {},
+			uploadMaskOrNormal() {},
+			uploadRoughness() {},
+			clearNormal: () => calls.push('clearNormal'),
+			resetRoughness: () => calls.push('resetRoughness'),
+		},
+		stage: { paint: 0, upload: 0 },
+		log: { warn() {} },
+	});
+	await flush();
+	painter.coverage[0] = 0.5;
+	PainterClient.update(painter, { chop: 0.3, normalCascades: [], foamEnabled: false });
+	expect.equal(posted.filter((type) => type === 'update').length, 2, 'one update to each worker');
+	expect.equal(posted.filter((type) => type === 'configure').length, 2, 'no Configure beyond the first two');
+	expect.equal(painter.mapsConfig.chop, 0.3, 'the maps config keeps it');
+	expect.equal(painter.colourConfig.chop, 0.3, 'the colour config keeps it');
+	expect.equal(painter.colourConfig.role, 'colour', 'the roles are untouched');
+	expect.equal(painter.paintsNormal, false, 'no normal cascade left');
+	expect.equal(calls.join(','), 'clearNormal,resetRoughness', 'the sink put both maps back to rest');
+	expect.truthy(painter.coverage.every((value) => value === 0), 'the kept coverage cleared');
+	for (let frame = 2; frame <= 9; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(PainterClient.ready(painter), true, 'still painting');
+	let message = '';
+	try {
+		PainterClient.update(painter, { lut: [] });
+	} catch (error) {
+		message = error.message;
+	}
+	expect.truthy(message.includes('lut'), `refused on this side too: ${message}`);
+});
+
+test('a Paint in flight when an update clears the maps does not upload them again', async () => {
+	const uploads = [];
+	const store = FieldStore.create(N, SIZES);
+	const painter = PainterClient.create({
+		config: mapsConfig(),
+		spawn: () => createInProcessWorker(createPainterWorker),
+		sink: {
+			uploadColourBand() {},
+			uploadMaskOrNormal: (slot) => uploads.push(slot === MapRotation.NORMAL ? 'normal' : 'mask'),
+			uploadRoughness: (ring) => uploads.push(`rough${ring}`),
+			clearNormal: () => uploads.push('clearNormal'),
+			resetRoughness: () => uploads.push('resetRoughness'),
+		},
+		stage: { paint: 0, upload: 0 },
+		log: { warn() {} },
+	});
+	await flush();
+	for (let frame = 1; frame <= 3; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	// Frame 4 sends colour band 4 and the maps worker's normal slot; both are still in flight.
+	PainterClient.step(painter, 4, 0, store);
+	PainterClient.update(painter, { normalCascades: [], foamEnabled: false });
+	await flush();
+	const after = uploads.slice(uploads.indexOf('resetRoughness') + 1);
+	expect.equal(uploads.indexOf('clearNormal') >= 0, true, 'the normal map was cleared');
+	expect.equal(after.filter((name) => name === 'normal' || name.startsWith('rough')).length, 0, `nothing stale after the clear: ${after.join(',')}`);
+	expect.truthy(painter.coverage.every((value) => value === 0), 'the stale coverage was not kept');
+	expect.equal(painter.pendingColour || painter.pendingMaps, false, 'both replies still cleared their pending flags');
+	for (let frame = 5; frame <= 8; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(uploads.slice(uploads.indexOf('resetRoughness') + 1).filter((name) => name === 'normal' || name.startsWith('rough')).length, 0, 'and none later');
+	expect.truthy(uploads.at(-1) === 'mask', 'the mask keeps painting');
+});
+
+test('update keeps its own copies of the cascade lists', async () => {
+	const { painter } = harness();
+	await flush();
+	const list = [2];
+	PainterClient.update(painter, { normalCascades: list, maskCascades: [1, 2] });
+	list.push(3);
+	expect.equal(painter.mapsConfig.normalCascades.join(','), '2', 'the caller changing its array changes nothing kept');
+	expect.equal(painter.colourConfig.normalCascades.join(','), '2', 'nor in the colour config');
+	expect.truthy(painter.mapsConfig.normalCascades !== painter.colourConfig.normalCascades, 'the two configs share no array');
+	expect.truthy(painter.mapsConfig.maskCascades !== painter.colourConfig.maskCascades, 'nor the mask list');
+});
+
+// Task 4 minor: a colour reply painted before foam was switched off lands after the update; its
+// foam cover is the old field's and must not show while nothing steps the foam.
+test('a colour reply in flight when foam goes off does not bring back the old foam cover', async () => {
+	const store = FieldStore.create(N, SIZES);
+	// Every colour reply reports a foam cover of 0.25, as one painted over live foam does.
+	const foamy = () => {
+		const inner = createInProcessWorker(createPainterWorker);
+		const worker = { onmessage: null, onerror: null, postMessage: (m, t) => inner.postMessage(m, t), terminate: () => inner.terminate() };
+		inner.onmessage = (event) => {
+			const data = event.data.type === 'pixels' && event.data.slot === MapRotation.COLOUR ? { ...event.data, first: 0.25 } : event.data;
+			worker.onmessage?.({ data });
+		};
+		inner.onerror = (event) => worker.onerror?.(event);
+		return worker;
+	};
+	const painter = PainterClient.create({
+		config: mapsConfig(),
+		spawn: foamy,
+		sink: { uploadColourBand() {}, uploadMaskOrNormal() {}, uploadRoughness() {}, clearNormal() {}, resetRoughness() {} },
+		stage: { paint: 0, upload: 0 },
+		log: { warn() {} },
+	});
+	await flush();
+	for (let frame = 1; frame <= 4; frame++) {
+		PainterClient.step(painter, frame, 0, store);
+		await flush();
+	}
+	expect.equal(painter.foamCover, 0.25, 'the foam cover the replies carry');
+	PainterClient.step(painter, 5, 0, store); // a colour band in flight
+	PainterClient.update(painter, { foamEnabled: false });
+	expect.equal(painter.foamCover, 0, 'zeroed when foam goes off');
+	await flush();
+	expect.equal(painter.foamCover, 0, 'and the reply in flight does not bring a cover back');
+});

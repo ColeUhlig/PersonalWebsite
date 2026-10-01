@@ -1,0 +1,20 @@
+/* The frequency charts of steps 14 and 15 (piece C2; lane E owns this file). The plots, grid, text
+   and lines are style.css's chart classes; these are the spikes and the chord's faint original. */
+.chart-spike {
+	stroke: var(--chart-a);
+	stroke-width: 3;
+	stroke-linecap: round;
+}
+
+.chart-spike-removed {
+	stroke: var(--chart-b);
+	stroke-width: 2;
+	stroke-dasharray: 3 3;
+}
+
+.chart-line-faint {
+	fill: none;
+	stroke: var(--ink-dim);
+	stroke-width: 1.5;
+	opacity: 0.55;
+}

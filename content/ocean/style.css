@@ -1,41 +1,869 @@
+/* The ocean showcase page (piece C): a full-screen live ocean pinned behind glass panels that
+   scroll over it. Below 900 px the ocean takes the top half and the panels scroll beneath it.
+   One dark theme whatever the system prefers; colours are tokens on :root. No backdrop-filter
+   and no filter here: the canvas already carries render/lighting.js CSS_FILTER, and another
+   filter over a full-screen WebGL canvas would be re-composited every frame (A2 final review). */
 :root {
+	--body-bg: #0b1a24;
 	--ink: #e8eef2;
-	--panel: rgba(8, 20, 30, 0.72);
+	--ink-dim: #a9bcc8;
+	--glass: rgba(7, 18, 27, 0.86);
+	/* Behind the opening's title and lede: lighter than the glass, feathered at the edge by a shadow of
+	   the same colour, and still dark enough for white text over a white sea (layout.spec.js). */
+	--scrim: rgba(7, 18, 27, 0.6);
+	--line: rgba(232, 238, 242, 0.14);
+	--accent: #5fd4c4;
+	--card-bg: rgba(92, 20, 20, 0.6);
+	--card-line: #ff8a7a;
+	--card-ink: #ffe3de;
+	--card-head: #ffb4a8;
+	--chart-bg: #0a1822;
+	--chart-ink: #e8eef2;
+	--chart-a: #5fd4c4;
+	--chart-b: #f2b25c;
+	--chart-grid: rgba(232, 238, 242, 0.18);
+	--term-a: #f2b25c;
+	--term-b: #5fd4c4;
+	--term-c: #ff8fb1;
 	--warn: #ffb4a8;
+	--panel-width: clamp(300px, 30vw, 440px);
+	--gutter: 16px;
+	/* C2: the math box's pinned bar on a narrow screen (lane A's css/mathbox.css draws it); the story's
+	   lower half starts below it. */
+	--mathbar-height: 44px;
+	/* The pills (the motion and tilt buttons) wrap their text inside this width; on a wide screen the
+	   full-width parts of the page keep clear of a column this wide plus the gutters (.pills). */
+	--pill-width: 11rem;
+	--pill-room: calc(var(--pill-width) + 2 * var(--gutter));
+	/* The column's height when it is tallest: three lines of 0.9rem text at 1.55 (the refusal wraps),
+	   two pills' padding and borders, the gap, the gutter below and a little air above. */
+	--pill-stack: calc(4.2rem + 68px);
 }
-html,
+
+html {
+	background: var(--body-bg);
+}
+
 body {
 	margin: 0;
-	height: 100%;
-	background: #0b1a24;
+	background: var(--body-bg);
 	color: var(--ink);
-	font: 14px/1.4 system-ui, sans-serif;
-	overflow: hidden;
+	font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', sans-serif;
+	overflow-x: clip;
 }
+
+a {
+	color: var(--accent);
+}
+
+/* `hidden` wins over every display rule below (.play is inline-block, for one), so a block the
+   finale keeps back until it is real (Play, footage, the render toggle) stays out of sight. */
+[hidden] {
+	display: none !important;
+}
+
 #ocean {
 	position: fixed;
 	inset: 0;
 	width: 100%;
 	height: 100%;
 	display: block;
+	z-index: 0;
 }
+
+header.site {
+	position: fixed;
+	top: 12px;
+	right: var(--gutter);
+	z-index: 3;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+	font-size: 0.85rem;
+}
+
+header.site a {
+	color: var(--ink);
+	text-decoration: none;
+}
+
 #notice {
 	position: fixed;
-	inset: auto 16px 16px 16px;
-	padding: 12px 16px;
-	background: var(--panel);
-	border-left: 3px solid var(--warn);
+	inset: auto var(--gutter) var(--gutter) var(--gutter);
+	z-index: 4;
 	max-width: 640px;
+	padding: 12px 16px;
+	background: var(--glass);
+	border-left: 3px solid var(--warn);
+	color: var(--ink);
 }
+
 #stats {
 	position: fixed;
 	top: 8px;
 	left: 8px;
+	z-index: 4;
 	margin: 0;
 	padding: 8px 10px;
-	background: var(--panel);
+	background: var(--glass);
+	color: var(--ink);
 	font: 12px/1.35 ui-monospace, monospace;
 	pointer-events: none;
 	max-width: calc(100% - 32px);
 	white-space: pre-wrap;
+}
+
+/* The motion and tilt buttons, stacked in one column at the bottom right, so however large the text
+   they never overlap; a hidden one takes no room. On a wide screen the full-width parts of the page
+   (the opening, the finale's blocks, the footer) keep --pill-room clear on the right, so the column
+   never covers text; on a narrow one it sits over the ocean's half (below). */
+.pills {
+	position: fixed;
+	right: var(--gutter);
+	bottom: var(--gutter);
+	z-index: 3;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
+	max-width: var(--pill-width);
+	pointer-events: none;
+}
+
+.motion,
+.tilt {
+	pointer-events: auto;
+	max-width: 100%;
+	padding: 8px 14px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: var(--glass);
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+/* Task 9b: the tilt button asks for motion access on a phone that needs a tap for it (iOS). */
+.tilt:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.noscript {
+	position: relative;
+	z-index: 1;
+	margin: 16px;
+}
+
+/* The story scrolls over the canvas. Its empty space lets the pointer through to the ocean, so the
+   visitor can drag to orbit between panels; everything readable takes the pointer back. */
+main#story {
+	position: relative;
+	z-index: 1;
+	pointer-events: none;
+	counter-reset: step;
+}
+
+.panel,
+.block,
+.play-row,
+.opening-inner,
+footer.site {
+	pointer-events: auto;
+}
+
+.opening {
+	min-height: 100vh;
+	min-height: 100svh;
+	display: grid;
+	place-items: center;
+	text-align: center;
+	padding: 0 var(--gutter);
+	box-sizing: border-box;
+}
+
+.opening-inner {
+	box-sizing: border-box;
+	max-width: 100%;
+	padding: 24px 32px;
+	border-radius: 28px;
+	background: var(--scrim);
+	box-shadow: 0 0 48px 24px var(--scrim);
+}
+
+.opening h1 {
+	margin: 0 0 12px;
+	font-size: clamp(2.2rem, 6vw, 4.5rem);
+	line-height: 1.05;
+	letter-spacing: -0.02em;
+	color: #ffffff;
+	text-shadow: 0 2px 24px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.opening .lede {
+	max-width: 36rem;
+	margin: 0 auto 20px;
+	font-size: 1.15rem;
+	color: #ffffff;
+	/* A tight shadow as well as a soft one: the lede sits on the horizon, over white foam. */
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 1px 12px rgba(0, 0, 0, 0.7);
+}
+
+.opening .cue {
+	display: inline-block;
+	padding: 8px 16px;
+	border-radius: 999px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+	color: var(--ink);
+}
+
+.step {
+	counter-increment: step;
+	min-height: 170vh;
+	min-height: 170svh;
+	padding-top: 10vh;
+	box-sizing: border-box;
+}
+
+.panel {
+	position: sticky;
+	top: 10vh;
+	box-sizing: border-box;
+	width: var(--panel-width);
+	margin-left: max(var(--gutter), 2.5vw);
+	padding: 20px 22px;
+	border-radius: 14px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.panel h2 {
+	margin: 0 0 10px;
+	font-size: 1.45rem;
+	line-height: 1.2;
+}
+
+.panel h2::before {
+	content: counter(step, decimal-leading-zero);
+	display: block;
+	margin-bottom: 4px;
+	font-size: 0.75rem;
+	letter-spacing: 0.12em;
+	color: var(--accent);
+}
+
+/* C2: a chapter's first panel names the chapter, in words (the copy check reads digits). */
+.chapter {
+	margin: 0 0 6px;
+	font-size: 0.75rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--ink-dim);
+}
+
+/* C2: a live line under a panel's picture (step 9's readout). */
+.readout {
+	margin: 10px 0 0;
+	font-size: 0.9rem;
+	color: var(--ink-dim);
+}
+
+.readout:empty {
+	display: none;
+}
+
+.panel p {
+	margin: 0 0 12px;
+}
+
+.step.is-active .panel {
+	border-color: var(--accent);
+}
+
+.controls {
+	display: grid;
+	gap: 12px;
+	margin: 14px 0;
+}
+
+.controls:empty {
+	display: none;
+}
+
+.control {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 4px 10px;
+}
+
+.control input[type='range'] {
+	grid-column: 1 / -1;
+	width: 100%;
+	accent-color: var(--accent);
+}
+
+.control-toggle {
+	grid-template-columns: auto 1fr auto;
+}
+
+.control-counter {
+	grid-template-columns: auto auto 1fr;
+}
+
+.control-choice {
+	grid-template-columns: 1fr;
+}
+
+.control-choice .segmented {
+	display: inline-flex;
+	justify-self: start;
+	max-width: 100%;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.control-choice .segmented button {
+	padding: 6px 10px;
+	white-space: nowrap;
+}
+
+.control-press {
+	padding: 6px 14px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	cursor: pointer;
+}
+
+.control-value {
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-dim);
+	text-align: right;
+}
+
+.control-note {
+	grid-column: 1 / -1;
+	font-size: 0.8rem;
+	color: var(--ink-dim);
+}
+
+.control-note[hidden] {
+	display: none;
+}
+
+.control.is-unavailable label,
+.control.is-unavailable .control-value {
+	opacity: 0.55;
+}
+
+.control .control-timing {
+	grid-column: 1 / -1;
+	margin: 0;
+	font-size: 0.8rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-dim);
+}
+
+.control .control-timing:empty {
+	display: none;
+}
+
+.swatch {
+	display: inline-block;
+	width: 0.6em;
+	height: 0.6em;
+	margin-right: 6px;
+	border-radius: 50%;
+	background: currentColor;
+	vertical-align: middle;
+}
+
+details.math {
+	margin: 12px 0;
+	border-top: 1px solid var(--line);
+	padding-top: 8px;
+}
+
+details.math summary {
+	cursor: pointer;
+	color: var(--accent);
+	font-weight: 600;
+}
+
+/* No overflow here: a formula wraps to the panel (ui/math.js stacks a list of equations one per line)
+   rather than becoming a sideways scroller of its own. */
+.tex {
+	margin: 10px 0 6px;
+}
+
+.tex code {
+	display: block;
+	font: 0.8rem/1.4 ui-monospace, monospace;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--ink-dim);
+}
+
+/* KaTeX's output (ui/math.js). Its display mode never wraps; here it may, at the breaks KaTeX
+   marks (after = and +, and at the line breaks between stacked equations), so no formula is wider
+   than its panel at 1366 x 767 or 390 x 844 (math.spec.js). */
+.tex-rendered {
+	padding: 4px 0;
+	font-size: 0.95rem;
+}
+
+.tex-rendered .katex-display {
+	margin: 0;
+}
+
+.tex-rendered .katex-display > .katex {
+	white-space: normal;
+}
+
+.tex-rendered .katex-newline {
+	height: 0.45em;
+}
+
+.math-note {
+	font-size: 0.9rem;
+	color: var(--ink-dim);
+}
+
+.t-amp, .t-count, .t-sun, .t-chop, .t-tile, .t-wind, .t-whitecap, .t-seed, .t-n, .t-layer, .t-grid, .t-h, .t-note {
+	color: var(--term-a);
+}
+
+.t-len, .t-fetch, .t-fade, .t-glow, .t-spec {
+	color: var(--term-b);
+}
+
+.t-speed, .t-dir, .t-fresnel {
+	color: var(--term-c);
+}
+
+.card {
+	margin: 14px 0 0;
+	padding: 14px 16px;
+	border-radius: 10px;
+	background: var(--card-bg);
+	border: 1px solid var(--card-line);
+	color: var(--card-ink);
+}
+
+.card h3 {
+	margin: 0 0 8px;
+	font-size: 0.8rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--card-head);
+}
+
+.card dl {
+	margin: 0;
+}
+
+.card dt {
+	font-weight: 700;
+	font-size: 0.85rem;
+	margin-top: 8px;
+}
+
+.card dd {
+	margin: 2px 0 0;
+	font-size: 0.92rem;
+	color: var(--card-ink);
+}
+
+.chart {
+	margin: 14px 0;
+	padding: 10px;
+	border-radius: 10px;
+	background: var(--chart-bg);
+	color: var(--chart-ink);
+}
+
+.chart figcaption {
+	margin-top: 6px;
+	font-size: 0.8rem;
+	color: var(--chart-ink);
+}
+
+.chart-body svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.chart-note {
+	margin: 6px 0 0;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	color: var(--chart-ink);
+}
+
+/* Task 15: the FFT step's timing chart rewrites its notes as it goes (waiting, timing, measured), so
+   its body keeps room from the start for the measured state at its tallest: the 68 px bars and five
+   lines of notes (a 0.8rem line at 1.4) with their two 6 px gaps. Nothing under it moves. */
+.chart[data-chart="transforms"] .chart-body {
+	min-height: calc(68px + 12px + 5 * 1.4 * 0.8rem);
+}
+
+.chart-line {
+	fill: none;
+	stroke: var(--chart-a);
+	stroke-width: 2;
+}
+
+.chart-plot {
+	fill: none;
+	stroke: var(--chart-grid);
+	stroke-width: 1;
+}
+
+/* The three layers' bands sit side by side, so neighbours differ in strength. */
+.chart-band {
+	fill: var(--chart-a);
+	opacity: 0.16;
+}
+
+.chart-band[data-layer='2'] {
+	opacity: 0.07;
+}
+
+.chart-grid,
+.chart-ring {
+	fill: none;
+	stroke: var(--chart-grid);
+	stroke-width: 1;
+}
+
+.chart-peak {
+	stroke: var(--chart-b);
+	stroke-width: 1.5;
+	stroke-dasharray: 4 3;
+}
+
+.chart-peak-label {
+	fill: var(--chart-b);
+}
+
+.chart-label-bg {
+	fill: var(--chart-bg);
+}
+
+.chart-arrow {
+	stroke: var(--chart-a);
+	stroke-width: 2.5;
+	stroke-linecap: round;
+}
+
+.chart-arrowhead,
+.chart-hub {
+	fill: var(--chart-a);
+}
+
+.chart-text {
+	fill: var(--chart-ink);
+	font: 12px system-ui, sans-serif;
+}
+
+/* A bar's value written inside the bar's end. */
+.chart-bar-value {
+	fill: var(--chart-bg);
+}
+
+.chart-bar-naive {
+	fill: var(--chart-b);
+}
+
+.chart-bar-fft {
+	fill: var(--chart-a);
+}
+
+body[data-ocean='unavailable'] .controls,
+body[data-ocean='unavailable'] .chart {
+	display: none;
+}
+
+.step-finale {
+	min-height: auto;
+	padding-bottom: 10vh;
+}
+
+.step-finale .panel {
+	position: static;
+}
+
+.block {
+	box-sizing: border-box;
+	width: min(1100px, calc(100% - 2 * var(--gutter)));
+	margin: 28px auto;
+	padding: 22px 24px;
+	border-radius: 14px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+}
+
+.block h3 {
+	margin: 0 0 10px;
+	font-size: 1.25rem;
+}
+
+.block ul {
+	margin: 0;
+	padding-left: 1.2rem;
+}
+
+.block li {
+	margin: 6px 0;
+}
+
+.dim {
+	color: var(--ink-dim);
+}
+
+.live {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 4px 16px;
+	margin: 10px 0 14px;
+	font-variant-numeric: tabular-nums;
+}
+
+.live dt {
+	color: var(--ink-dim);
+}
+
+.live dd {
+	margin: 0;
+}
+
+.clips {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 16px;
+}
+
+.clips video {
+	width: 100%;
+	height: auto;
+	border-radius: 8px;
+	background: #000000;
+}
+
+.play-row {
+	text-align: center;
+	margin: 28px 0;
+}
+
+.play {
+	display: inline-block;
+	padding: 12px 22px;
+	border-radius: 999px;
+	background: var(--accent);
+	color: var(--body-bg);
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.render-mode .segmented {
+	display: inline-flex;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	overflow: hidden;
+	margin-bottom: 8px;
+}
+
+.render-mode .segmented button,
+.segmented button {
+	padding: 6px 14px;
+	border: 0;
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	cursor: pointer;
+}
+
+.segmented button:disabled {
+	color: var(--ink-dim);
+	text-decoration: line-through;
+	cursor: not-allowed;
+}
+
+.segmented button[aria-checked='true'] {
+	background: var(--accent);
+	color: var(--body-bg);
+}
+
+.render-mode-label {
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+
+footer.site {
+	position: relative;
+	z-index: 1;
+	padding: 24px var(--gutter) 48px;
+	text-align: center;
+}
+
+/* The link home sits over the sea, so it gets the same glass pill as the header's. */
+footer.site a {
+	display: inline-block;
+	padding: 8px 16px;
+	border-radius: 999px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+}
+
+@media (max-width: 899.98px) {
+	/* The ocean pinned to the top half, above the story, so the panels scroll beneath it. A jump to
+	   a step (a link, find-in-page, scrollIntoView) lands below the ocean, not behind it. */
+	html {
+		scroll-padding-top: calc(50vh + var(--mathbar-height));
+		scroll-padding-top: calc(50svh + var(--mathbar-height));
+	}
+
+	#ocean {
+		height: 50vh;
+		height: 50svh;
+		bottom: auto;
+		z-index: 2;
+	}
+
+	main#story {
+		padding-top: calc(50vh + var(--mathbar-height));
+		padding-top: calc(50svh + var(--mathbar-height));
+	}
+
+	.opening {
+		min-height: 50vh;
+		min-height: 50svh;
+	}
+
+	.opening h1,
+	.opening .lede {
+		color: var(--ink);
+		text-shadow: none;
+	}
+
+	.step {
+		min-height: 120vh;
+		min-height: 120svh;
+		padding-top: 24px;
+	}
+
+	.panel {
+		position: static;
+		width: auto;
+		margin: 0 var(--gutter);
+	}
+
+	.block {
+		padding: 18px 16px;
+	}
+
+	/* Two columns even here, so the live list stays short; a long label wraps inside its column. */
+	.live {
+		grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr);
+		gap: 2px 12px;
+	}
+
+	.live dt {
+		overflow-wrap: anywhere;
+	}
+
+	/* Over the ocean's half, the column's foot at its bottom right, so the buttons never cover the
+	   text below (the panels scroll beneath the ocean here). */
+	.pills {
+		bottom: auto;
+		top: calc(50vh - 8px);
+		top: calc(50svh - 8px);
+		transform: translateY(-100%);
+	}
+}
+
+/* A wide screen: the story's full-width parts keep the pills' column clear (.pills). The opening
+   keeps clear of the column's height at the bottom, and the same at the top so its card stays
+   centred in the window (C2 Task 14); the finale's blocks keep clear of the column's width on both
+   sides, so they stay centred too, and the footer keeps clear of it. */
+@media (min-width: 900px) {
+	.opening {
+		padding-top: var(--pill-stack);
+		padding-bottom: var(--pill-stack);
+	}
+
+	.block {
+		width: min(1100px, calc(100% - 2 * var(--pill-room)));
+	}
+
+	footer.site {
+		padding-left: var(--pill-room);
+		padding-right: var(--pill-room);
+	}
+}
+
+/* A short wide screen (a phone on its side): the pills' column reaches up past the opening card, so
+   the card keeps clear of its width instead, on both sides so it stays centred. The room is capped
+   at 30vw so that with the text at twice its size (the column's room doubles with it) the card keeps
+   enough width to read; the pills themselves stay narrower than that (C2 Task 14). */
+@media (min-width: 900px) and (max-height: 600px) {
+	.opening {
+		padding: var(--gutter) min(var(--pill-room), 30vw);
+	}
+}
+
+/* A short laptop screen (1366 x 768 and the like): panels grow with their text rather than scroll
+   inside themselves, so tighten them a little to keep more of each one in view at once. */
+@media (min-width: 900px) and (max-height: 820px) {
+	.panel {
+		padding: 16px 18px;
+	}
+
+	.panel h2 {
+		font-size: 1.3rem;
+	}
+
+	.panel > p {
+		margin-bottom: 10px;
+		font-size: 0.95rem;
+		line-height: 1.5;
+	}
+
+	.controls {
+		margin: 10px 0;
+	}
+
+	.card {
+		margin-top: 10px;
+		padding: 10px 14px;
+	}
+
+	.card dt {
+		margin-top: 6px;
+	}
+
+	.card dd {
+		font-size: 0.88rem;
+		line-height: 1.45;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	* {
+		transition: none !important;
+		animation: none !important;
+	}
 }

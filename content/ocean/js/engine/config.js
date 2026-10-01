@@ -23,6 +23,25 @@ export const REPORT_EVERY_FRAMES = 300;
 export const CONFIGURE_TIMEOUT_FRAMES = 60;
 export const PAINT_TIMEOUT_FRAMES = 60;
 export const CAMERAS = Object.freeze(['orbit', 'deck', 'high', 'crest']);
+
+// Phones get the lighter tier by rule, not by measurement (decided with Cole 2026-09-30; A3 owns
+// the rule): a touch-first device whose screen's SHORTER side is under 900 CSS px, so a phone held
+// sideways still counts. Medium, not Low: it draws 6,480 vertices against High's 18,144 and keeps
+// two of the three cascade layers, so the story's step 10 still has layers to toggle, where Low's
+// single cascade would leave one. Unmeasured on a real phone; the page's numbers say so.
+export const PHONE_SHORT_SIDE = 900;
+export const PHONE_TIER = 'Medium';
+
+// The tier the phone rule gives this device, or null when it does not apply (the probe decides).
+export function tierForDevice({ shortSide, coarsePointer }) {
+	return Number.isFinite(shortSide) && shortSide < PHONE_SHORT_SIDE && coarsePointer === true ? PHONE_TIER : null;
+}
+
+// Cascade `index`'s random seed for the sea numbered `seed`: the formula WaveField.create and the
+// coordinator have used since A1, so seed 7 is the shipped sea.
+export function cascadeSeed(seed, index) {
+	return seed * 7919 + index;
+}
 const CALIBRATIONS = Object.freeze(['vertex', 'map']);
 const GREY = Object.freeze([128, 128, 128]);
 

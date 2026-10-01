@@ -47,7 +47,8 @@ test('anything that is not an experience page URL is refused', () => {
 
 test('each shot has fixed file names', () => {
 	expect.equal(Showcase.FOOTAGE_SHOTS.join(','), 'deck,flyup,crest,studio', 'shots');
-	expect.equal(Showcase.FOOTAGE_MANIFEST, 'media/footage.json', 'manifest path');
+	expect.equal(Showcase.FOOTAGE_MANIFEST, '/ocean/media/footage.json', 'manifest path: site-absolute, so /ocean without a slash finds it');
+	expect.equal(Showcase.FOOTAGE_DIR, '/ocean/media/', 'clip files: site-absolute too');
 	const files = Showcase.clipFiles('crest');
 	expect.equal(`${files.webm} ${files.mp4} ${files.poster}`, 'crest.webm crest.mp4 crest.jpg', 'crest');
 	expect.truthy(Object.isFrozen(files), 'frozen');

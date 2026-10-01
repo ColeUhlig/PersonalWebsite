@@ -101,13 +101,38 @@ test.describe('on a device pixel ratio 3 screen', () => {
 		expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3);
 		await page.setViewportSize({ width: 390, height: 844 });
 		// resize() sets the camera aspect and the canvas size together: wait for it to have run.
-		await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 390 / 844) < 1e-3);
+		// Piece C: below 900 px the ocean is the top half of the screen (50svh = 422 of 844).
+		await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 390 / 422) < 1e-3);
 		const size = await page.evaluate(() => {
 			const canvas = document.getElementById('ocean');
 			return [canvas.width, canvas.height];
 		});
-		expect(size).toEqual([390 * 2, 844 * 2]);
+		expect(size).toEqual([390 * 2, 422 * 2]);
 	});
+});
+
+// C final review fix 8: a window resize also changes the canvas, so the window's resize event and
+// the ResizeObserver both report it; the renderer is sized once (the camera's projection is updated
+// only by a resize that does work), and a report with nothing changed sizes nothing.
+test('a window resize sizes the renderer once, though two listeners hear it', async ({ page }) => {
+	await page.goto('/ocean/?cam=deck');
+	await ready(page);
+	await page.evaluate(() => {
+		const camera = window.__ocean.camera;
+		const original = camera.updateProjectionMatrix.bind(camera);
+		window.__resizes = 0;
+		camera.updateProjectionMatrix = () => {
+			window.__resizes += 1;
+			original();
+		};
+	});
+	await page.setViewportSize({ width: 1200, height: 700 });
+	await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 1200 / 700) < 1e-3);
+	await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 500)));
+	expect(await page.evaluate(() => window.__resizes)).toBe(1);
+	await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+	await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)));
+	expect(await page.evaluate(() => window.__resizes)).toBe(1);
 });
 
 test('stats=1 shows the live numbers', async ({ page }) => {

@@ -33,24 +33,30 @@ export function createScene(canvas) {
 	uniforms.sunPosition.value.copy(sunDirection);
 	scene.add(sky);
 
-	// Environment reflections from the same sky (Roblox EnvironmentSpecularScale 1).
-	const pmrem = new THREE.PMREMGenerator(renderer);
+	// Environment reflections from the same sky (Roblox EnvironmentSpecularScale 1). Rebuilt when a
+	// stage moves the sun and it has settled (settleEnvironment), so the reflections follow it.
 	const environmentScene = new THREE.Scene();
 	const environmentSky = new Sky();
 	environmentSky.scale.setScalar(8000);
 	Object.assign(environmentSky.material.uniforms, THREE.UniformsUtils.clone(uniforms));
 	environmentScene.add(environmentSky);
-	const environment = pmrem.fromScene(environmentScene).texture;
+	function buildEnvironment() {
+		const generator = new THREE.PMREMGenerator(renderer);
+		const texture = generator.fromScene(environmentScene).texture;
+		generator.dispose();
+		return texture;
+	}
+	let environment = buildEnvironment();
 	scene.environment = environment;
 	scene.environmentIntensity = Lighting.ENVIRONMENT_INTENSITY;
-	pmrem.dispose();
 
 	// The direction the engine is handed each frame: setSun rewrites it in place, so the caller's
 	// reference follows.
 	const sunArray = sunDirection.toArray();
-	// A test hook for the calibration (tests/ocean/e2e/materials.spec.js): moves the DirectionalLight
-	// and the engine's sun vector to `direction`. The sky and its environment reflections keep the
-	// place's sun; nothing in the shipped page calls this.
+	// Moves the DirectionalLight and the engine's sun vector to `direction`. On its own it is the
+	// calibration's test hook (tests/ocean/e2e/materials.spec.js, through window.__ocean.setSun), and
+	// the sky and its environment reflections keep the place's sun; the stage looks call it through
+	// setStageSun below, which moves the sky's sun as well.
 	function setSun(direction) {
 		const v = new THREE.Vector3(...direction);
 		const length = v.length();
@@ -67,6 +73,60 @@ export function createScene(canvas) {
 	// them out; the shipped page keeps them.
 	function setEnvironment(enabled) {
 		scene.environment = enabled ? environment : null;
+	}
+
+	// Frames the stage sun must hold still before the environment is rebuilt: a PMREM pass costs a
+	// few milliseconds on a GPU and far more under SwiftShader, too much for every frame of a drag.
+	const ENVIRONMENT_SETTLE_FRAMES = 20;
+	let environmentStale = false;
+	let stillFrames = 0;
+
+	// A3: the sun a stage recipe asks for (steps 4 and 12 move it). Unlike setSun, which the
+	// calibration uses, it moves the sky dome's sun too, and the environment reflections follow once
+	// the sun has held still. A direction equal to the current one changes nothing.
+	function setStageSun(direction) {
+		const before = [...sunArray];
+		setSun(direction);
+		if (sunArray.every((value, i) => value === before[i])) {
+			return;
+		}
+		uniforms.sunPosition.value.set(sunArray[0], sunArray[1], sunArray[2]);
+		environmentStale = true;
+		stillFrames = 0;
+	}
+
+	// Once a frame: rebuilds the environment when the stage sun has settled.
+	function settleEnvironment() {
+		if (!environmentStale) {
+			return;
+		}
+		stillFrames += 1;
+		if (stillFrames < ENVIRONMENT_SETTLE_FRAMES) {
+			return;
+		}
+		environmentSky.material.uniforms.sunPosition.value.set(sunArray[0], sunArray[1], sunArray[2]);
+		const next = buildEnvironment();
+		if (scene.environment === environment) {
+			scene.environment = next;
+		}
+		environment.dispose();
+		environment = next;
+		environmentStale = false;
+	}
+
+	// A3: whether the environment reflections have caught up with the stage sun, and the sun they
+	// were last built for (the stage look's probe reports it).
+	function environmentState() {
+		const built = environmentSky.material.uniforms.sunPosition.value;
+		return { settled: !environmentStale, sun: [built.x, built.y, built.z] };
+	}
+
+	// A3: the fog a stage recipe asks for (step 1 thickens it over the far grid).
+	function setFog(density) {
+		if (!(Number.isFinite(density) && density >= 0)) {
+			throw new Error(`setFog needs a finite density of at least 0, got ${density}`);
+		}
+		scene.fog.density = density;
 	}
 
 	// The dome is 8000 across around its own position and the camera's far plane is 9000: left at
@@ -92,6 +152,10 @@ export function createScene(canvas) {
 		sunDirection: sunArray,
 		setSun,
 		setEnvironment,
+		setStageSun,
+		settleEnvironment,
+		environmentState,
+		setFog,
 		resize,
 		follow,
 		render: () => renderer.render(scene, camera),

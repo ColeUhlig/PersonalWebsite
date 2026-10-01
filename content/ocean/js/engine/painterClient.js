@@ -20,10 +20,12 @@
 // frame) and a set lost to a dropped Paint is replaced by a fresh one. And there IS a main-thread
 // painter here: when a worker cannot be spawned or reports an error, both roles move to in-process
 // workers (Review Focus 1), because a frozen sea is worse than a slower one.
+//
+// `update` (A3) changes painter knobs without a Configure (painterWorkerCore's `update`).
 import * as FieldStore from '../core/fieldStore.js';
 import * as MapRotation from '../core/mapRotation.js';
 import { createInProcessWorker } from './inProcessWorker.js';
-import { createPainterWorker } from '../workers/painterWorkerCore.js';
+import { checkUpdate, createPainterWorker, mergeUpdate } from '../workers/painterWorkerCore.js';
 import { CONFIGURE_TIMEOUT_FRAMES, PAINT_TIMEOUT_FRAMES } from './config.js';
 
 const ROLE_COLOUR = 'colour';
@@ -143,8 +145,10 @@ function uploadColour(painter, data) {
 		sink.uploadColourBand(data.band, data.pixels);
 	}
 	// The last band brings the finished coverage and one roughness map per ring painted from it.
-	// The coverage is copied whatever the sink: every maps Paint until the next cycle reads it.
-	if (data.coverage) {
+	// The coverage is copied whatever the sink: every maps Paint until the next cycle reads it. A
+	// band 4 painted before an update switched the foam off lands after the reset, so with foam off
+	// now neither is kept: the roughness would stay on the water with nothing to repaint it.
+	if (data.coverage && painter.mapsConfig.foamEnabled) {
 		painter.coverage.set(data.coverage);
 		if (sink) {
 			data.roughness.forEach((pixels, index) => sink.uploadRoughness(index + 1, pixels));
@@ -175,17 +179,24 @@ function onPixels(painter, role, data) {
 	if (fromColour) {
 		uploadColour(painter, data);
 		painter.stage.upload += (performance.now() - started) / 1000;
-		painter.foamCover = data.first;
+		// A band painted before foam went off lands after the update: its cover is the old field's.
+		painter.foamCover = painter.colourConfig.foamEnabled ? data.first : 0;
 		// Every band steps its own quarter of the field, so every band's cost is added.
 		painter.foamSeconds += data.second / 1000;
 		painter.colourSeconds += data.third / 1000;
 		painter.pendingColour = false;
+		painter.colourLanded = data.sequence;
 		painter.cycleColour = Math.max(painter.cycleColour, painter.frame - painter.sentColourFrame);
 	} else {
-		painter.sink?.uploadMaskOrNormal(data.slot, data.pixels);
+		// A normal map painted before an update took the last normal cascade away lands after the
+		// clear: uploaded, it would stay on the water with nothing to repaint it.
+		if (data.slot !== MapRotation.NORMAL || painter.paintsNormal) {
+			painter.sink?.uploadMaskOrNormal(data.slot, data.pixels);
+		}
 		painter.stage.upload += (performance.now() - started) / 1000;
 		painter.maskMax = data.first;
 		painter.pendingMaps = false;
+		painter.mapsLanded = data.sequence;
 		painter.cycleMaps = Math.max(painter.cycleMaps, painter.frame - painter.sentMapsFrame);
 	}
 }
@@ -306,6 +317,8 @@ export function create({ config, spawn, sink = null, stage, log = console }) {
 		pendingColour: false,
 		sentColourFrame: 0,
 		colourSequence: 0,
+		// Piece C (ocean.js's rest): the sequence of the last reply that landed, per worker.
+		colourLanded: 0,
 		colourFrame: 0,
 		cycleColour: 0,
 		warnedSilentColour: false,
@@ -313,6 +326,7 @@ export function create({ config, spawn, sink = null, stage, log = console }) {
 		pendingMaps: false,
 		sentMapsFrame: 0,
 		mapsSequence: 0,
+		mapsLanded: 0,
 		mapsFrame: 0,
 		cycleMaps: 0,
 		warnedSilentMaps: false,
@@ -341,6 +355,33 @@ export function create({ config, spawn, sink = null, stage, log = console }) {
 		toMainThread(painter, `painter workers could not start: ${error.message}`);
 	}
 	return painter;
+}
+
+/**
+ * Changes painter knobs without a Configure: both workers get it, and both kept configs take it,
+ * so a Configure re-sent after a timeout or on the main-thread fallback carries it too. When the
+ * normal map loses its last cascade, or the foam is switched off, what was painted before would
+ * otherwise stay on the water, so the sink is asked to put those maps back to rest.
+ * @param {object} settings keys from painterWorkerCore's UPDATABLE
+ */
+export function update(painter, settings) {
+	checkUpdate(settings, painter.count);
+	const hadNormal = painter.paintsNormal;
+	const hadFoam = painter.mapsConfig.foamEnabled;
+	painter.mapsConfig = mergeUpdate(painter.mapsConfig, settings);
+	painter.colourConfig = mergeUpdate(painter.colourConfig, settings);
+	painter.paintsNormal = painter.mapsConfig.normalCascades.length > 0;
+	for (const role of ROLES) {
+		painter.workers[role]?.postMessage({ type: 'update', settings });
+	}
+	if (hadNormal && !painter.paintsNormal) {
+		painter.sink?.clearNormal?.();
+	}
+	if (hadFoam && !painter.mapsConfig.foamEnabled) {
+		painter.coverage.fill(0);
+		painter.foamCover = 0;
+		painter.sink?.resetRoughness?.();
+	}
 }
 
 // One turn to each painter, from the fields that were just blended. The `paint` stage this charges
@@ -406,6 +447,21 @@ export function mode(painter) {
 
 export function fallbackReason(painter) {
 	return painter.reason;
+}
+
+// Piece C (ocean.js's rest): the sequence numbers sent so far, to count Paints from.
+export function mark(painter) {
+	return Object.freeze({ colour: painter.colourSequence, maps: painter.mapsSequence });
+}
+
+// Whether, since `mark`, Paints of every colour band and of both map slots have landed and no
+// reply is still out. A slot with nothing to paint (one cascade, no normal block) is skipped
+// without a sequence number, so two map Paints may both be masks: still the newest of each.
+export function paintedSince(painter, since) {
+	return !painter.pendingColour
+		&& !painter.pendingMaps
+		&& painter.colourLanded >= since.colour + MapRotation.BANDS
+		&& painter.mapsLanded >= since.maps + MapRotation.MAPS.length;
 }
 
 export function ready(painter) {

@@ -149,3 +149,144 @@ test('a fallback whose build throws leaves the transport as it was (no main-thre
 	expect.equal(cascades.fallbackReason(), null, 'no reason recorded');
 	expect.equal(cascades.request(1, 0, 1), 'waiting', 'a later request is answered, not a TypeError');
 });
+
+function retuneHarness(useWorkers) {
+	const state = { scale: 1 };
+	const received = [];
+	const cascades = createCascades({
+		count: 1,
+		cells: CELLS,
+		configFor: (index) => ({ ...configFor(index), params: { ...Spectrum.NORMAL, scale: state.scale } }),
+		spawn: () => createInProcessWorker(createCascadeWorker),
+		useWorkers,
+		onFields: (index, packed) => received.push(packed.slice()),
+		onReady: () => {},
+		log: { warn() {} },
+	});
+	return { cascades, received, state };
+}
+
+function doubled(later, earlier) {
+	let nonZero = 0;
+	for (const i of [3, 50, 101]) {
+		expect.equal(later[i], earlier[i] * 2, `value ${i} doubled`);
+		if (earlier[i] !== 0) nonZero += 1;
+	}
+	expect.truthy(nonZero > 0, 'the compared values are not all zero');
+}
+
+test('retune sends the current config to a ready worker, and the next result carries it', async () => {
+	const { cascades, received, state } = retuneHarness(true);
+	expect.equal(cascades.retune(1), 'waiting', 'not ready: the caller keeps it pending');
+	await flush();
+	cascades.request(1, 4, 1);
+	await flush();
+	state.scale = 2;
+	expect.equal(cascades.retune(1), 'sent', 'sent to the ready worker');
+	cascades.request(1, 4, 2);
+	await flush();
+	expect.equal(received.length, 2, 'two results');
+	doubled(received[1], received[0]);
+	expect.truthy(Number.isFinite(cascades.lastRetuneMs[0]), 'the rebuild time is kept');
+});
+
+test('on the main thread a retune rebuilds the local cascade at once', () => {
+	const { cascades, received, state } = retuneHarness(false);
+	expect.truthy(Number.isNaN(cascades.lastRetuneMs[0]), 'no rebuild timed yet');
+	cascades.request(1, 4, 1);
+	state.scale = 2;
+	expect.equal(cascades.retune(1), 'local', 'rebuilt on this thread');
+	cascades.request(1, 4, 2);
+	doubled(received[1], received[0]);
+	expect.truthy(Number.isFinite(cascades.lastRetuneMs[0]), 'the rebuild time is kept');
+});
+
+// Task 3 minors: a refused sea is refused the same way on both paths, before anything is posted
+// or rebuilt, and an index outside the cascades is refused.
+test('a retune the maths cannot take throws on either path and leaves the transport as it was', async () => {
+	for (const useWorkers of [true, false]) {
+		const { cascades, state } = retuneHarness(useWorkers);
+		await flush();
+		state.scale = Number.NaN;
+		let message = '';
+		try {
+			cascades.retune(1);
+		} catch (error) {
+			message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+		}
+		expect.truthy(message.includes('scale'), `workers=${useWorkers}: ${message}`);
+		await flush();
+		expect.equal(cascades.mode(), useWorkers ? 'workers' : 'main-thread', 'no fallback');
+		state.scale = 1;
+		expect.equal(cascades.retune(1), useWorkers ? 'sent' : 'local', 'a good retune still goes');
+	}
+});
+
+test('a retune names a cascade the transport has, on either path', async () => {
+	for (const useWorkers of [true, false]) {
+		const { cascades } = retuneHarness(useWorkers);
+		await flush();
+		for (const bad of [0, 2, 1.5, Number.NaN]) {
+			let message = '';
+			try {
+				cascades.retune(bad);
+			} catch (error) {
+				message = error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
+			}
+			expect.truthy(message.includes('cascade'), `workers=${useWorkers}, index ${bad}: ${message}`);
+		}
+	}
+});
+
+// Task 3 minor: a retune sent while an evolve is in flight. The reply in flight is the old sea
+// (the worker handles messages in order: the evolve went first); the next request is the new one.
+test('a retune sent while an evolve is in flight lands after it: the reply in flight is the old sea', async () => {
+	const { cascades, received, state } = retuneHarness(true);
+	await flush();
+	cascades.request(1, 4, 1);
+	await flush();
+	expect.equal(cascades.request(1, 4, 2), 'sent', 'an evolve in flight');
+	state.scale = 2;
+	expect.equal(cascades.retune(1), 'sent', 'the retune goes out behind it');
+	await flush();
+	expect.equal(received.length, 2, 'the evolve in flight answered');
+	expect.equal(received[1].join(','), received[0].join(','), 'with the old sea');
+	cascades.request(1, 4, 3);
+	await flush();
+	doubled(received[2], received[0]);
+});
+
+// Load-proof: the lookup is made several times slower than this machine's own rebuild (measured
+// first, best of a few), and the retune's time, best of a few, must come in under the lookup's. Had
+// the timer started before the lookup, every retune would take at least the lookup.
+test('the main-thread retune times the rebuild, not the config lookup', () => {
+	let lookupMs = 0;
+	const cascades = createCascades({
+		count: 1,
+		cells: CELLS,
+		configFor: (index) => {
+			const until = performance.now() + lookupMs;
+			while (performance.now() < until) {
+				// a slow config lookup
+			}
+			return configFor(index);
+		},
+		spawn: () => createInProcessWorker(createCascadeWorker),
+		useWorkers: false,
+		onFields: () => {},
+		onReady: () => {},
+		log: { warn() {} },
+	});
+	const bestOf = (runs) => {
+		let best = Infinity;
+		for (let i = 0; i < runs; i++) {
+			cascades.retune(1);
+			best = Math.min(best, cascades.lastRetuneMs[0]);
+		}
+		return best;
+	};
+	const rebuildMs = bestOf(3);
+	lookupMs = Math.max(30, 4 * rebuildMs + 10);
+	const timedMs = bestOf(3);
+	expect.truthy(timedMs < lookupMs, `the rebuild alone: ${timedMs.toFixed(1)} ms, against a ${lookupMs.toFixed(1)} ms lookup (rebuild ${rebuildMs.toFixed(1)} ms)`);
+});
