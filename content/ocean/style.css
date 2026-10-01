@@ -28,6 +28,13 @@
 	--warn: #ffb4a8;
 	--panel-width: clamp(300px, 30vw, 440px);
 	--gutter: 16px;
+	/* The pills (the motion and tilt buttons) wrap their text inside this width; on a wide screen the
+	   full-width parts of the page keep clear of a column this wide plus the gutters (.pills). */
+	--pill-width: 11rem;
+	--pill-room: calc(var(--pill-width) + 2 * var(--gutter));
+	/* The column's height when it is tallest: three lines of 0.9rem text at 1.55 (the refusal wraps),
+	   two pills' padding and borders, the gap, the gutter below and a little air above. */
+	--pill-stack: calc(4.2rem + 68px);
 }
 
 html {
@@ -104,28 +111,27 @@ header.site a {
 	white-space: pre-wrap;
 }
 
-.motion {
+/* The motion and tilt buttons, stacked in one column at the bottom right, so however large the text
+   they never overlap; a hidden one takes no room. On a wide screen the full-width parts of the page
+   (the opening, the finale's blocks, the footer) keep --pill-room clear on the right, so the column
+   never covers text; on a narrow one it sits over the ocean's half (below). */
+.pills {
 	position: fixed;
 	right: var(--gutter);
 	bottom: var(--gutter);
 	z-index: 3;
-	padding: 8px 14px;
-	border-radius: 999px;
-	border: 1px solid var(--line);
-	background: var(--glass);
-	color: var(--ink);
-	font: inherit;
-	font-size: 0.9rem;
-	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
+	max-width: var(--pill-width);
+	pointer-events: none;
 }
 
-/* Task 9b: asks for motion access on a phone that needs a tap for it (iOS), so tilting the phone can
-   swing the camera. Stacked above the motion button (about 40 px tall, plus a gap), over the ocean. */
+.motion,
 .tilt {
-	position: fixed;
-	right: var(--gutter);
-	bottom: calc(var(--gutter) + 48px);
-	z-index: 3;
+	pointer-events: auto;
+	max-width: 100%;
 	padding: 8px 14px;
 	border-radius: 999px;
 	border: 1px solid var(--line);
@@ -136,6 +142,7 @@ header.site a {
 	cursor: pointer;
 }
 
+/* Task 9b: the tilt button asks for motion access on a phone that needs a tap for it (iOS). */
 .tilt:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
@@ -744,18 +751,31 @@ footer.site a {
 		overflow-wrap: anywhere;
 	}
 
-	/* Over the ocean's half, at its bottom right, so the button never covers the text below. */
-	.motion {
+	/* Over the ocean's half, the column's foot at its bottom right, so the buttons never cover the
+	   text below (the panels scroll beneath the ocean here). */
+	.pills {
 		bottom: auto;
-		top: calc(50vh - 48px);
-		top: calc(50svh - 48px);
+		top: calc(50vh - 8px);
+		top: calc(50svh - 8px);
+		transform: translateY(-100%);
+	}
+}
+
+/* A wide screen: the story's full-width parts keep the pills' column clear (.pills). The opening
+   only ever moves up from where it starts, so it keeps clear of the column's height at the bottom,
+   which leaves its title centred; the finale's blocks and the footer keep clear of its width. */
+@media (min-width: 900px) {
+	.opening {
+		padding-bottom: var(--pill-stack);
 	}
 
-	/* Above the motion button, still over the ocean's half. */
-	.tilt {
-		bottom: auto;
-		top: calc(50vh - 96px);
-		top: calc(50svh - 96px);
+	.step-finale {
+		padding-right: var(--pill-room);
+	}
+
+	footer.site {
+		padding-left: var(--pill-room);
+		padding-right: var(--pill-room);
 	}
 }
 

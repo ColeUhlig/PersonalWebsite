@@ -44,7 +44,7 @@ export function mountTilt({ button, story, win = window }) {
 		return handle;
 	}
 
-	const onOrientation = (event) => follower.sense(event.beta, event.gamma, screenAngle(win));
+	const onOrientation = (event) => follower.sense(event, screenAngle(win));
 	function turnOn() {
 		state = 'on';
 		follower.reset();
