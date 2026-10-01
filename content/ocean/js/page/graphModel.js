@@ -147,6 +147,15 @@ export function graphSpan(camera, out = { zMin: 0, zMax: 0, frameMin: 0, frameMa
 	return out;
 }
 
+/**
+ * Task 14: the z where the curve's line (y = 0 on the plane) crosses the screen column ndcX (-1 the
+ * left edge, +1 the right), within MAX_SPAN_HALF of the view's centre; NaN when the camera does not
+ * face the plane. The stage keeps its words left of the page's pills with it.
+ */
+export function lineZAt(camera, ndcX) {
+	return readView(camera) ? lineZ(ndcX) : Number.NaN;
+}
+
 // Pixels the axes stand in from the frame's left edge (room for the height ticks' numbers, drawn to
 // the axis' left), its right edge, and its top and bottom.
 export const AXIS_LEFT_PX = 44;

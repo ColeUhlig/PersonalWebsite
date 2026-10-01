@@ -22,8 +22,11 @@
 // The band never eases: the lens clearance depends on it. Nothing allocates per frame: tick values
 // go into a buffer made once, and a label's text is rebuilt only when its number changes (R18).
 // The probe's `components` is a number: how many component curves are drawn.
+// Task 14: the page's pills sit over the canvas's bottom right (keepClear, measured by
+// ui/keepClear.js): where the graph's foot comes down into their rows, the distance numbers stop and
+// the distance word ends short of them, and a λ word under the troughs moves left out of them.
 import * as THREE from 'three';
-import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, niceAtLeast, floorDepth, graphSpan, lambdaPair, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
+import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, niceAtLeast, floorDepth, graphSpan, lambdaPair, lineZAt, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
 import { GRAPH_OFF, GRAPH_PLANE_X, graphBand } from '../stages/graph.js';
 import { createAxes, createLabel } from './graphLabels.js';
 
@@ -58,6 +61,12 @@ const WORD_OVER_CRESTS_PX = 44;
 const TICK_SPACING_PX = 90;
 const MAX_DISTANCE_TICKS = 8;
 const MINUS = '\u2212';
+// Task 14: pixels kept between the graph's words and the page's pills, and how far under the foot
+// of the axes its numbers and word reach (the numbers 14 px under it, the word 32 px, each about
+// 13 px tall); half the widest distance number's width ("\u221230").
+const KEEP_CLEAR_GAP_PX = 8;
+const FOOT_LABELS_PX = 52;
+const TICK_HALF_PX = 14;
 const signed = (v) => (v < 0 ? `${MINUS}${-v}` : `${v}`);
 
 function ribbonMesh(colour, opacity, order) {
@@ -140,6 +149,28 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	let drawing = false;
 	let drawn = 0;
 	let tallest = 0;
+	// The pills' box at the canvas's bottom right in CSS pixels ({ width, height }), or null; and,
+	// this frame, the z the foot's words must end short of (Infinity when nothing is in the way).
+	let clearZone = null;
+	let footClear = Infinity;
+	const scratch = new THREE.Vector3();
+
+	function keepClear(zone) {
+		clearZone = zone !== null && zone.width > 0 && zone.height > 0 ? { width: zone.width, height: zone.height } : null;
+	}
+
+	// The z the words at screen row `y` (studs on the plane, at z) must end short of: the line's z at
+	// the pills' left edge less the gap, when that row comes down into the pills' rows; else Infinity.
+	function clearOf(x, y, z, reachPx) {
+		if (clearZone === null) return Infinity;
+		const heightPx = spanInput.heightPx;
+		scratch.set(x, y, z).project(camera);
+		const rowPx = ((1 - scratch.y) / 2) * heightPx;
+		if (rowPx + reachPx < heightPx - clearZone.height - KEEP_CLEAR_GAP_PX) return Infinity;
+		const widthPx = heightPx * spanInput.aspect;
+		const z0 = lineZAt(spanInput, 1 - (2 * (clearZone.width + KEEP_CLEAR_GAP_PX)) / widthPx);
+		return Number.isNaN(z0) ? Infinity : z0;
+	}
 
 	function clip() {
 		if (band === null) {
@@ -319,6 +350,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		// bracket too (a trough pair is drawn under the curve), as far as the frame allows.
 		const marksDepth = marking ? sine.packed[2] * sine.weights[0] * yScale + FOOT_BELOW_MARKS_PX * sppLeft : 0;
 		const footDepth = Math.max(heightTop, Math.min(marksDepth, -layout.bottom - 34 * sppLeft));
+		footClear = clearOf(x, -footDepth, right, FOOT_LABELS_PX);
 		axes.begin();
 		heightAxes.begin();
 		axes.segment(x, 0, left, x, 0, right);
@@ -334,7 +366,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			const z = zTicks[i];
 			const spp = studsPerPixelAt(spanInput, z);
 			axes.segment(x, -5 * spp, z, x, 5 * spp, z);
-			if (slot < TICK_LABELS) {
+			if (slot < TICK_LABELS && z + TICK_HALF_PX * spp <= footClear) {
 				tickLabel(slot, z, 0, x, -footDepth - 14 * spp, z, spp, opacity, 'centre');
 				slot += 1;
 			}
@@ -361,7 +393,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		const wordY = Math.min(Math.max(heightTop + 30 * sppLeft, crestTop + WORD_OVER_CRESTS_PX * sppLeft), layout.top);
 		words.height.place(x, wordY, left + wordY * lean, sppLeft, heightOpacity, 'left');
 		words.distance.set('distance (studs)');
-		words.distance.place(x, Math.max(-footDepth - 32 * sppRight, layout.bottom), right, sppRight, opacity, 'right');
+		words.distance.place(x, Math.max(-footDepth - 32 * sppRight, layout.bottom), Math.min(right, footClear), sppRight, opacity, 'right');
 		if (heightOpacity > 0) shownLabels.push(words.height.text());
 		shownLabels.push(words.distance.text());
 		if (marking) {
@@ -406,7 +438,11 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			}
 			// Over the bracket either way: above the crests for a crest pair; for a trough pair between
 			// the bracket and the axis, where the curve is at its crest midway, clear of the numbers below.
-			words.lambda.place(x, lift + 12 * spp, (first + second) / 2, spp, opacity);
+			// Under the troughs it may come down into the pills' rows: then it moves left, out of them.
+			const half = (words.lambda.width() / 2) * spp;
+			const centre = (first + second) / 2;
+			const clear = pair.crest ? Infinity : clearOf(x, lift + 12 * spp, centre, 10);
+			words.lambda.place(x, lift + 12 * spp, Math.min(centre, clear - half), spp, opacity);
 			lambdaSide = pair.crest ? 'crest' : 'trough';
 			shownLabels.push(words.lambda.text());
 		} else {
@@ -466,5 +502,5 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		};
 	}
 
-	return { apply, frame, probe };
+	return { apply, frame, probe, keepClear };
 }

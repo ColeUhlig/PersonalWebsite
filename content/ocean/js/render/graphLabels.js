@@ -73,6 +73,9 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 	return {
 		sprite,
 		text: () => text,
+		// The label's width in CSS pixels, padding included (Task 14: the stage keeps it clear of the
+		// page's pills).
+		width: () => widthPx,
 		// Redraws only for new text.
 		set(next) {
 			if (next === text) return;

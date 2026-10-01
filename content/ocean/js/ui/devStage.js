@@ -9,6 +9,7 @@ import { createDirector } from '../stages/director.js';
 import { recipeFor } from '../stages/recipes.js';
 import { resolveSliderValues } from '../stages/route.js';
 import { createStageLook } from '../render/stageLook.js';
+import { watchKeepClear } from './keepClear.js';
 import { createGraphStage } from '../render/graphStage.js';
 import { createSurfaceOverlays } from '../render/surfaceOverlays.js';
 
@@ -32,6 +33,8 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
 	const graph = createGraphStage({ view, ocean, look });
 	const overlays = createSurfaceOverlays({ view, ocean });
+	// Task 14: the graph keeps its words out from under the page's pills.
+	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), graph.keepClear);
 	const focusNow = [0, 0];
 
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so

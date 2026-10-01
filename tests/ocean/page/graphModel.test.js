@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
-import { CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, niceAtLeast, componentWaves, floorDepth, graphSpan, uprightLean, axisLayout, axisOpacityOf, lambdaPair, AXIS_LEFT_PX, AXIS_RIGHT_PX, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
+import { lineZAt, CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, niceAtLeast, componentWaves, floorDepth, graphSpan, uprightLean, axisLayout, axisOpacityOf, lambdaPair, AXIS_LEFT_PX, AXIS_RIGHT_PX, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
 import { GRAPH_PLANE_X } from '../../../content/ocean/js/stages/graph.js';
 import { GRAPH_SHOT } from '../../../content/ocean/js/stages/recipeKit.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
@@ -75,6 +75,18 @@ test("graphSpan from step 4's shot on a 21:9 screen draws the curve out to the o
 		expect.truthy(span.zMin <= farEdge, `aspect ${aspect.toFixed(2)}: the curve ends at z ${span.zMin.toFixed(1)}, the sheet at ${farEdge}`);
 		expect.truthy((span.zMax - span.zMin) / (CURVE_POINTS - 1) <= 3.01, 'points no more than three studs apart');
 	}
+});
+
+// Task 14: the line's z at any screen column, so the stage can keep its words left of the page's
+// pills: the frame's edges are graphSpan's frameMin and frameMax, and a column in between lies between.
+test('lineZAt finds where the curve\'s line crosses a screen column', () => {
+	const camera = { position: GRAPH_SHOT.position, forward: forwardOf(GRAPH_SHOT), fovDegrees: 70, aspect: 390 / 422, heightPx: 422 };
+	const span = graphSpan(camera);
+	expect.near(lineZAt(camera, 1), span.frameMax, 1e-9, 'the right edge');
+	expect.near(lineZAt(camera, -1), span.frameMin, 1e-9, 'the left edge');
+	const inside = lineZAt(camera, 0.4);
+	expect.truthy(inside > span.frameMin && inside < span.frameMax, 'a column inside the frame');
+	expect.truthy(Number.isNaN(lineZAt({ position: [10, 0, 0], forward: [-1, 0, 0], fovDegrees: 70, aspect: 1, heightPx: 100 }, 0)), 'not facing the plane: NaN');
 });
 
 test('sampleCurve is the engine sampler along the plane, drawn yScale times taller, just in front of it', () => {

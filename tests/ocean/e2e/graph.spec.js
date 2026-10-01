@@ -342,3 +342,34 @@ test.describe('on a phone', () => {
 		expect([...sides].sort()).toEqual(['crest', 'trough']);
 	});
 });
+
+// Task 14 (lane B's note): the page's chrome sits over the canvas, the pills at the bottom right and
+// the home link at the top right. At the tallest sine (A = 4) the distance word and the last tick
+// numbers ran under the "Pause the ocean" pill. No graph word or number sits under either, on a phone
+// at 390 and 320 px and on a laptop, at the tallest sine and on the other graph steps.
+for (const { width, height } of [{ width: 390, height: 844 }, { width: 320, height: 700 }, { width: 1366, height: 767 }]) {
+	test.describe(`on a ${width} × ${height} screen`, () => {
+		test.use({ viewport: { width, height }, isMobile: width < 900, hasTouch: width < 900 });
+
+		test("no graph word sits under the page's pills or its home link", async ({ page }) => {
+			test.setTimeout(180_000);
+			const hit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+			for (const query of ['step=sine&s.amplitude=4', 'step=sine', 'step=moving-sine', 'step=sum-of-sines', 'step=frequency']) {
+				await load(page, `${query}&freeze=12`, 30);
+				await waitFrames(page, 5);
+				const { labels, chrome } = await page.evaluate(() => {
+					const canvas = document.getElementById('ocean').getBoundingClientRect();
+					const chrome = [...document.querySelectorAll('.pills > *, header.site a')].filter((e) => !e.hidden && e.offsetParent !== null).map((e) => {
+						const r = e.getBoundingClientRect();
+						return { name: e.id || e.textContent.trim(), x0: r.left - canvas.left, y0: r.top - canvas.top, x1: r.right - canvas.left, y1: r.bottom - canvas.top };
+					});
+					return { labels: window.__ocean.stage.graph().labelRects, chrome };
+				});
+				expect(labels.length, `${query}: words drawn`).toBeGreaterThan(3);
+				expect(chrome.length).toBeGreaterThan(0);
+				const covered = labels.flatMap((l) => chrome.filter((c) => hit(l, c)).map((c) => `"${l.text}" under ${c.name}`));
+				expect(covered, query).toEqual([]);
+			}
+		});
+	});
+}
