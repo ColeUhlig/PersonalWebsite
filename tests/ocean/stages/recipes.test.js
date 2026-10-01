@@ -159,7 +159,7 @@ test("the choppiness sliders run to the engine's 2; the layer toggles name the H
 	});
 });
 
-test('the tiling step flies up and looks steeply down under the A2 fog; the lit teaching sun is ahead of the deck', async () => {
+test('the tiling step flies up and looks steeply down under the A2 fog; the lit sun is ahead of the deck', async () => {
 	const Lighting = await import('../../../content/ocean/js/render/lighting.js');
 	const tiling = at('tiling');
 	expect.truthy(tiling.shot.position[1] > 5 * at('gerstner').shot.position[1], 'far higher than the Gerstner step');
@@ -172,8 +172,12 @@ test('the tiling step flies up and looks steeply down under the A2 fog; the lit 
 	const a = (lit.look.sun.azimuth * Math.PI) / 180;
 	const off = (Math.acos((fx * Math.cos(a) + fz * Math.sin(a)) / Math.hypot(fx, fz)) * 180) / Math.PI;
 	expect.truthy(off < 60, `the sun is ${off.toFixed(0)} degrees off the line of sight`);
-	for (const id of ['unlit', 'highlights', 'gerstner', 'tiling']) {
-		expect.equal(at(id).look.sun.azimuth, lit.look.sun.azimuth, `${id} keeps the teaching sun`);
+	// Lane D tunes the lit steps' sun (Task 0 fix round 1, U4): no literal here. A sun slider starts
+	// at its own recipe's sun, so the panel never shows one sun and the sea another.
+	for (const recipe of R) {
+		for (const slider of recipe.sliders.filter((s) => s.bind.startsWith('look.sun.'))) {
+			expect.equal(slider.default, getPath(recipe, slider.bind), `${recipe.id} ${slider.id} starts at the recipe's sun`);
+		}
 	}
 });
 

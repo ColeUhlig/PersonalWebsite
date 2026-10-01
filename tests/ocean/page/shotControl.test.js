@@ -180,3 +180,27 @@ test('resolveShot writes into the pose it is given, so the story allocates nothi
 	expect.equal(out.target.join(','), finale.target.join(','), 'the target');
 	expect.truthy(out.target !== finale.target, "the recipe's own array is not handed out");
 });
+
+// C2 (Task 0 fix round 1): the flat graph's hold coming on takes the camera back from the visitor,
+// on the same step, by the same ease; on the shot it changes nothing.
+test('release eases the camera back to the shot even from a visitor holding it on the same step', () => {
+	const shots = createShotControl();
+	close(shots.frame(3, SHOT, SHOT, 0.016).position, SHOT.position, 'on the shot');
+	shots.release();
+	expect.equal(shots.mode(), 'shot', 'on the shot, release changes nothing');
+	shots.orbited(3);
+	expect.equal(shots.frame(3, AWAY, SHOT, 0.016), null, 'the visitor has it');
+	shots.release();
+	expect.equal(shots.mode(), 'returning', 'released on the same step');
+	const first = shots.frame(3, AWAY, SHOT, 0);
+	close(first.position, AWAY.position, 'starts where the camera is');
+	let pose = first;
+	for (let t = 0; t < MAX_RETURN_SECONDS + 1; t += 0.05) {
+		pose = shots.frame(3, pose, SHOT, 0.05);
+	}
+	close(pose.position, SHOT.position, 'arrives');
+	expect.equal(shots.mode(), 'shot', 'back on the shot');
+	shots.orbited(3);
+	shots.release();
+	close(shots.frame(3, AWAY, SHOT, 0, { ease: false }).position, SHOT.position, 'with the clock stopped it goes straight there');
+});

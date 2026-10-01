@@ -1,21 +1,22 @@
-// The Gerstner wave banks of the teaching steps 2 to 6 (A3; not a twin). Each is a bank in the
-// packed layout WaveSampler and Swells share (k, omega, A, phase, dx, dz per wave) and in the
-// Swells.Bank shape SurfaceSampler.fill takes as its `swells`: { packed, count, weights, silent }.
-// Handing the sampler one of these with every ring's cascade list empty is exactly how the Roblox
-// coordinator's Gerstner-bank A/B drew the original prototype's sea (OceanClient.client.luau,
-// `gerstnerBank`): every ring samples the whole bank, the last ring flattens it into the horizon,
-// and the vertex normals are the bank's analytic ones.
+// The Gerstner wave banks of the teaching steps, `sine` to `fourier` (A3, extended by C2; not a
+// twin). Each is a bank in the packed layout WaveSampler and Swells share (k, omega, A, phase, dx,
+// dz per wave) and in the Swells.Bank shape SurfaceSampler.fill takes as its `swells`: { packed,
+// count, weights, silent }. Handing the sampler one of these with every ring's cascade list empty is
+// exactly how the Roblox coordinator's Gerstner-bank A/B drew the original prototype's sea
+// (OceanClient.client.luau, `gerstnerBank`): every ring samples the whole bank, the last ring
+// flattens it into the horizon, and the vertex normals are the bank's analytic ones.
 //
-// Two sources:
-//   * one sine wave (step 2) travelling along +z, towards the story's cameras (which look along
-//     -z), so its crests run across the view; from the panel's height, length and speed.
-//     Changing the speed keeps the wave's phase where it was at that instant, so a slider drag
-//     slows or quickens the wave instead of jumping it;
-//   * the teaching bank (steps 3 to 6): the prototype's 32 JONSWAP waves, sorted tallest first so
-//     the wave-count slider adds waves that show, with every wavevector snapped to the 256-stud
-//     lattice. A sum of waves whose wavevectors sit on a 2 pi / 256 lattice repeats exactly every
-//     256 studs, which is the repetition step 6 shows and the one an FFT patch has too. It rolls
-//     along +z like the sine, so its crests also cross the view in steps 3 to 5.
+// Two sources, and the bank's spread:
+//   * one sine wave (the `sine` and `moving-sine` steps) travelling along +z, towards the story's
+//     deck cameras (which look along -z); from the panel's height, length and speed. Changing the
+//     speed keeps the wave's phase where it was at that instant, so a slider drag slows or quickens
+//     the wave instead of jumping it;
+//   * the teaching bank (`sum-of-sines` to `tiling`, and the graph's `frequency` and `fourier`):
+//     the prototype's 32 JONSWAP waves, sorted tallest first so the wave-count slider adds waves
+//     that show, with every wavevector snapped to the 256-stud lattice. A sum of waves whose
+//     wavevectors sit on a 2 pi / 256 lattice repeats exactly every 256 studs, which is the
+//     repetition the `tiling` step shows and the one an FFT patch has too. It rolls along +z like
+//     the sine;
 //   * the spread (C2): `withFan` lays the bank along one axis for the flat graph, or fans it back out.
 import * as Jonswap from '../core/jonswap.js';
 import * as WaveSampler from '../core/waveSampler.js';
@@ -72,9 +73,9 @@ export function checkSine(spec) {
 }
 
 /**
- * The single sine wave of step 2, y = A sin(k z - omega t + phase), with k = 2 pi / wavelength and
- * omega = k * speed (the visitor sets the speed; the wave need not obey dispersion). The panel's
- * y = A sin(kx - omega t) names the direction of travel x; here that is +z.
+ * The single sine wave of the sine steps, y = A sin(k z - omega t + phase), with k = 2 pi /
+ * wavelength and omega = k * speed (the visitor sets the speed; the wave need not obey
+ * dispersion). The panel's y = A sin(kx - omega t) names the direction of travel x; here that is +z.
  * @param {{ omega: number, phase: number } | null} previous the last sine, or null for the first
  * @param {{ amplitude: number, wavelength: number, speed: number }} spec
  * @param {number} t the teaching clock now
