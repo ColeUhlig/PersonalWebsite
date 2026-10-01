@@ -22,9 +22,9 @@ export const NORMAL_LENGTH = 3;
 export const FRAME_LENGTH = 6;
 // How many grid points T (along +x) or B (along +z) lies over, each; those grid normals are left out.
 const CROSSED = Math.floor(FRAME_LENGTH / GRID_SPACING);
-// Step 8's arrows: the grid less its centre (n stands there) and the normals T and B cross, then n,
-// T and B.
-export const NORMAL_ARROWS = GRID * GRID - 1 - 2 * CROSSED + 3;
+// Step 8's arrows: the grid less its centre (n stands there), the normals T and B cross, and the two
+// just past their tips that from the step's shot would stand across them; then n, T and B.
+export const NORMAL_ARROWS = GRID * GRID - 1 - 2 * CROSSED - 2 + 3;
 // Step 9 draws the most: an exact and a difference arrow at every grid point.
 export const MAX_ARROWS = Math.max(2 * GRID * GRID, NORMAL_ARROWS, MAX_DIRECTIONS);
 // Studs the grid's centre sits from the focus on a wide screen (where the step's panel covers the
@@ -37,7 +37,8 @@ export const WIDE_GRID_OFFSET = Object.freeze([6, -8]);
 export const DIFFERENCE_LENGTH = 3.75;
 // One colour per COLOURS entry, then one per heading: the normal (a darker accent), the tangent and
 // binormal (term colours), the central difference (orange), the waves, then the frame normal (the
-// normals' teal again), all clear against the white teaching sea. The renderer builds its colours from these, and the browser tests read them.
+// normals' teal again), all clear against the white teaching sea. The renderer builds its colours
+// from these, and the browser tests read them.
 export const PALETTE_HEX = Object.freeze([
 	'#1aa392', '#d9891a', '#d6457a', '#ef6c1a',
 	'#e4572e', '#17a2a0', '#c9a000', '#5a9b2f', '#2e86ab', '#a23b72', '#f18f01', '#6a4c93',
@@ -103,8 +104,9 @@ export function directionArrows(waves, t, focus, out) {
 const lattice = (value) => Math.round(value / 2) * 2;
 
 /**
- * GRID x GRID exact normals round the focus, less the centre and the grid points T and B lie over;
- * then the frame at the centre point P: the normal n, the tangent T and the binormal B, all from P.
+ * GRID x GRID exact normals round the focus, less the centre, the grid points T and B lie over and
+ * the one just past each tip; then the frame at the centre point P: the normal n, the tangent T and
+ * the binormal B, all from P.
  */
 export function normalArrows(waves, t, focus, out) {
 	const cx = lattice(focus[0]);
@@ -116,7 +118,9 @@ export function normalArrows(waves, t, focus, out) {
 			// Grid steps from the centre; T runs along +x (i), B along +z (j).
 			const di = i - half;
 			const dj = j - half;
-			if ((dj === 0 && di >= 0 && di <= CROSSED) || (di === 0 && dj > 0 && dj <= CROSSED)) continue;
+			const crossed = (dj === 0 && di >= 0 && di <= CROSSED) || (di === 0 && dj > 0 && dj <= CROSSED);
+			const pastTip = (di === CROSSED + 1 && dj === 1) || (di === 1 && dj === CROSSED + 1);
+			if (crossed || pastTip) continue;
 			const x = cx + di * GRID_SPACING;
 			const z = cz + dj * GRID_SPACING;
 			const s = sampleAt(waves, t, x, z);

@@ -8,7 +8,7 @@ import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import { DIRECTIONS_WAVES } from '../../../content/ocean/js/stages/recipeKit.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
-import { ARROW_STRIDE, COLOURS, DIFFERENCE_LENGTH, FRAME_LENGTH, GRID, MAX_ARROWS, MAX_DIRECTIONS, NORMAL_ARROWS, NORMAL_LENGTH, PALETTE_HEX, WIDE_GRID_OFFSET, differenceSlope, directionArrows, normalArrows, readoutText, slopeArrows } from '../../../content/ocean/js/page/overlayModel.js';
+import { ARROW_STRIDE, COLOURS, DIFFERENCE_LENGTH, FRAME_LENGTH, GRID, GRID_SPACING, MAX_ARROWS, MAX_DIRECTIONS, NORMAL_ARROWS, NORMAL_LENGTH, PALETTE_HEX, WIDE_GRID_OFFSET, differenceSlope, directionArrows, normalArrows, readoutText, slopeArrows } from '../../../content/ocean/js/page/overlayModel.js';
 
 const arrow = (out, i) => Array.from(out.subarray(i * ARROW_STRIDE, (i + 1) * ARROW_STRIDE));
 const unit = (v) => {
@@ -88,7 +88,12 @@ test('normals: a grid of exact normals on the surface, and n, T, B from one poin
 		const [bx, , bz] = arrow(out, i);
 		const alongT = bz === centre[2] && bx - centre[0] >= 0 && bx - centre[0] <= FRAME_LENGTH;
 		const alongB = bx === centre[0] && bz - centre[2] >= 0 && bz - centre[2] <= FRAME_LENGTH;
-		expect.truthy(!alongT && !alongB, `grid normal ${i} at (${bx}, ${bz}) under the frame`);
+		// Nor the nearer of the two just past each tip, which from the step's shot would stand across it:
+		// one grid step past T's tip and one towards the camera, and the same for B.
+		const past = (Math.floor(FRAME_LENGTH / GRID_SPACING) + 1) * GRID_SPACING;
+		const pastT = bx - centre[0] === past && bz - centre[2] === GRID_SPACING;
+		const pastB = bx - centre[0] === GRID_SPACING && bz - centre[2] === past;
+		expect.truthy(!alongT && !alongB && !pastT && !pastB, `grid normal ${i} at (${bx}, ${bz}) under or across the frame`);
 	}
 });
 
@@ -208,7 +213,7 @@ test('one colour per role and wave, as six-digit hex', () => {
 
 // Fix round 3: on a wide screen the grid sits a fixed world offset from the focus, the step's own
 // shot's right-hand direction, so orbiting never slides it.
-test("the wide grid offset is about GRID_SHIFT studs along the vector steps' shot's right, on the lattice", () => {
+test("the wide grid offset is about 9 studs along the vector steps' shot's right, on the lattice", () => {
 	for (const id of ['normals', 'slopes']) {
 		const { position, target } = recipeFor(stepOf(id)).shot;
 		const fx = target[0] - position[0];
