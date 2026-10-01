@@ -5,6 +5,8 @@
 // body[data-ocean] is 'loading', 'running' or 'unavailable', for the stylesheet and the tests.
 // Feature imports (each later task adds its import directly above the next line).
 import { inertStory, startStory } from './story.js';
+import { mountControls } from './controls.js';
+import { mountLiveTiming, TIMING_SLIDER, TIMING_STEP } from './liveTiming.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -21,6 +23,29 @@ export function startPage({ route, reducedMotion, clock }) {
 			if (handle.story) {
 				story.onChange((reading) => handle.story.setScroll(reading));
 			}
+		},
+	});
+	// Task 6: the panels' controls, once the ocean runs in story mode. Each sets its own panel's step;
+	// step 3's wave count also shows a live timing of its sum (ui/liveTiming.js).
+	features.push({
+		attachOcean(handle) {
+			if (!handle.story) {
+				return;
+			}
+			for (const root of document.querySelectorAll('.controls[data-controls]')) {
+				const step = Number(root.dataset.controls);
+				mountControls({
+					root,
+					step,
+					story: handle.story,
+					onChange: (detail) => document.dispatchEvent(new CustomEvent('ocean:slider', { detail })),
+				});
+				const timed = step === TIMING_STEP ? root.querySelector(`[data-slider="${TIMING_SLIDER}"]`) : null;
+				if (timed) {
+					mountLiveTiming({ control: timed, story: handle.story, ocean: handle.ocean });
+				}
+			}
+			story.relayout();
 		},
 	});
 	// Features end.

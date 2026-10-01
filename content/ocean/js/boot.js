@@ -5,6 +5,8 @@
 import { readConfig } from './engine/config.js';
 import { createPlayClock } from './engine/playClock.js';
 import { parseStageRoute } from './stages/route.js';
+import { recipeFor } from './stages/recipes.js';
+import { clampKnobsToSliders } from './page/knobs.js';
 import { NOTICES } from './page/notices.js';
 import { webglSupported } from './webgl.js';
 import { showNotice } from './ui/notice.js';
@@ -21,8 +23,11 @@ function searchFor(search, route) {
 }
 
 const route = parseStageRoute(location.search);
-const config = readConfig(searchFor(location.search, route));
-for (const warning of [...config.warnings, ...(route?.warnings ?? [])]) {
+const read = readConfig(searchFor(location.search, route));
+// In the story, knobs a slider owns stay inside that slider's range (page/knobs.js).
+const clamped = route ? { config: read, warnings: [] } : clampKnobsToSliders(read, recipeFor);
+const config = clamped.config;
+for (const warning of [...read.warnings, ...clamped.warnings, ...(route?.warnings ?? [])]) {
 	console.warn(`[ocean] ${warning}`);
 }
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

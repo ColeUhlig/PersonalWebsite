@@ -183,8 +183,10 @@ test("step 6's frame stays on the rings that resolve every wave it sums", () => 
 });
 
 // Final review I2: a crest runs across the frame when its wave travels towards or away from the
-// camera, so each teaching step's heading must lie along the shot's own line of sight.
-test('the teaching crests run across the view in steps 2 to 5', () => {
+// camera, so each teaching step's heading must lie along the shot's own line of sight. Step 5 is
+// the exception (piece C Task 6): its lesson is the crests' pinched profile, which only shows from
+// the side, so it looks across the waves instead (tests/ocean/stages/crests.test.js).
+test('the teaching crests run across the view in steps 2 to 4', () => {
 	const STRIDE = WaveSampler.STRIDE;
 	const heading = (bank) => {
 		let x = 0;
@@ -197,7 +199,7 @@ test('the teaching crests run across the view in steps 2 to 5', () => {
 		const length = Math.hypot(x, z);
 		return [x / length, z / length];
 	};
-	for (let step = 2; step <= 5; step++) {
+	for (let step = 2; step <= 4; step++) {
 		const recipe = recipeFor(step);
 		const e = recipe.engine;
 		const bank = e.source === 'sine' ? WaveBanks.nextSine(null, e.sine, 0).bank : WaveBanks.withCount(WaveBanks.teachingBank(), e.bank.count);

@@ -32,7 +32,7 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'Kept every layer at 64 × 64, so the whole sea is at most 3 × 64 × 64 = 12,288 wave components', source: FACTS, quote: 'three layers of 64 × 64 over 256, 64 and 16 studs: 3 × 64 × 64 = 12,288' },
 	{ phrase: "One 64 × 64 grid can't hold", source: FACTS, quote: 'three layers of 64 × 64' },
 	{ phrase: 'tiling patches of 256, 64 and 16 studs', source: FACTS, quote: 'over 256, 64 and 16 studs' },
-	{ phrase: 'finding the 256-stud pattern', source: FACTS, quote: 'over 256, 64 and 16 studs' },
+	{ phrase: 'so the 256-stud pattern gets harder to spot', source: FACTS, quote: 'over 256, 64 and 16 studs' },
 	{ phrase: "That's how 12,288 wave components pass for far more", source: FACTS, quote: '3 × 64 × 64 = 12,288' },
 	{ phrase: 'The tallest waves in the 256-stud layer', source: FACTS, quote: 'over 256, 64 and 16 studs' },
 	{ phrase: 'A 256 × 256 foam field, painted into the 512 × 512 colour map', source: FACTS, quote: 'the colour map is 512 × 512 and the foam field 256 × 256' },

@@ -242,6 +242,98 @@ footer.site {
 	display: none;
 }
 
+.control {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 4px 10px;
+}
+
+.control input[type='range'] {
+	grid-column: 1 / -1;
+	width: 100%;
+	accent-color: var(--accent);
+}
+
+.control-toggle {
+	grid-template-columns: auto 1fr auto;
+}
+
+.control-counter {
+	grid-template-columns: auto auto 1fr;
+}
+
+.control-choice {
+	grid-template-columns: 1fr;
+}
+
+.control-choice .segmented {
+	display: inline-flex;
+	justify-self: start;
+	max-width: 100%;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.control-choice .segmented button {
+	padding: 6px 10px;
+	white-space: nowrap;
+}
+
+.control-press {
+	padding: 6px 14px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	cursor: pointer;
+}
+
+.control-value {
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-dim);
+	text-align: right;
+}
+
+.control-note {
+	grid-column: 1 / -1;
+	font-size: 0.8rem;
+	color: var(--ink-dim);
+}
+
+.control-note[hidden] {
+	display: none;
+}
+
+.control.is-unavailable label,
+.control.is-unavailable .control-value {
+	opacity: 0.55;
+}
+
+.control .control-timing {
+	grid-column: 1 / -1;
+	margin: 0;
+	font-size: 0.8rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-dim);
+}
+
+.control .control-timing:empty {
+	display: none;
+}
+
+.swatch {
+	display: inline-block;
+	width: 0.6em;
+	height: 0.6em;
+	margin-right: 6px;
+	border-radius: 50%;
+	background: currentColor;
+	vertical-align: middle;
+}
+
 details.math {
 	margin: 12px 0;
 	border-top: 1px solid var(--line);

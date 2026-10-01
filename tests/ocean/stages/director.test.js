@@ -125,7 +125,7 @@ test('frame() returns the look, the shot and the charts of the blended recipe', 
 	const { director } = build();
 	director.setStep(5, 0.5);
 	const out = director.frame();
-	expect.equal(out.shot.position.join(','), '0,153,57.5', 'halfway between the crest [0, 6, 25] and the look-down [0, 300, 90]');
+	expect.equal(out.shot.position.join(','), '-20,157,35', 'halfway between the crest [-40, 14, -20] and the look-down [0, 300, 90]');
 	expect.equal(out.look.material, 'sea', 'the sea look');
 	expect.equal(out.recipe.from, 5, 'from');
 	expect.equal(out.charts, out.recipe.charts, 'charts');

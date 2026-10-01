@@ -95,7 +95,12 @@ const WHITE = { material: 'white', wireframe: true };
 // sits out of frame to the left). Steps 5 and 6 keep it, so scrolling on from 4 does not swing it.
 const TEACHING_SUN = { azimuth: 215, elevation: PLACE_SUN.elevation };
 const DECK = { position: [0, 14, 40], target: [0, 2, -120] };
-const CREST = { position: [0, 6, 25], target: [0, 1, -15] };
+// Step 5 looks across the waves, side-on, at a few crests 30 to 120 studs off (piece C Task 6): the
+// teaching bank rolls along +z, so a camera looking along it (the deck's way) sees each crest end-on
+// as a smooth swell whatever the choppiness. Looking along +x, the crests' flanks run across the
+// frame and their pinch shows (tests/ocean/stages/crests.test.js measures it), with the sun behind
+// the camera rather than glaring into it.
+const CREST = { position: [-40, 14, -20], target: [30, 0, -20] };
 const FINALE_HEIGHT = 21;
 const HIGH = { position: [0, 110, 150], target: [0, 0, -60] };
 

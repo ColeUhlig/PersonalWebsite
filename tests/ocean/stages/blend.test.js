@@ -33,7 +33,7 @@ test('numbers lerp between; fetch and fog on a log scale; the sun the short way 
 	const sun = blendRecipes(applySliders(recipeFor(4), { sunAzimuth: 350 }), applySliders(recipeFor(4), { sunAzimuth: 10 }), 0.5);
 	expect.near(sun.look.sun.azimuth, 0, 1e-9, 'through north, not round the long way');
 	const shot = blendRecipes(recipeFor(5), recipeFor(6), 0.5);
-	expect.equal(shot.shot.position.join(','), '0,153,57.5', 'the camera halfway up (crest [0, 6, 25], look-down [0, 300, 90])');
+	expect.equal(shot.shot.position.join(','), '-20,157,35', 'the camera halfway up (crest [-40, 14, -20], look-down [0, 300, 90])');
 });
 
 // Task 8 minor: steps 1 and 2 used to carry the hero sea's 32 waves, so the 2 -> 3 lerp met the
