@@ -51,10 +51,14 @@ export function positionOf(reading) {
 	return reading.step + (reading.step >= LAST_STEP ? 0 : reading.progress);
 }
 
-export function splitPosition(position) {
+// The step and the progress through it, written into `out` (the story passes a scratch object, as
+// it splits every frame) and returned.
+export function splitPosition(position, out = { step: 1, progress: 0 }) {
 	const p = Math.min(Math.max(position, 1), LAST_STEP);
 	const step = Math.min(Math.floor(p), LAST_STEP);
-	return { step, progress: step === LAST_STEP ? 0 : p - step };
+	out.step = step;
+	out.progress = step === LAST_STEP ? 0 : p - step;
+	return out;
 }
 
 export function smoothPosition(current, target, dt, tau = SMOOTH_SECONDS) {

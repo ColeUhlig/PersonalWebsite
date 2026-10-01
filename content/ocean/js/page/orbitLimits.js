@@ -92,24 +92,39 @@ function steepCap(distance, targetY, aspect, tanHalf, reach, maxPolar) {
  * @param {{ aspect: number, fovDegrees: number, reach: number, horizonHeight?: number, maxPolar?: number }} view
  * @returns {{ min: number, max: number }}
  */
-export function polarRange(pose, { aspect, fovDegrees, reach, horizonHeight = HORIZON_HEIGHT, maxPolar = MAX_POLAR }) {
-	const { distance, polar } = polarOf(pose);
+// Written into `out` and returned: the story works the range out on every frame a shot moves, so
+// it passes a scratch object (and a reused options object).
+export function polarRange(pose, options, out = { min: 0, max: 0 }) {
+	const dx = pose.position[0] - pose.target[0];
+	const dy = pose.position[1] - pose.target[1];
+	const dz = pose.position[2] - pose.target[2];
+	const distance = Math.hypot(dx, dy, dz);
+	const polar = Math.atan2(Math.hypot(dx, dz), dy);
 	const targetY = pose.target[1];
-	const band = tiltBand(distance, polar, targetY, { aspect, fovDegrees, reach, horizonHeight, maxPolar });
+	tiltBand(distance, polar, targetY, options, out);
 	// The most tilt that keeps the camera at or above the floor.
 	const floor = Math.min(CAMERA_FLOOR, pose.position[1]);
 	const floorMax = Math.acos(Math.min(Math.max((floor - targetY) / distance, -1), 1));
-	return { min: band.min, max: Math.max(Math.min(band.max, floorMax), polar) };
+	out.max = Math.max(Math.min(out.max, floorMax), polar);
+	return out;
 }
 
-function tiltBand(distance, polar, targetY, { aspect, fovDegrees, reach, horizonHeight, maxPolar }) {
+// The band the shot's tilt may move in, written into `out`.
+function tiltBand(distance, polar, targetY, { aspect, fovDegrees, reach, horizonHeight = HORIZON_HEIGHT, maxPolar = MAX_POLAR }, out) {
 	const steepMax = steepCap(distance, targetY, aspect, Math.tan((fovDegrees / 2) * (Math.PI / 180)), reach, maxPolar);
 	// The least tilt that keeps the camera within horizonHeight of the ground.
 	const lowMin = Math.acos(Math.min(Math.max((horizonHeight - targetY) / distance, -1), 1));
+	// Two allowed bands with a gap between them (steepMax < lowMin): stay in the one the shot is in
+	// (or nearer to).
+	const steep = steepMax < lowMin && (polar <= steepMax || (polar < lowMin && polar - steepMax < lowMin - polar));
 	if (steepMax >= lowMin) {
-		return { min: 0, max: Math.max(maxPolar, polar) };
+		out.min = 0;
+		out.max = Math.max(maxPolar, polar);
+	} else if (steep) {
+		out.min = 0;
+		out.max = Math.max(steepMax, polar);
+	} else {
+		out.min = Math.min(lowMin, polar);
+		out.max = Math.max(maxPolar, polar);
 	}
-	// Two allowed bands with a gap between them: stay in the one the shot is in (or nearer to).
-	const steep = polar <= steepMax || (polar < lowMin && polar - steepMax < lowMin - polar);
-	return steep ? { min: 0, max: Math.max(steepMax, polar) } : { min: Math.min(lowMin, polar), max: Math.max(maxPolar, polar) };
 }

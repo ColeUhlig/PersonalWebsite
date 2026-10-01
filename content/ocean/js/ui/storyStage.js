@@ -36,7 +36,7 @@ import * as Charts from '../engine/charts.js';
 import * as Ocean from '../engine/ocean.js';
 import { probeSurface } from '../engine/surfaceProbe.js';
 import { createDirector } from '../stages/director.js';
-import { recipeFor, STEP_COUNT } from '../stages/recipes.js';
+import { RECIPES, recipeFor, STEP_COUNT } from '../stages/recipes.js';
 import { createStageLook } from '../render/stageLook.js';
 import { watchKeepClear } from './keepClear.js';
 import { createGraphStage } from '../render/graphStage.js';
@@ -146,6 +146,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	// The tilt range for `pose` at the frame's aspect now; the pose is copied, so a resize can work
 	// the range out again for it (the visitor's free camera, the opening) after the shot's own pose
 	// has been rewritten.
+	// polarRange's options and answer, reused: the range is worked out on every frame a shot moves.
+	const rangeOptions = { aspect: 1, fovDegrees: view.camera.fov, reach };
+	const rangeScratch = { min: 0, max: 0 };
 	function limitTilt(pose) {
 		if (pose !== tiltPose) {
 			for (let i = 0; i < 3; i++) {
@@ -154,7 +157,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			}
 		}
 		tiltAspect = view.camera.aspect;
-		const range = polarRange(tiltPose, { aspect: tiltAspect, fovDegrees: view.camera.fov, reach });
+		rangeOptions.aspect = tiltAspect;
+		rangeOptions.fovDegrees = view.camera.fov;
+		const range = polarRange(tiltPose, rangeOptions, rangeScratch);
 		tilt = Object.freeze({ min: range.min, max: range.max, aspect: tiltAspect });
 		rig.limitTilt(tilt.min, tilt.max);
 	}
@@ -180,6 +185,8 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		return seconds;
 	}
 
+	// splitPosition's answer, reused every frame.
+	const split = { step: 1, progress: 0 };
 	function followScroll(seconds) {
 		if (reading.phase === 'opening') {
 			director.setStep(STEP_COUNT, 0);
@@ -190,7 +197,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			cutPending = true;
 		}
 		position = reducedMotion || !(seconds > 0) ? target : smoothPosition(position, target, seconds);
-		const { step, progress } = splitPosition(position);
+		const { step, progress } = splitPosition(position, split);
 		director.setStep(step, reducedMotion ? 0 : holdThenBlend(progress));
 		return step;
 	}
@@ -406,8 +413,10 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 		return cache;
 	};
-	// A step's seed: its New sea slider's value when it has one, else its recipe's own seed.
-	const seedOf = (step) => (recipeFor(step).sliders.some((s) => s.id === 'seed') ? director.valueOf(step, 'seed') : recipeFor(step).engine.seed);
+	// A step's seed: its New sea slider's value when it has one, else its recipe's own seed. Which
+	// steps have one is fixed, so it is looked up once rather than searched every frame.
+	const seeded = new Set(RECIPES.filter((r) => r.sliders.some((s) => s.id === 'seed')).map((r) => r.step));
+	const seedOf = (step) => (seeded.has(step) ? director.valueOf(step, 'seed') : recipeFor(step).engine.seed);
 	// The spectrum chart's fixed top: JONSWAP at the wind and fetch sliders' maxima, so a stronger
 	// wind raises the curve on the chart instead of rescaling the axis.
 	let ceiling = null;
@@ -428,8 +437,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		// optional step whose sea and seed they show (lane E draws the time step's with its own seed,
 		// pre-flight R13).
 		phaseArrows(t = ocean.t, step = stepOf('random-sea')) {
+			// at.sea spreads the live params only when it rebuilds (a new sea or seed), not every frame.
 			const sea = recipeFor(step).engine.sea;
-			return arrowsFor(step)({ ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch }, seedOf(step), t);
+			return arrowsFor(step).sea(ocean.live.params, sea.windSpeed, sea.fetch, seedOf(step), t);
 		},
 		transforms: (n) => Charts.measureTransforms(n),
 		seed: (step = stepOf('random-sea')) => seedOf(step),

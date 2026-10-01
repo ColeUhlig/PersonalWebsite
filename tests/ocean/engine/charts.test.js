@@ -114,6 +114,25 @@ test('the phase-arrow cache builds once per sea and seed and turns the arrows ev
 	expect.equal(first.length, 8, 'eight arrows by default');
 });
 
+// C final review fix 7: the story draws a step's arrows on its own sea's wind and fetch over the
+// live params; at.sea takes them apart, so no params object is spread per frame, and builds the sea
+// it would have built from the spread.
+test('at.sea builds the sea from a base and its own wind and fetch, once per sea and seed', () => {
+	const at = Charts.createPhaseArrowCache({ sizes: [256, 64, 16], n: 64 });
+	const wind = HERO.windSpeed + 3;
+	const fetch = HERO.fetch / 2;
+	const direct = Charts.phaseArrowsAt(Charts.createPhaseArrows({ ...HERO, windSpeed: wind, fetch }, { seed: 7, sizes: [256, 64, 16], n: 64 }), 2.5);
+	expect.equal(JSON.stringify(at.sea(HERO, wind, fetch, 7, 2.5)), JSON.stringify(direct), 'the same arrows as the spread');
+	at.sea({ ...HERO }, wind, fetch, 7, 4);
+	expect.equal(at.builds(), 1, 'the same sea and seed: turned, not rebuilt');
+	at(({ ...HERO, windSpeed: wind, fetch }), 7, 5);
+	expect.equal(at.builds(), 1, 'at() with the same sea shares the build');
+	at.sea(HERO, wind, fetch, 8, 1);
+	expect.equal(at.builds(), 2, 'a new seed rebuilds');
+	at.sea(HERO, wind, fetch + 1, 8, 1);
+	expect.equal(at.builds(), 3, 'a new fetch rebuilds');
+});
+
 test('the transform timing measures both ways and proves they agree', () => {
 	const result = Charts.measureTransforms(8);
 	expect.equal(result.n, 8, 'n');

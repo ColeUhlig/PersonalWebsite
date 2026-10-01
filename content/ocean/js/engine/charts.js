@@ -156,21 +156,29 @@ export function createPhaseArrows(params, { seed = SEED, count = 8, sizes = Tier
 /**
  * The phase arrows for the page's charts (the dev route and the story), built once per sea and seed
  * and turned every call: `at(params, seed, t)` returns phaseArrowsAt at time t, rebuilding only when
- * the wind, the fetch or the seed changed. `at.builds()` counts the builds.
+ * the wind, the fetch or the seed changed. `at.sea(base, windSpeed, fetch, seed, t)` is the same
+ * with the wind and fetch given apart from the other params (the story's steps draw their own sea's
+ * over the live params), so a caller spreads no params object per frame: the spread happens only
+ * on a build. `at.builds()` counts the builds.
  */
 export function createPhaseArrowCache({ sizes, n }) {
 	let arrows = null;
-	let key = '';
+	let builtWind = NaN;
+	let builtFetch = NaN;
+	let builtSeed = NaN;
 	let builds = 0;
-	function at(params, seed, t) {
-		const next = `${params.windSpeed}|${params.fetch}|${seed}`;
-		if (next !== key) {
-			arrows = createPhaseArrows(params, { seed, sizes, n });
-			key = next;
+	function sea(base, windSpeed, fetch, seed, t) {
+		if (windSpeed !== builtWind || fetch !== builtFetch || seed !== builtSeed) {
+			arrows = createPhaseArrows({ ...base, windSpeed, fetch }, { seed, sizes, n });
+			builtWind = windSpeed;
+			builtFetch = fetch;
+			builtSeed = seed;
 			builds += 1;
 		}
 		return phaseArrowsAt(arrows, t);
 	}
+	const at = (params, seed, t) => sea(params, params.windSpeed, params.fetch, seed, t);
+	at.sea = sea;
 	at.builds = () => builds;
 	return at;
 }

@@ -190,6 +190,9 @@ function phaseChart(figure, story, onLayout) {
 	const motion = figure.dataset.motion === 'still' ? 'still' : 'turning';
 	const step = PHASE_STEP[motion];
 	let arrows = [];
+	// The longest arrow's length in studs, which fills its ring: fixed for a build (a new sea or seed
+	// rebuilds), so it is found once there rather than every frame.
+	let tallest = 1;
 	let frame = 0;
 	let reported = false;
 	// The figure's size at its width: four rings a row, two rows (the engine's eight arrows).
@@ -203,7 +206,7 @@ function phaseChart(figure, story, onLayout) {
 	function build(waves) {
 		const { width, column, radius, row, height } = layout();
 		const unit = column >= LABEL_ROOM ? ' studs' : '';
-		const tallest = Math.max(...waves.map((a) => a.amplitude));
+		tallest = waves.reduce((most, wave) => Math.max(most, wave.amplitude), 0);
 		const [label, words] = PHASE_WORDS[motion](waves.length, tallest);
 		const root = canvasFor(figure, width, height, label, [words]);
 		const defs = svg('defs');
@@ -229,15 +232,15 @@ function phaseChart(figure, story, onLayout) {
 	function turn() {
 		const waves = motion === 'still' ? story.charts.phaseArrows(0, step) : story.charts.phaseArrows(undefined, step);
 		if (arrows.length !== waves.length) build(waves);
-		const tallest = Math.max(...waves.map((a) => a.amplitude));
-		waves.forEach((wave, i) => {
+		for (let i = 0; i < waves.length; i++) {
+			const wave = waves[i];
 			const arrow = arrows[i];
 			const end = arrowEnd(wave.re, wave.im, tallest, arrow.radius - 3);
 			const x2 = (arrow.cx + end.x).toFixed(2);
 			const y2 = (arrow.cy + end.y).toFixed(2);
 			if (x2 !== arrow.x2) arrow.line.setAttribute('x2', (arrow.x2 = x2));
 			if (y2 !== arrow.y2) arrow.line.setAttribute('y2', (arrow.y2 = y2));
-		});
+		}
 	}
 	// Every turn the chart starts itself (on show, each frame of the loop, the still one at mount)
 	// runs here: a throw stops the arrows until the chart next comes on screen, logged once a page,

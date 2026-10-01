@@ -45,6 +45,15 @@ test('a position is step plus progress, and splits back; the finale has no progr
 	expect.equal(splitPosition(0.2).step, 1, 'clamped to step 1');
 });
 
+// C final review fix 7: the story splits its position every frame, into a scratch object of its own.
+test('splitPosition writes into the object it is given and returns it', () => {
+	const out = { step: 0, progress: 0 };
+	expect.equal(splitPosition(7.25, out), out, 'the same object back');
+	expect.equal(`${out.step},${out.progress}`, '7,0.25', 'written in place');
+	splitPosition(STEP_COUNT + 0.4, out);
+	expect.equal(`${out.step},${out.progress}`, `${STEP_COUNT},0`, 'the finale, in place');
+});
+
 test('the position eases toward the scroll, and cuts when the scroll jumps more than a step (Review Focus 1)', () => {
 	let p = 3;
 	for (let i = 0; i < 5; i++) p = smoothPosition(p, 3.8, 0.05);

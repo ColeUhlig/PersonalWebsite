@@ -99,6 +99,16 @@ test('a shot high and far enough to need both limits keeps the side it is on', (
 	expect.near(distance * Math.cos(lowRange.max), CAMERA_FLOOR, 1e-6, 'the lowest it can sink');
 });
 
+// C final review fix 7: the story works the range out while a shot moves, into a scratch object.
+test('polarRange writes into the object it is given, with the same range as a fresh one', () => {
+	const out = { min: -1, max: -1 };
+	for (const shot of [{ position: [0, 400, 100], target: [0, 0, 0] }, { position: [0, 60, 400], target: [0, 0, 0] }, { position: [0, 14, 40], target: [0, 2, -120] }]) {
+		const fresh = polarRange(shot, view(16 / 9));
+		expect.equal(polarRange(shot, view(16 / 9), out), out, 'the same object back');
+		expect.equal(`${out.min},${out.max}`, `${fresh.min},${fresh.max}`, `the range for ${shot.position}`);
+	}
+});
+
 test('frameReach is Infinity once the top of the frame reaches the horizon', () => {
 	const top = (Math.PI / 2) - (FIELD_OF_VIEW / 2) * (Math.PI / 180);
 	expect.equal(frameReach({ distance: 300, polar: top + 0.01, targetY: 0, aspect: 1, fovDegrees: FIELD_OF_VIEW }), Infinity, 'past the horizon');
