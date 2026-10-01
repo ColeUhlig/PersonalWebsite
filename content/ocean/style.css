@@ -346,9 +346,10 @@ details.math summary {
 	font-weight: 600;
 }
 
+/* No overflow here: a formula wraps to the panel (ui/math.js stacks a list of equations one per line)
+   rather than becoming a sideways scroller of its own. */
 .tex {
 	margin: 10px 0 6px;
-	overflow-x: auto;
 }
 
 .tex code {
@@ -357,6 +358,26 @@ details.math summary {
 	white-space: pre-wrap;
 	word-break: break-word;
 	color: var(--ink-dim);
+}
+
+/* KaTeX's output (ui/math.js). Its display mode never wraps; here it may, at the breaks KaTeX
+   marks (after = and +, and at the line breaks between stacked equations), so no formula is wider
+   than its panel at 1366 x 767 or 390 x 844 (math.spec.js). */
+.tex-rendered {
+	padding: 4px 0;
+	font-size: 0.95rem;
+}
+
+.tex-rendered .katex-display {
+	margin: 0;
+}
+
+.tex-rendered .katex-display > .katex {
+	white-space: normal;
+}
+
+.tex-rendered .katex-newline {
+	height: 0.45em;
 }
 
 .math-note {

@@ -7,6 +7,7 @@
 import { inertStory, startStory } from './story.js';
 import { mountControls } from './controls.js';
 import { mountLiveTiming, TIMING_SLIDER, TIMING_STEP } from './liveTiming.js';
+import { startMath } from './math.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -48,6 +49,12 @@ export function startPage({ route, reducedMotion, clock }) {
 			story.relayout();
 		},
 	});
+	// Task 7: "The math" lines, typeset the first time one is opened.
+	try {
+		startMath({ onRendered: () => story.relayout() });
+	} catch (error) {
+		console.error('[ocean] the math lines could not start', error);
+	}
 	// Features end.
 	document.body.dataset.ocean = 'loading';
 	return Object.freeze({
