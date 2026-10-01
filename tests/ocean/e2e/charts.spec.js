@@ -4,6 +4,9 @@
 import { test, expect } from '@playwright/test';
 import { arrowEnd } from '../../../content/ocean/js/page/chartGeometry.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import * as Charts from '../../../content/ocean/js/engine/charts.js';
+import { readConfig } from '../../../content/ocean/js/engine/config.js';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { oceanRunning, scrollToFigure, scrollToId, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
 
 // The charts' steps by id (piece C2, Task 0): the spectrum is the jonswap step's; the phase arrows
@@ -77,10 +80,16 @@ test("the jonswap step's axis holds the peak of every sea the sliders allow, lab
 		const ys = f.querySelector('path.chart-line').getAttribute('d').slice(1).split(' L').map((p) => Number(p.split(' ')[1]));
 		return { top: Number(plot.getAttribute('y')), bottom: Number(plot.getAttribute('y')) + Number(plot.getAttribute('height')), peak: Math.min(...ys) };
 	});
-	for (const [wind, fetch] of [[3, 5000], [25, 200000]]) {
+	// The chart redraws on a 100 ms throttle with a trailing call, so a fixed wait could read the
+	// curve before the last slider move. Wait instead until the drawing's label names the peak this
+	// setting's spectrum has (the same curve story.charts.spectrum() hands the chart).
+	const fetchSlider = recipeFor(SPECTRUM).sliders.find((s) => s.id === 'fetch');
+	const params = readConfig('').params;
+	for (const [wind, fetch, position] of [[3, fetchSlider.min, 0], [25, fetchSlider.max, 1000]]) {
 		await setRange(page, SPECTRUM, 'wind', wind);
-		await setRange(page, SPECTRUM, 'fetch', fetch === 5000 ? 0 : 1000);
-		await page.waitForTimeout(100);
+		await setRange(page, SPECTRUM, 'fetch', position);
+		const peakLabel = `peak: waves ${Charts.spectrumCurve({ ...params, windSpeed: wind, fetch }, { sizes: [256, 64, 16], n: 64 }).peakWavelength.toFixed(0)} studs long`;
+		await expect(figure.locator('svg[role=img]')).toHaveAttribute('aria-label', new RegExp(`, ${peakLabel},`));
 		const { top, bottom, peak } = await peakY();
 		expect(peak, `wind ${wind}, fetch ${fetch}: the peak is inside the plot`).toBeGreaterThan(top);
 		expect(peak, `wind ${wind}, fetch ${fetch}: the peak is above the floor`).toBeLessThan(bottom - 5);
