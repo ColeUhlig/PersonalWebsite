@@ -1,6 +1,7 @@
 // Arrows on the surface (piece C2; lane C owns this file; spec 10.7 steps 5, 8 and 9): each wave's
 // heading (step 5), the surface's normals with the tangent and binormal (step 8), and the
-// central-difference normal beside each exact one, with their mean angle (step 9, Task 6). The
+// central-difference normal beside each exact one, with their mean angle (step 9, Task 6), and, as
+// the 'tiles' kind, the tile's edges on step 13 (Task 15, render/tileEdges.js). The
 // arrows come from page/overlayModel.js, read from the waves the surface is written from; each is a
 // thin cylinder and a cone, two instanced meshes for every arrow at once. Everything is made once; a frame writes
 // matrices and colours into the instance buffers and allocates nothing. An arrow that is not finite
@@ -9,6 +10,7 @@
 import * as THREE from 'three';
 import { ARROW_STRIDE, COLOURS, MAX_ARROWS, PALETTE_HEX, WIDE_GRID_OFFSET, directionArrows, normalArrows, slopeArrows } from '../page/overlayModel.js';
 import { NARROW_QUERY } from '../page/scrollMap.js';
+import { createTileEdges } from './tileEdges.js';
 
 // The model's colours (one per role, then one per wave heading), as three.js colours.
 const PALETTE = PALETTE_HEX.map((hex) => new THREE.Color().setStyle(hex, THREE.SRGBColorSpace));
@@ -55,6 +57,8 @@ export function createSurfaceOverlays({ view, ocean }) {
 		mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 		view.scene.add(mesh);
 	}
+	// Task 15: the 'tiles' kind (step 13) draws the tile's edges, not arrows (render/tileEdges.js).
+	const tiles = createTileEdges(view);
 	const base = new THREE.Vector3();
 	const tip = new THREE.Vector3();
 	const direction = new THREE.Vector3();
@@ -116,7 +120,7 @@ export function createSurfaceOverlays({ view, ocean }) {
 	function draw(t, focus) {
 		const waves = ocean.source === 'waves' ? ocean.waves : null;
 		meanAngle = null;
-		if (kind === null || waves === null) return 0;
+		if (kind === null || kind === 'tiles' || waves === null) return 0;
 		if (kind === 'directions') return directionArrows(waves, t, focus, arrows);
 		shiftGrid(focus);
 		if (kind === 'normals') return normalArrows(waves, t, gridFocus, arrows);
@@ -129,6 +133,7 @@ export function createSurfaceOverlays({ view, ocean }) {
 		apply(overlay) {
 			kind = overlay.kind;
 			spacing = overlay.spacing;
+			tiles.show(kind === 'tiles');
 		},
 		frame(t, focus) {
 			// Hidden and already cleared: nothing to sample, write or upload, and both meshes stay invisible.
@@ -163,7 +168,7 @@ export function createSurfaceOverlays({ view, ocean }) {
 			const shown = Math.min(count, 2);
 			const colours = Array.from({ length: shown }, (_, i) => hex(shafts, i));
 			const headColours = Array.from({ length: shown }, (_, i) => hex(heads, i));
-			return { kind, arrows: count, spacing, meanAngle, finite, first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, headColours, colourUploads };
+			return { kind, arrows: count, spacing, meanAngle, finite, tiles: tiles.probe(), first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, headColours, colourUploads };
 		},
 	};
 }

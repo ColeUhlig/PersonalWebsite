@@ -63,3 +63,9 @@ test("the chord step says what its big graph shows", () => {
 	const words = text(sections.find((s) => s.id === 'fourier').inner);
 	expect.truthy(/big graph/i.test(words) && /last step's waves/i.test(words) && /one curve/i.test(words), `step 15 explains its big graph: "${words.slice(0, 200)}..."`);
 });
+
+// Task 15 polish: step 13 draws the tile's edges dashed on the sea; its words say what they are.
+test("the tiling step says what its dashed lines are", () => {
+	const words = text(sections.find((s) => s.id === 'tiling').inner);
+	expect.truthy(/dashed lines/i.test(words) && /tile's edges/i.test(words), `step 13 names its dashed lines: "${words.slice(-260)}"`);
+});

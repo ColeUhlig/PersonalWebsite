@@ -59,7 +59,7 @@ test('sources and spreads: the sine, the bank along one axis, the bank fanned, t
 
 test('materials, overlays, the graph and the charts sit where the contract puts them', () => {
 	expect.equal(column((r) => (r.id === 'mesh' ? '*' : r.look.material)), 'white,white,white,white,white,white,white,white,white,terms,terms,terms,terms,white,white,painted,painted,painted,painted,painted,painted,painted,painted,*,painted,painted,painted,painted', 'materials');
-	expect.equal(column((r) => r.look.overlay.kind ?? '-'), '-,-,-,-,directions,-,-,normals,slopes,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-', 'overlays');
+	expect.equal(column((r) => r.look.overlay.kind ?? '-'), '-,-,-,-,directions,-,-,normals,slopes,-,-,-,tiles,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-', 'overlays (Task 15: the tile edges on step 13)');
 	expect.equal(column((r) => (r.look.graph.opacity >= GRAPH_HOLD ? 'G' : graphBand(r.look.graph) ? 'b' : '-')), 'G,G,G,b,-,-,-,-,-,-,-,-,-,G,G,-,-,-,-,-,-,-,-,-,-,-,-,-', 'graph steps');
 	expect.equal(column((r) => r.look.graph.components), 'false,false,true,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false', 'components');
 	expect.equal(column((r) => r.charts.phaseArrows || '-'), '-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,still,turning,-,-,-,-,-,-,-,-,-,-', 'phase arrows');
@@ -242,5 +242,29 @@ test("the mesh step's shot shows the 8-stud ring's right and far edges well insi
 		const x = dot(v, right) / depth / (tanHalf * (16 / 9));
 		const y = dot(v, up) / depth / tanHalf;
 		expect.truthy(depth > 0 && Math.abs(x) <= 0.8 && Math.abs(y) <= 0.8, `the ${name} edge's middle at NDC (${x.toFixed(2)}, ${y.toFixed(2)})`);
+	}
+});
+
+// Task 15 polish (the walk: step 13 showed stripes, no tile): the tiling step draws the tile's edges,
+// and only it. The edges are honest: the step's waves (the bank's tallest at full spread, chop and
+// all) give the same surface at (x, z), (x + 256, z) and (x, z + 256), so every square the edges cut
+// holds the same picture.
+test('the tiling step alone draws the tile edges, and its surface repeats across them', async () => {
+	const WaveBanks = await import('../../../content/ocean/js/engine/waveBanks.js');
+	const WaveSampler = await import('../../../content/ocean/js/core/waveSampler.js');
+	for (const recipe of R) {
+		expect.equal(recipe.look.overlay.kind === 'tiles', recipe.id === 'tiling', `${recipe.id}: tile edges ${recipe.look.overlay.kind}`);
+	}
+	const tiling = at('tiling');
+	const tile = WaveBanks.TEACHING_TILE;
+	const bank = WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), tiling.engine.bank.fan), tiling.engine.bank.count);
+	const at0 = new Float64Array(7);
+	const moved = new Float64Array(7);
+	for (const [x, z, t] of [[3.7, -12.1, 0], [101.3, 47.9, 7.5], [-200.2, 133.3, 61]]) {
+		WaveSampler.sample(bank.packed, bank.count, t, x, z, tiling.engine.chop, bank.weights, 0, at0);
+		for (const [dx, dz] of [[tile, 0], [0, tile], [-tile, 2 * tile]]) {
+			WaveSampler.sample(bank.packed, bank.count, t, x + dx, z + dz, tiling.engine.chop, bank.weights, 0, moved);
+			for (let i = 0; i < 7; i++) expect.truthy(Math.abs(moved[i] - at0[i]) < 1e-6, `(${x}, ${z}) and ${dx}, ${dz} on: output ${i} ${at0[i]} vs ${moved[i]}`);
+		}
 	}
 });

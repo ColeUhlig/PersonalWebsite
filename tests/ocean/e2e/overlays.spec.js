@@ -148,3 +148,32 @@ test('a drag on step 8 turns the camera and leaves every arrow where it stood', 
 	expect(JSON.stringify(after.pose)).not.toBe(JSON.stringify(before.pose));
 	expect([after.first[0], after.first[2]]).toEqual([before.first[0], before.first[2]]);
 });
+
+// Task 15 polish: step 13 draws the tile's edges on the sea, dashed, at multiples of the 256-stud
+// tile in x and z (where the surface repeats; recipes.test checks it does), with lines of both
+// directions in the frame; the neighbouring steps draw none.
+test('step 13 draws the tile edges at multiples of the tile, and its neighbours none', async ({ page }) => {
+	await load(page, 'step=tiling&freeze=12', 10);
+	await waitFrames(page, 3);
+	const { tiles } = await stage(page, 'overlays');
+	expect(tiles.shown).toBe(true);
+	expect(tiles.tile).toBe(256);
+	expect(tiles.x.length).toBeGreaterThan(2);
+	expect(tiles.z.length).toBeGreaterThan(2);
+	for (const v of [...tiles.x, ...tiles.z]) expect(Math.abs(v / 256 - Math.round(v / 256))).toBeLessThan(1e-9);
+	const inFrame = await page.evaluate(() => {
+		const camera = window.__ocean.camera;
+		const { tiles: t } = window.__ocean.stage.overlays();
+		const seen = (x, z) => {
+			const p = camera.position.clone().set(x, 0, z).project(camera);
+			return Math.abs(p.x) < 1 && Math.abs(p.y) < 1 && p.z < 1;
+		};
+		return { x: t.x.filter((x) => seen(x, camera.position.z - 150)).length, z: t.z.filter((z) => seen(camera.position.x, z)).length };
+	});
+	expect(inFrame.x, 'lines along z in the frame').toBeGreaterThan(0);
+	expect(inFrame.z, 'lines along x in the frame').toBeGreaterThan(0);
+	for (const id of ['gerstner', 'frequency']) {
+		await load(page, `step=${id}&freeze=12`, 10);
+		expect((await stage(page, 'overlays')).tiles.shown, id).toBe(false);
+	}
+});

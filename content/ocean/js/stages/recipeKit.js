@@ -16,7 +16,8 @@ import { PLACE_SUN } from './sun.js';
 
 export const MATERIALS = Object.freeze(['white', 'sea', 'painted', 'terms']);
 export const MOVES = Object.freeze(['still', 'drift']);
-export const OVERLAYS = Object.freeze([null, 'directions', 'normals', 'slopes']);
+// 'tiles' (Task 15): the teaching tile's edges on step 13, not arrows; its spacing is unused.
+export const OVERLAYS = Object.freeze([null, 'directions', 'normals', 'slopes', 'tiles']);
 export const PHASE_ARROWS = Object.freeze([false, 'still', 'turning']);
 // The recipe fields the engine reads (EngineSettings without `normals` and `warm`).
 export const ENGINE_FIELDS = Object.freeze(['source', 'sine', 'bank', 'chop', 'sea', 'seed', 'layers', 'maps', 'foam', 'foamKnobs', 'glow', 'glowStrength']);

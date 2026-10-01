@@ -18,7 +18,8 @@ export const BETTER_WAVES = Object.freeze({
 	tiling: {
 		title: 'The tiling problem',
 		engine: { ...TEACHING, source: 'bank', bank: { count: TILING_WAVES, fan: 1 }, chop: 0.6 },
-		look: { material: 'terms', sun: TEACHING_SUN },
+		// Task 15: the tile's edges drawn dashed on the sea, so one square can be matched to the next.
+		look: { material: 'terms', sun: TEACHING_SUN, overlay: { kind: 'tiles', spacing: 4 } },
 		shot: { position: [0, 300, 90], target: [0, 0, 0] },
 	},
 });
