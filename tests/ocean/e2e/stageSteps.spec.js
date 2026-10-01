@@ -230,6 +230,9 @@ for (const tier of TIERS) {
 			});
 			expect(Math.hypot(...position.map((value, i) => value - recipe.shot.position[i]))).toBeLessThan(1);
 			expect((await stage(page, 'look')).fog).toBeCloseTo(recipe.look.fog, 12);
+			// The rise itself, read from the recipe (Task 14 review): at least 90% of the tiling shot's
+			// own height, as well as above the Gerstner step's deck-level shot.
+			expect(position[1]).toBeGreaterThanOrEqual(0.9 * recipeOf('tiling').shot.position[1]);
 			expect(position[1]).toBeGreaterThan(recipeOf('gerstner').shot.position[1]);
 			expect(direction[1]).toBeLessThan(-0.9);
 		});
