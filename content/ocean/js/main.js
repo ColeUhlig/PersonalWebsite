@@ -54,8 +54,20 @@ export function startOcean({ config, route, now, paused = () => false, reducedMo
 	// ratio without the media query's change event (headless Chromium under device emulation fires
 	// neither that nor a resize).
 	let ratio = window.devicePixelRatio;
+	// The canvas size the renderer was last sized for. A window resize also changes the canvas, so
+	// the window's resize event and the ResizeObserver both report it: the second finds nothing
+	// changed and sizes nothing (setSize reallocates the drawing buffer).
+	let sizedWidth = -1;
+	let sizedHeight = -1;
+	let sizedRatio = -1;
 	function resize() {
 		ratio = window.devicePixelRatio;
+		if (canvas.clientWidth === sizedWidth && canvas.clientHeight === sizedHeight && ratio === sizedRatio) {
+			return;
+		}
+		sizedWidth = canvas.clientWidth;
+		sizedHeight = canvas.clientHeight;
+		sizedRatio = ratio;
 		view.resize();
 	}
 	resize();

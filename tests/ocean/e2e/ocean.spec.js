@@ -111,6 +111,30 @@ test.describe('on a device pixel ratio 3 screen', () => {
 	});
 });
 
+// C final review fix 8: a window resize also changes the canvas, so the window's resize event and
+// the ResizeObserver both report it; the renderer is sized once (the camera's projection is updated
+// only by a resize that does work), and a report with nothing changed sizes nothing.
+test('a window resize sizes the renderer once, though two listeners hear it', async ({ page }) => {
+	await page.goto('/ocean/?cam=deck');
+	await ready(page);
+	await page.evaluate(() => {
+		const camera = window.__ocean.camera;
+		const original = camera.updateProjectionMatrix.bind(camera);
+		window.__resizes = 0;
+		camera.updateProjectionMatrix = () => {
+			window.__resizes += 1;
+			original();
+		};
+	});
+	await page.setViewportSize({ width: 1200, height: 700 });
+	await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 1200 / 700) < 1e-3);
+	await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 500)));
+	expect(await page.evaluate(() => window.__resizes)).toBe(1);
+	await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+	await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)));
+	expect(await page.evaluate(() => window.__resizes)).toBe(1);
+});
+
 test('stats=1 shows the live numbers', async ({ page }) => {
 	await page.goto('/ocean/?stats=1&cam=deck');
 	await ready(page);
