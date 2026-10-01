@@ -1,6 +1,7 @@
 // The look a stage recipe asks for, applied to the ocean's meshes (A3; not a twin): which material
-// the surface wears -- flat white (step 1's plane and the unlit steps 2 and 3), the sea colour lit by
-// the sun and the sky (steps 4 to 6) or unlit (step 4 with its shading off), or the painted
+// the surface wears -- flat white (step 1's plane and the unlit steps 2 and 3), the lighting terms
+// one at a time (C2 steps 10 to 13: render/termsMaterial.js), the sea colour lit by three's standard
+// material or unlit (kept for any recipe that asks for `sea`), or the painted
 // Roblox-mode materials (step 7 on) -- the wireframe over it, the fog and the sun. A material
 // change swaps the meshes' material references; nothing is rebuilt, and the painted materials keep
 // their textures and glow for when they come back. The wireframe is one extra mesh per patch,
@@ -8,10 +9,12 @@
 // it is asked for and hidden, not removed, when it is switched off; it fades out with view depth
 // (WIRE_FADE) so the far grid does not crowd into moire. The horizon quads get the
 // material but no wireframe: two triangles 2,048 studs wide would draw one huge diagonal.
-// C2: the `terms` material (a stand-in until lane D's) and `setClip`, which clips every surface
-// material to the flat graph's band.
+// C2: the `terms` material (lane D's render/termsMaterial.js, a shader that switches each lighting
+// term on alone and follows the stage sun) and `setClip`, which clips every surface material to the
+// flat graph's band.
 import * as THREE from 'three';
 import { sunDirection } from '../stages/sun.js';
+import { createTermsMaterial } from './termsMaterial.js';
 
 const WHITE = Object.freeze([0.95, 0.95, 0.94]);
 const WIRE = Object.freeze([0.11, 0.17, 0.21]);
@@ -50,8 +53,7 @@ export function createStageLook({ view, meshes, materials, config }) {
 		white: new THREE.MeshBasicMaterial({ color: srgb(WHITE), toneMapped: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
 		'sea-lit': new THREE.MeshStandardMaterial({ color: sea, roughness: SEA_ROUGHNESS, metalness: 0 }),
 		'sea-flat': new THREE.MeshBasicMaterial({ color: sea }),
-		// C2: lane D replaces this stand-in with the term-by-term material (render/termsMaterial.js).
-		terms: new THREE.MeshStandardMaterial({ color: sea, roughness: SEA_ROUGHNESS, metalness: 0 }),
+		terms: createTermsMaterial({ seaColour: sea, sunDirection: view.sunDirection }),
 	};
 	const wireMaterial = new THREE.MeshBasicMaterial({ color: srgb(WIRE), wireframe: true, transparent: true, opacity: WIRE_OPACITY, toneMapped: false });
 	wireMaterial.onBeforeCompile = (shader) => {
@@ -117,11 +119,16 @@ export function createStageLook({ view, meshes, materials, config }) {
 
 	function apply(look) {
 		setMode(modeOf(look));
+		if (mode === 'terms') {
+			shared.terms.setTerms(look.terms);
+		}
 		setWireframe(look.wireframe);
 		view.setFog(look.fog);
 		const sun = look.sun;
 		if (sun.azimuth !== sunAzimuth || sun.elevation !== sunElevation) {
 			view.setStageSun(sunDirection(sun));
+			// The view normalises the direction and keeps it in this array.
+			shared.terms.setSun(view.sunDirection);
 			sunAzimuth = sun.azimuth;
 			sunElevation = sun.elevation;
 		}
@@ -156,7 +163,9 @@ export function createStageLook({ view, meshes, materials, config }) {
 			sun: [...view.sunDirection],
 			environment: view.environmentState(),
 			clipped: clip !== null,
-			terms: null,
+			terms: mode === 'terms' ? shared.terms.terms() : null,
+			// A ShaderMaterial ignores clipping planes unless its `clipping` flag is on.
+			termsClips: shared.terms.clipping === true && shared.terms.clippingPlanes === clip,
 		};
 	}
 
