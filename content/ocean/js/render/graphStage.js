@@ -22,9 +22,11 @@
 // The band never eases: the lens clearance depends on it. Nothing allocates per frame: tick values
 // go into a buffer made once, and a label's text is rebuilt only when its number changes (R18).
 // The probe's `components` is a number: how many component curves are drawn.
-// Task 14: the page's pills sit over the canvas's bottom right (keepClear, measured by
-// ui/keepClear.js): where the graph's foot comes down into their rows, the distance numbers stop and
-// the distance word ends short of them, and a λ word under the troughs moves left out of them.
+// Task 14: the page sits over parts of the canvas (keepClear, measured by ui/keepClear.js). The
+// pills at its bottom right: where the graph's foot comes down into their rows, the distance numbers
+// stop and the distance word ends short of them, and a λ word under the troughs moves left out of
+// them. On a wide screen the steps' panels down its left: the height axis stands clear of them; and
+// the math box at its top right: the λ bracket over the crests ends short of it.
 import * as THREE from 'three';
 import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, niceAtLeast, floorDepth, graphSpan, lambdaPair, lineZAt, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
 import { GRAPH_OFF, GRAPH_PLANE_X, graphBand } from '../stages/graph.js';
@@ -137,7 +139,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	const forward = new THREE.Vector3();
 	const forwardArray = [0, 0, 0];
 	const positionArray = [0, 0, 0];
-	const spanInput = { position: positionArray, forward: forwardArray, fovDegrees: 70, aspect: 1, heightPx: 1 };
+	const spanInput = { position: positionArray, forward: forwardArray, fovDegrees: 70, aspect: 1, heightPx: 1, leftPx: 0 };
 	const span = { zMin: 0, zMax: 0, frameMin: 0, frameMax: 0, depth: 0, studsPerPixel: 0 };
 	const chosen = new Int32Array(MAX_COMPONENTS);
 	let current = GRAPH_OFF;
@@ -152,11 +154,31 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	// The pills' box at the canvas's bottom right in CSS pixels ({ width, height }), or null; and,
 	// this frame, the z the foot's words must end short of (Infinity when nothing is in the way).
 	let clearZone = null;
+	let boxZone = null;
 	let footClear = Infinity;
 	const scratch = new THREE.Vector3();
 
+	// zone: ui/keepClear.js's { pills: { width, height } | null, left: px of the panels' column }.
 	function keepClear(zone) {
-		clearZone = zone !== null && zone.width > 0 && zone.height > 0 ? { width: zone.width, height: zone.height } : null;
+		const pills = zone?.pills ?? null;
+		clearZone = pills !== null && pills.width > 0 && pills.height > 0 ? { width: pills.width, height: pills.height } : null;
+		spanInput.leftPx = Math.max(0, zone?.left ?? 0);
+		const box = zone?.box ?? null;
+		boxZone = box !== null && box.width > 0 && box.height > 0 ? { width: box.width, height: box.height } : null;
+	}
+
+	// The z a crest pair's bracket and word, over the crests at height `y`, must end short of: the
+	// line's z at the math box's left edge less the gap, when the word's row goes up into the box's
+	// rows; else Infinity.
+	function clearOfBox(x, y, z) {
+		if (boxZone === null) return Infinity;
+		const heightPx = spanInput.heightPx;
+		scratch.set(x, y, z).project(camera);
+		const rowPx = ((1 - scratch.y) / 2) * heightPx;
+		if (rowPx - 20 > boxZone.height + KEEP_CLEAR_GAP_PX) return Infinity;
+		const widthPx = heightPx * spanInput.aspect;
+		const z0 = lineZAt(spanInput, 1 - (2 * (boxZone.width + KEEP_CLEAR_GAP_PX)) / widthPx);
+		return Number.isNaN(z0) ? Infinity : z0;
 	}
 
 	// The z the words at screen row `y` (studs on the plane, at z) must end short of: the line's z at
@@ -356,7 +378,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		axes.segment(x, 0, left, x, 0, right);
 		heightAxes.segment(x, -heightTop, left - heightTop * lean, x, heightTop, left + heightTop * lean);
 		// The axis spans the frame less its insets on screen, however oblique the view.
-		const axisPx = spanInput.heightPx * spanInput.aspect - AXIS_LEFT_PX - AXIS_RIGHT_PX;
+		const axisPx = spanInput.heightPx * spanInput.aspect - spanInput.leftPx - AXIS_LEFT_PX - AXIS_RIGHT_PX;
 		const wanted = Math.min(MAX_DISTANCE_TICKS, Math.max(2, Math.round(axisPx / TICK_SPACING_PX)));
 		const zCount = axisTicksInto(left, right, niceStep(right - left, wanted), zTicks);
 		const yCount = axisTicksInto(-heightTop / yScale, heightTop / yScale, yStep, yTicks);
@@ -421,8 +443,11 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		const top = amplitude * current.yScale;
 		const shownLength = Number(wavelength.toFixed(1));
 		const shownHeight = Number(amplitude.toFixed(2));
-		const edge = span.frameMax - BRACKET_EDGE_PX * studsPerPixelAt(spanInput, span.frameMax);
-		const pair = lambdaPair(k, omega, phase, t, left, edge, pairOut);
+		// Crest pairs end short of the math box over the canvas's top right, where their bracket would go
+		// up into it; trough pairs, under the curve, may run to the frame's edge.
+		const frameEdge = span.frameMax - BRACKET_EDGE_PX * studsPerPixelAt(spanInput, span.frameMax);
+		const crestRow = top + 22 * studsPerPixelAt(spanInput, (left + frameEdge) / 2);
+		const pair = lambdaPair(k, omega, phase, t, left, frameEdge, pairOut, clearOfBox(x, crestRow, frameEdge));
 		if (pair !== null) {
 			const first = pair.start;
 			const second = first + wavelength;

@@ -77,8 +77,8 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
 	const graph = createGraphStage({ view, ocean, look, reducedMotion });
 	const overlays = createSurfaceOverlays({ view, ocean });
-	// Task 14: the graph keeps its words out from under the page's pills.
-	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), graph.keepClear);
+	// Task 14: the graph keeps its words out from under the page's pills, its panels and the math box.
+	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), document.querySelector('.step .panel'), document.getElementById('mathbox'), graph.keepClear);
 	const focusNow = [0, 0];
 	// True while the graph's backdrop is at least GRAPH_HOLD opaque: the visitor's orbit and the
 	// phone's tilt are held then, so nobody drags the camera off the graph.

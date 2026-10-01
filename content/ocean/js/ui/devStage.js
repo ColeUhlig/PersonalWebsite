@@ -33,8 +33,9 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
 	const graph = createGraphStage({ view, ocean, look });
 	const overlays = createSurfaceOverlays({ view, ocean });
-	// Task 14: the graph keeps its words out from under the page's pills.
-	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), graph.keepClear);
+	// Task 14: the graph keeps its words out from under the page's pills (the dev route shows no panel
+	// over the canvas, so the height axis keeps its own place).
+	watchKeepClear(view.renderer.domElement, document.querySelector('.pills'), null, document.getElementById('mathbox'), graph.keepClear);
 	const focusNow = [0, 0];
 
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so

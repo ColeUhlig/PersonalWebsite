@@ -164,8 +164,8 @@ export const AXIS_EDGE_PX = 12;
 
 /**
  * Where the stage draws the axes, from the camera's view: the distance axis' ends (z on the line
- * y = 0) where the line meets the screen columns AXIS_LEFT_PX and AXIS_RIGHT_PX in from the frame's
- * edges, so they stay on the frame however oblique the view; the studs a pixel covers at each end;
+ * y = 0) where the line meets the screen columns AXIS_LEFT_PX (plus camera.leftPx, what of the page
+ * covers the frame's left) and AXIS_RIGHT_PX in from the frame's edges, so they stay on the frame however oblique the view; the studs a pixel covers at each end;
  * the height axis' lean at the left end and how upright that keeps it (`upright`: 1 while the lean it
  * needs is under half MAX_LEAN, easing to 0 at MAX_LEAN, past which it could not stand upright: the
  * stage fades the height axis by it, so it never snaps or slides off the frame); and the heights there
@@ -177,7 +177,8 @@ export function axisLayout(camera, out = { left: 0, right: 0, sppLeft: 0, sppRig
 		return null;
 	}
 	const widthPx = VIEW.heightPx * VIEW.aspect;
-	const wl = lineW(-1 + (2 * AXIS_LEFT_PX) / widthPx);
+	// Task 14: camera.leftPx, the page's panels over the frame's left, moves the height axis right.
+	const wl = lineW(-1 + (2 * ((camera.leftPx ?? 0) + AXIS_LEFT_PX)) / widthPx);
 	const wr = lineW(1 - (2 * AXIS_RIGHT_PX) / widthPx);
 	if (Number.isNaN(wl) || Number.isNaN(wr)) {
 		return null;
@@ -227,15 +228,17 @@ export function axisOpacityOf(shown) {
 /**
  * Where the λ bracket starts, for the sine k z - omega t + phase: the first crest of a crest pair
  * that fits in [from, to], preferring the first one a quarter wave in from `from` (clear of the
- * height axis' words); else the first trough of a trough pair (drawn under the curve). One of the two
+ * height axis' words), ending by crestTo when that is sooner (Task 14: short of the math box over
+ * the frame's top right); else the first trough of a trough pair (drawn under the curve). One of the two
  * always fits when to - from is at least 1.5 wavelengths, so the bracket never blinks out as the
  * wave slides. out.crest says which; null when neither fits.
  */
-export function lambdaPair(k, omega, phase, t, from, to, out = { start: 0, crest: true }) {
+export function lambdaPair(k, omega, phase, t, from, to, out = { start: 0, crest: true }, crestTo = to) {
 	const wavelength = (2 * Math.PI) / k;
+	const crestEnd = Math.min(to, crestTo);
 	let start = crestAfter(k, omega, phase, t, from + wavelength * 0.25);
-	if (start + wavelength > to) start = crestAfter(k, omega, phase, t, from);
-	if (start + wavelength <= to) {
+	if (start + wavelength > crestEnd) start = crestAfter(k, omega, phase, t, from);
+	if (start + wavelength <= crestEnd) {
 		out.start = start;
 		out.crest = true;
 		return out;

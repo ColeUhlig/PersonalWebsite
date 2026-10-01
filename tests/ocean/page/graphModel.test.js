@@ -267,6 +267,10 @@ test('lambdaPair always finds a crest or trough pair across 1.5 wavelengths, at 
 	expect.truthy(crests > 0 && troughs > 0, `both kinds used (${crests} crests, ${troughs} troughs)`);
 	expect.truthy(lambdaPair(k, 0, 0, 0, -38, 38).crest, 'crests when they fit');
 	expect.equal(lambdaPair(k, 0, 0, 0, -10, 10), null, 'nothing across one wavelength');
+	// Task 14: crests that would reach under the math box end by crestTo; troughs still use the frame.
+	const kept = lambdaPair(k, 0, 0, 0, -38, 38, undefined, -20);
+	expect.truthy(kept !== null && !kept.crest, 'troughs when the crests must stop short');
+	expect.truthy(kept.start + (2 * Math.PI) / k <= 38, 'the trough pair inside the frame');
 });
 
 // Fix round 2: the height ticks keep a minimum spacing on screen, so the step is at least a size.

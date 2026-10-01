@@ -373,3 +373,36 @@ for (const { width, height } of [{ width: 390, height: 844 }, { width: 320, heig
 		});
 	});
 }
+
+// Task 14: on a wide screen the step's panel covers the left of the canvas and the math box its top
+// right; the graph's words and numbers (the height axis' among them) stand clear of both.
+for (const { width, height } of [{ width: 1366, height: 767 }, { width: 1024, height: 768 }, { width: 1920, height: 1080 }]) {
+	test.describe(`in the story on a ${width} × ${height} screen`, () => {
+		test.use({ viewport: { width, height } });
+
+		test("no graph word sits under the step's panel or the math box", async ({ page }) => {
+			test.setTimeout(180_000);
+			const hit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+			await oceanRunning(page);
+			for (const id of ['sine', 'moving-sine', 'sum-of-sines', 'frequency', 'fourier']) {
+				await scrollToId(page, id, 0.35);
+				await page.waitForFunction(() => window.__ocean.story.graph().shown === 1, null, { timeout: 30_000 });
+				await waitFrames(page, 5);
+				const { labels, covers } = await page.evaluate((step) => {
+					const canvas = document.getElementById('ocean').getBoundingClientRect();
+					const box = (el) => {
+						const r = el.getBoundingClientRect();
+						return { name: el.id || el.className, x0: r.left - canvas.left, y0: r.top - canvas.top, x1: r.right - canvas.left, y1: r.bottom - canvas.top };
+					};
+					const covers = [document.querySelector(`section[data-step-id="${step}"] .panel`), document.getElementById('mathbox')].filter((el) => el && !el.hidden).map(box);
+					return { labels: window.__ocean.story.graph().labelRects, covers };
+				}, id);
+				expect(labels.length, `${id}: words drawn`).toBeGreaterThan(3);
+				// The sine steps still mark the length: under the troughs when the crests' pair would reach the box.
+				if (id === 'sine' || id === 'moving-sine') expect(labels.some((l) => l.text.startsWith('λ')), `${id}: the λ word`).toBe(true);
+				const covered = labels.flatMap((l) => covers.filter((c) => hit(l, c)).map((c) => `"${l.text}" under ${c.name}`));
+				expect(covered, id).toEqual([]);
+			}
+		});
+	});
+}
