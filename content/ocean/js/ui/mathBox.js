@@ -15,7 +15,7 @@
 // call), so the page before the first scroll is A2's.
 import { loadKatex } from './math.js';
 import { KATEX_OPTIONS, stackEquations } from '../page/mathTrust.js';
-import { FRESH_SECONDS, PROMPT, entryFor, readCollapsed, readableTex, writeCollapsed } from '../page/mathBoxModel.js';
+import { FRESH_SECONDS, entryFor, readCollapsed, readableTex, writeCollapsed } from '../page/mathBoxModel.js';
 import { mathFor } from '../page/mathSteps.js';
 import { NARROW_QUERY } from '../page/scrollMap.js';
 import { stepOf } from '../stages/steps.js';
@@ -166,7 +166,6 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 		if (entry === null) {
 			// Back over the opening the sheet has nothing to hold.
 			if (isOpen) setOpen(false);
-			sentence.textContent = PROMPT;
 			return;
 		}
 		render(entry);

@@ -8,8 +8,6 @@ import { idOf } from '../stages/steps.js';
 export const COLLAPSE_KEY = 'ocean.mathbox.collapsed';
 // How long the terms a step adds glow when the step is entered (spec 10.3: about a second).
 export const FRESH_SECONDS = 1.2;
-// What the phone's bar says before the first step (Task 2): no digits.
-export const PROMPT = 'The math shows up here as you scroll.';
 
 export function entryFor(reading) {
 	if (!reading || reading.phase !== 'step') {

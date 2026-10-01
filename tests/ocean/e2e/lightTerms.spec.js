@@ -164,7 +164,7 @@ test('the shader is page/lightTerms.js, term by term', async ({ page }) => {
 // sun" needed the slider). With the recipe's own sun, the lit and shadowed faces differ clearly on the
 // hold: the water's brightness spread, right of the panel's column and below the horizon, is at least
 // 18 (of 255). A survey of sun directions on this sea (1366 x 767, frozen at 12 s) measured 14.1 at
-// the old 215 degrees (behind the view, to the left), 7.5 to 7.7 with the sun straight to either side
+// the old 215 degrees (ahead of the view, well to the left), 7.5 to 7.7 with the sun straight to either side
 // (the crests run across the view, so both their faces turn equally from a side sun), and 21 to 23.4
 // with the sun along the waves' travel (60 to 120 degrees, behind the camera, or 240 to 300).
 for (const { width, height } of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) {

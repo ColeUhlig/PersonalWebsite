@@ -6,7 +6,7 @@
 // frame loop schedules its next frame before running this one, so an exception cannot stop it
 // (page/frameGuard.js); the renderer follows a change of device pixel ratio; and the ocean reads
 // the page's pausable clock (engine/playClock.js) through `now`, and rests its cascades and
-// painters while that clock is paused (`paused`; engine/ocean.js REST_AFTER_FRAMES).
+// painters while that clock is paused (`paused`; engine/ocean.js REST_MARGIN_FRAMES).
 import * as Ocean from './engine/ocean.js';
 import { tierForDevice } from './engine/config.js';
 import { createFrameGuard } from './page/frameGuard.js';

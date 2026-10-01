@@ -137,6 +137,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	let lambdaShown = Number.NaN;
 	let amplitudeShown = Number.NaN;
 	const forward = new THREE.Vector3();
+	const canvasSize = new THREE.Vector2();
 	const forwardArray = [0, 0, 0];
 	const positionArray = [0, 0, 0];
 	const spanInput = { position: positionArray, forward: forwardArray, fovDegrees: 70, aspect: 1, heightPx: 1, leftPx: 0 };
@@ -265,7 +266,9 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		positionArray[2] = camera.position.z;
 		spanInput.fovDegrees = camera.fov;
 		spanInput.aspect = camera.aspect;
-		spanInput.heightPx = view.renderer.domElement.clientHeight || 1;
+		// The canvas's CSS height as the view's resize last set it (renderer.getSize): no layout read
+		// per frame (final review Minor 15).
+		spanInput.heightPx = view.renderer.getSize(canvasSize).y || 1;
 		return graphSpan(spanInput, span) !== null;
 	}
 

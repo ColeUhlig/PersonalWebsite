@@ -1,4 +1,4 @@
-// The tile's edges on the sea (piece C2; Task 15's polish round owns this file; spec 10.6 step 13):
+// The tile's edges on the sea (piece C2; Task 15's polish round owns this file; spec 10.7 step 13):
 // faint dashed lines at every multiple of the 256-stud teaching tile in x and in z, at the sea's mean
 // level, so the eye can match one square of the repeating sea to the next. The step's waves all sit
 // on the tile's lattice, so the surface really repeats across these lines (recipes.test checks it).

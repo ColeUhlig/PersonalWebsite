@@ -4,8 +4,8 @@
 // with a graph run), each summed wave alone for the faint component curves, and the ribbons the
 // lines are drawn as (WebGL lines are one pixel wide). Task 4 adds the axes' tick arithmetic and the
 // floor the stage clips the sheet's skirts to. Nothing here allocates per call except ribbonIndices,
-// which the stage calls once, and axisTicks, which the tests and graphLabels.js use (the stage writes
-// its ticks with axisTicksInto).
+// which the stage calls once, and axisTicks, which the tests use (the stage writes its ticks with
+// axisTicksInto).
 import * as WaveSampler from '../core/waveSampler.js';
 import { bankExtent } from '../engine/waveBanks.js';
 import { GRAPH_PLANE_X } from '../stages/graph.js';

@@ -5,8 +5,6 @@
 // written by index into a buffer made once (pre-flight R18).
 import * as THREE from 'three';
 
-export { axisTicks, niceStep } from '../page/graphModel.js';
-
 const INK = '#e8eef2'; // style.css --ink
 const DIM = '#a9bcc8'; // --ink-dim
 const HALO = '#0b1a24'; // --body-bg, the backdrop's colour: words stay legible where a curve crosses them
