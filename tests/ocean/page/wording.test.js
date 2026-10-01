@@ -69,3 +69,10 @@ test("the tiling step says what its dashed lines are", () => {
 	const words = text(sections.find((s) => s.id === 'tiling').inner);
 	expect.truthy(/dashed lines/i.test(words) && /tile's edges/i.test(words), `step 13 names its dashed lines: "${words.slice(-260)}"`);
 });
+
+// Task 15 polish: step 20's hold shows one choppiness; its words tell the reader to drag the slider
+// to see the push come and go.
+test("the choppiness step says to drag its slider", () => {
+	const words = text(sections.find((s) => s.id === 'choppiness').inner);
+	expect.truthy(/Drag Choppiness/.test(words), `step 20 says to drag the slider: "${words.slice(0, 300)}"`);
+});
