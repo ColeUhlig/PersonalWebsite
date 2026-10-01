@@ -1,6 +1,7 @@
 // A paused sea costs less than a moving one (piece C, Task 9; the 2026-09-30 ruling): while the
 // page's play clock is paused and no stage setting changes, the ocean stops asking its cascades
-// and painters for work it already has, once they have caught up with the held time. The rings,
+// and painters for work it already has, once they have caught up with the held time: every
+// running layer's two slots at that time, a full rotation of maps painted from it and landed. The rings,
 // the horizon and the glow still follow the camera, and the frame count and the report go on.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
@@ -27,12 +28,26 @@ function counting(create, posts) {
 	};
 }
 
-function build({ paused }) {
+// A worker whose replies of one type can be held back and let through later, as a slow worker's.
+function holdable(create, posts, gate, type) {
+	return () => {
+		const inner = counting(create, posts)();
+		const outer = { onmessage: null, onerror: null, postMessage: (message, transfer) => inner.postMessage(message, transfer), terminate: () => inner.terminate() };
+		inner.onmessage = (event) => {
+			if (gate.hold && event.data.type === type) gate.held.push(() => outer.onmessage?.(event));
+			else outer.onmessage?.(event);
+		};
+		inner.onerror = (event) => outer.onerror?.(event);
+		return outer;
+	};
+}
+
+function build({ paused, holdPixels = null, holdFields = null }) {
 	let clock = 0;
 	const posts = {};
 	const ocean = Ocean.create(readConfig('?tier=Low'), {
-		spawnCascade: counting(createCascadeWorker, posts),
-		spawnPainter: counting(createPainterWorker, posts),
+		spawnCascade: holdFields ? holdable(createCascadeWorker, posts, holdFields, 'fields') : counting(createCascadeWorker, posts),
+		spawnPainter: holdPixels ? holdable(createPainterWorker, posts, holdPixels, 'pixels') : counting(createPainterWorker, posts),
 		now: () => clock,
 		paused,
 		log: { warn() {} },
@@ -45,22 +60,42 @@ function build({ paused }) {
 			await flush();
 		}
 	};
+	// Steps with the clock held until the ocean rests; the frames it took, or null.
+	const untilResting = async (limit) => {
+		for (let frames = 1; frames <= limit; frames++) {
+			await advance(1, 0);
+			if (Ocean.status(ocean).resting) return frames;
+		}
+		return null;
+	};
 	const take = () => {
 		const taken = { ...posts };
 		for (const key of Object.keys(posts)) delete posts[key];
 		return taken;
 	};
-	return { ocean, advance, take };
+	return { ocean, advance, untilResting, take };
 }
 
 const work = (posts) => (posts.evolve ?? 0) + (posts.paint ?? 0);
+const gate = () => ({ hold: false, held: [] });
+const release = (g) => {
+	g.hold = false;
+	for (const deliver of g.held.splice(0)) deliver();
+};
 
-test('a paused clock with nothing changing stops the evolve and paint requests once caught up', async () => {
+test('a paused clock rests once every layer and map has caught up with the held time, then does no work', async () => {
 	let paused = false;
-	const { ocean, advance, take } = build({ paused: () => paused });
+	const { ocean, advance, untilResting, take } = build({ paused: () => paused });
 	await advance(30, 1 / 60);
 	paused = true;
-	await advance(Ocean.REST_AFTER_FRAMES + 10, 0);
+	const frames = await untilResting(120);
+	expect.truthy(frames !== null && frames > Ocean.REST_MARGIN_FRAMES, `rests, after the margin: ${frames}`);
+	// What the rest condition promises: both slots of every running layer hold the held time.
+	const t = Ocean.status(ocean).t;
+	for (let i = 0; i < ocean.store.count; i++) {
+		expect.equal(ocean.store.current[i].time, t, `layer ${i + 1} current at the held time`);
+		expect.equal(ocean.store.previous[i].time, t, `layer ${i + 1} previous at the held time`);
+	}
 	take();
 	const held = ocean.surface.patches[0].positions.slice();
 	const frame = Ocean.status(ocean).frame;
@@ -72,30 +107,43 @@ test('a paused clock with nothing changing stops the evolve and paint requests o
 	// Pressing Play: the clock moves again and so does the work.
 	paused = false;
 	await advance(6, 1 / 60);
+	expect.equal(Ocean.status(ocean).resting, false, 'awake');
 	expect.truthy((take().evolve ?? 0) > 0, 'evolving again after play');
 });
 
-test('the first frames after the pause still finish the held time, so nothing freezes half-blended', async () => {
+test('a painter reply still out keeps the work going until it lands', async () => {
+	const pixels = gate();
 	let paused = false;
-	const { ocean, advance, take } = build({ paused: () => paused });
+	const { ocean, advance, untilResting } = build({ paused: () => paused, holdPixels: pixels });
 	await advance(30, 1 / 60);
 	paused = true;
-	take();
-	await advance(Ocean.REST_AFTER_FRAMES, 0);
-	expect.truthy(work(take()) > 0, 'work continues until the rest begins');
-	const t = Ocean.status(ocean).t;
-	for (const slot of ocean.store.current) {
-		if (slot.filled) expect.equal(slot.time, t, 'every result is at the held time');
-	}
+	pixels.hold = true;
+	expect.equal(await untilResting(30), null, 'no rest while the painters have not answered');
+	release(pixels);
+	expect.truthy((await untilResting(60)) !== null, 'rests once the replies land and a full rotation has painted');
+	expect.truthy(Ocean.status(ocean).resting, 'resting');
+});
+
+test('a layer whose result has not come back keeps the work going', async () => {
+	const fields = gate();
+	let paused = false;
+	const { advance, untilResting } = build({ paused: () => paused, holdFields: fields });
+	await advance(30, 1 / 60);
+	paused = true;
+	fields.hold = true;
+	expect.equal(await untilResting(40), null, 'no rest while a layer is behind the held time');
+	release(fields);
+	expect.truthy((await untilResting(60)) !== null, 'rests once every layer has caught up');
 });
 
 test('a stage change while paused wakes the work, and a report still arrives while resting', async () => {
-	let paused = true;
-	const { ocean, advance, take } = build({ paused: () => paused });
-	await advance(Ocean.REST_AFTER_FRAMES + 20, 0);
+	const { ocean, advance, untilResting, take } = build({ paused: () => true });
+	expect.truthy((await untilResting(120)) !== null, 'resting');
 	take();
 	Ocean.configureStage(ocean, { ...DEFAULT_SETTINGS, chop: DEFAULT_SETTINGS.chop * 0.5 });
-	await advance(10, 0);
+	await advance(1, 0);
+	expect.equal(Ocean.status(ocean).resting, false, 'a stage change ends the rest at once');
+	await advance(9, 0);
 	expect.truthy(work(take()) > 0, 'a stage change wakes the cascades and painters');
 	await advance(Ocean.REPORT_WINDOW, 0);
 	const report = Ocean.report(ocean);
@@ -103,8 +151,9 @@ test('a stage change while paused wakes the work, and a report still arrives whi
 });
 
 test('without a paused clock (the default) a held time keeps working, as a frozen clock always has', async () => {
-	const { advance, take } = build({ paused: undefined });
-	await advance(Ocean.REST_AFTER_FRAMES + 20, 0);
+	const { ocean, advance, take } = build({ paused: undefined });
+	await advance(150, 0);
+	expect.equal(Ocean.status(ocean).resting, false, 'never rests');
 	take();
 	await advance(30, 0);
 	expect.truthy(work(take()) > 0, 'no rest without the page asking for it');

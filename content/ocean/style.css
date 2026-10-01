@@ -712,8 +712,21 @@ footer.site a {
 		padding: 18px 16px;
 	}
 
+	/* Two columns even here, so the live list stays short; a long label wraps inside its column. */
 	.live {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr);
+		gap: 2px 12px;
+	}
+
+	.live dt {
+		overflow-wrap: anywhere;
+	}
+
+	/* Over the ocean's half, at its bottom right, so the button never covers the text below. */
+	.motion {
+		bottom: auto;
+		top: calc(50vh - 48px);
+		top: calc(50svh - 48px);
 	}
 }
 

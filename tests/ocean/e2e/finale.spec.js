@@ -7,6 +7,8 @@ import { test, expect } from '@playwright/test';
 import { oceanRunning, waitFrames, watchErrors } from './helpers/story.js';
 
 const INDEX_HTML = readFileSync(new URL('../../../content/ocean/index.html', import.meta.url));
+const SHOWCASE_JS = readFileSync(new URL('../../../content/ocean/js/engine/showcase.js', import.meta.url), 'utf8');
+const PLAY_ANCHOR = '<a id="play" class="play" rel="noopener" target="_blank" hidden>Play it in Roblox</a>';
 const CLIP = { shot: 'deck', webm: 'deck.webm', mp4: 'deck.mp4', poster: 'deck.jpg', width: 1280, height: 720, seconds: 20 };
 
 // The surface's vertex statistics (A3's probe): identical from frame to frame only if the waves
@@ -95,6 +97,30 @@ test('the finale growing while step 12 is read never reads as the opening or cut
 	expect(await page.evaluate(() => window.__ocean.story.applied())).toBe(applied);
 });
 
+// A refresh that throws never reaches its 'refresh' event; the story must still read the scroll.
+test('a ScrollTrigger refresh that throws leaves the story reading the scroll', async ({ page }) => {
+	await oceanRunning(page);
+	await page.waitForFunction(() => window.__page.scrollEngine() === 'gsap', null, { timeout: 30_000 });
+	const thrown = await page.evaluate(async () => {
+		const { ScrollTrigger } = await import('gsap/ScrollTrigger');
+		let armed = false;
+		ScrollTrigger.create({ trigger: document.body, onRefresh() { if (armed) throw new Error('a refresh that fails'); } });
+		armed = true;
+		try {
+			ScrollTrigger.refresh();
+			return 'did not throw';
+		} catch (error) {
+			return error.message;
+		}
+	});
+	expect(thrown).toBe('a refresh that fails');
+	await page.evaluate(() => {
+		const rect = document.getElementById('step-4').getBoundingClientRect();
+		window.scrollTo(0, rect.top + window.scrollY + 0.3 * rect.height - window.innerHeight * 0.5);
+	});
+	await page.waitForFunction(() => window.__page.reading().step === 4, null, { timeout: 10_000 });
+});
+
 test('footage stays hidden while the manifest lists no clips, and the manifest does not 404', async ({ page }) => {
 	const statuses = [];
 	page.on('response', (response) => {
@@ -135,12 +161,16 @@ test('footage appears when the manifest lists a clip, lazily and with its captio
 	await expect(page.locator('#footage figcaption')).toHaveText('Deck height, where a player would stand.');
 });
 
-test('a manifest that is not JSON keeps the footage hidden and throws nothing', async ({ page }) => {
+test('a manifest that is not JSON keeps the footage hidden, says why in the console and throws nothing', async ({ page }) => {
 	const errors = [];
+	const warnings = [];
 	page.on('pageerror', (error) => errors.push(error.message));
+	page.on('console', (message) => {
+		if (message.type() === 'warning') warnings.push(message.text());
+	});
 	await page.route('**/ocean/media/footage.json', (route) => route.fulfill({ contentType: 'application/json', body: 'not json' }));
 	await page.goto('/ocean/');
-	await page.waitForTimeout(1000);
+	await expect.poll(() => warnings.some((text) => text.includes('[ocean] the footage manifest could not be read; the footage stays hidden'))).toBe(true);
 	await expect(page.locator('#footage')).toBeHidden();
 	expect(errors).toEqual([]);
 });
@@ -149,6 +179,26 @@ test('Play in Roblox stays hidden while no public place URL is set', async ({ pa
 	await page.goto('/ocean/');
 	await expect(page.locator('#play')).toBeHidden();
 	expect(await page.locator('#play').getAttribute('href')).toBeNull();
+});
+
+// The two above hold for the served HTML alone, so these prove the page itself decides: an anchor
+// served visible with an address is hidden and stripped, and a real place URL shows the button.
+test('the page hides a Play anchor and drops its address while placeUrl() gives none', async ({ page }) => {
+	const html = String(INDEX_HTML).replace(PLAY_ANCHOR, '<a id="play" class="play" rel="noopener" target="_blank" href="https://example.com/">Play it in Roblox</a>');
+	expect(html).not.toBe(String(INDEX_HTML));
+	await page.route('**/ocean/', (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }));
+	await page.goto('/ocean/');
+	await expect(page.locator('#play')).toBeHidden();
+	await expect.poll(() => page.locator('#play').getAttribute('href')).toBeNull();
+});
+
+test('a real public place URL shows Play in Roblox with the canonical address', async ({ page }) => {
+	const placed = SHOWCASE_JS.replace("export const ROBLOX_PLACE_URL = '';", "export const ROBLOX_PLACE_URL = 'https://roblox.com/games/1234567890/Ocean';");
+	expect(placed).not.toBe(SHOWCASE_JS);
+	await page.route('**/ocean/js/engine/showcase.js', (route) => route.fulfill({ contentType: 'text/javascript', body: placed }));
+	await page.goto('/ocean/');
+	await expect(page.locator('#play')).toBeVisible();
+	await expect(page.locator('#play')).toHaveAttribute('href', 'https://www.roblox.com/games/1234567890');
 });
 
 test('the Luau proof panel mounts embedded as the visitor nears it, and its runtime waits for Run', async ({ page }) => {
@@ -237,7 +287,8 @@ test.describe('under reduced motion', () => {
 		await oceanRunning(page, '/ocean/', 30);
 		await page.waitForFunction(() => window.__ocean.status().resting === true, null, { timeout: 120_000 });
 		await page.locator('#live').scrollIntoViewIfNeeded();
-		await expect(page.locator('#live [data-live]')).toContainText('paused');
+		await expect(page.locator('#live [data-live]')).toContainText('held rather than recomputed');
+		await expect(page.locator('#live [data-live]')).toContainText('(last measured)');
 		await page.locator('#motion').click();
 		await page.waitForFunction(() => window.__ocean.status().resting === false, null, { timeout: 10_000 });
 		await expect(page.locator('#live [data-live]')).not.toContainText('paused');

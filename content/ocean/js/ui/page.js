@@ -73,7 +73,11 @@ export function startPage({ route, reducedMotion, clock }) {
 	// starting; without one it says there is nothing to measure. The proof panel is embedded: the
 	// finale's block gives it its heading, introduction and glass.
 	finalePart('Play button', () => mountPlayButton(document.getElementById('play')));
-	finalePart('footage', () => mountFootage(document.getElementById('footage'), { onShown: () => story.relayout() }));
+	finalePart('footage', () => {
+		mountFootage(document.getElementById('footage'), { onShown: () => story.relayout() }).catch((error) => {
+			console.error("[ocean] the finale's footage could not be shown", error);
+		});
+	});
 	finalePart('proof panel', () => {
 		window.__proof = mountProofPanelWhenNear(document.getElementById('proof'), { panelDeps: { embedded: true } });
 	});

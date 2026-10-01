@@ -185,6 +185,7 @@ function onPixels(painter, role, data) {
 		painter.foamSeconds += data.second / 1000;
 		painter.colourSeconds += data.third / 1000;
 		painter.pendingColour = false;
+		painter.colourLanded = data.sequence;
 		painter.cycleColour = Math.max(painter.cycleColour, painter.frame - painter.sentColourFrame);
 	} else {
 		// A normal map painted before an update took the last normal cascade away lands after the
@@ -195,6 +196,7 @@ function onPixels(painter, role, data) {
 		painter.stage.upload += (performance.now() - started) / 1000;
 		painter.maskMax = data.first;
 		painter.pendingMaps = false;
+		painter.mapsLanded = data.sequence;
 		painter.cycleMaps = Math.max(painter.cycleMaps, painter.frame - painter.sentMapsFrame);
 	}
 }
@@ -315,6 +317,8 @@ export function create({ config, spawn, sink = null, stage, log = console }) {
 		pendingColour: false,
 		sentColourFrame: 0,
 		colourSequence: 0,
+		// Piece C (ocean.js's rest): the sequence of the last reply that landed, per worker.
+		colourLanded: 0,
 		colourFrame: 0,
 		cycleColour: 0,
 		warnedSilentColour: false,
@@ -322,6 +326,7 @@ export function create({ config, spawn, sink = null, stage, log = console }) {
 		pendingMaps: false,
 		sentMapsFrame: 0,
 		mapsSequence: 0,
+		mapsLanded: 0,
 		mapsFrame: 0,
 		cycleMaps: 0,
 		warnedSilentMaps: false,
@@ -442,6 +447,21 @@ export function mode(painter) {
 
 export function fallbackReason(painter) {
 	return painter.reason;
+}
+
+// Piece C (ocean.js's rest): the sequence numbers sent so far, to count Paints from.
+export function mark(painter) {
+	return Object.freeze({ colour: painter.colourSequence, maps: painter.mapsSequence });
+}
+
+// Whether, since `mark`, Paints of every colour band and of both map slots have landed and no
+// reply is still out. A slot with nothing to paint (one cascade, no normal block) is skipped
+// without a sequence number, so two map Paints may both be masks: still the newest of each.
+export function paintedSince(painter, since) {
+	return !painter.pendingColour
+		&& !painter.pendingMaps
+		&& painter.colourLanded >= since.colour + MapRotation.BANDS
+		&& painter.mapsLanded >= since.maps + MapRotation.MAPS.length;
 }
 
 export function ready(painter) {

@@ -32,6 +32,8 @@ export function startStory({ reducedMotion = false, load = loadScrollTrigger } =
 	let scrollTrigger = null;
 	let queuedLayout = null;
 	let queuedScroll = false;
+	// True from ScrollTrigger's 'refreshInit' to its 'refresh' (see update()).
+	let refreshing = false;
 
 	function measure() {
 		measured = sections.map((section) => {
@@ -65,8 +67,8 @@ export function startStory({ reducedMotion = false, load = loadScrollTrigger } =
 	function update() {
 		// ScrollTrigger scrolls the page to the top while it refreshes, to measure: a reading taken
 		// then is not where the visitor is (it would read as the opening and cut the camera), so it
-		// waits for the refresh to finish ('refresh' below reads again).
-		if (scrollTrigger?.isRefreshing) {
+		// waits for the refresh to finish (followWithGsap reads again on 'refresh').
+		if (refreshing) {
 			return;
 		}
 		const next = readScroll(measured, window.scrollY + readingLine(window.innerHeight, narrow.matches));
@@ -157,11 +159,25 @@ export function startStory({ reducedMotion = false, load = loadScrollTrigger } =
 		}
 	}
 
+	function endRefresh() {
+		if (refreshing) {
+			refreshing = false;
+			update();
+		}
+	}
+
 	function followWithGsap({ gsap, ScrollTrigger }) {
 		// The whole page, 0 to the last scroll position, as the native listener reads it, so the
 		// reading keeps moving past the story's end (the footer).
 		ScrollTrigger.create({ trigger: document.documentElement, start: 0, end: 'max', onUpdate: update, onRefresh: relayout });
-		ScrollTrigger.addEventListener('refresh', update);
+		// A refresh is synchronous, so the flag is down again before the next frame unless the
+		// refresh threw before its 'refresh' event; then the next frame lowers it, so the story can
+		// never stop reading.
+		ScrollTrigger.addEventListener('refreshInit', () => {
+			refreshing = true;
+			window.requestAnimationFrame(endRefresh);
+		});
+		ScrollTrigger.addEventListener('refresh', endRefresh);
 		scrollTrigger = ScrollTrigger;
 		engine = 'gsap';
 		window.removeEventListener('scroll', onScroll);
