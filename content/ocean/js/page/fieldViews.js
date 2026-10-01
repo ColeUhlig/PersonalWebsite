@@ -1,20 +1,21 @@
 // The texture insets' arithmetic (piece C2; lane F owns this file; spec 10.7 steps 22, 23 and 25;
 // browser-free). The FFT's answer is grids of numbers (core/fieldStore.js display fields, n x n per
 // layer): fieldToRgba draws one as an image, blue below zero, pale at zero, amber above, scaled to its
-// own largest magnitude (or a scale given, so a zoom can keep the whole field's). bilinear is the blend the engine's sampler does (core/cascade.js corners:
-// floored modulo, a hair below zero folded back, the right and bottom neighbours wrapping to column
-// and row 0), written out with its corners and weights so the sampling inset can show them; its value
-// equals Cascade.sampleHeight's exactly. The sampling inset zooms on a ZOOM x ZOOM window round a
-// point that walks back and forth across the tile's edge, so the wrap is always on screen; zoomLayout
-// places the point and the seam in that window's cells, samples at cell centres, so the seam (x at the
-// tile's size, which is 0 again) runs through sample 0 itself. downsample
-// shrinks a painted texture for the painted-map inset by averaging blocks.
+// own largest magnitude (or a scale given, so a zoom can keep the whole field's). bilinear is the
+// blend the engine's sampler does (core/cascade.js corners: floored modulo, a hair below zero folded
+// back, the right and bottom neighbours wrapping to column and row 0), written out with its corners
+// and weights so the sampling inset can show them; its value equals Cascade.sampleHeight's exactly.
+// The sampling inset zooms on a ZOOM x ZOOM window round a point that walks back and forth across the
+// tile's edge, so the wrap is always on screen; zoomLayout places the point and the seam in that
+// window's cells, samples at cell centres, so the seam (x at the tile's size, which is 0 again) runs
+// through sample 0 itself. downsample shrinks a painted texture for the painted-map inset by
+// averaging blocks.
 import { mod } from '../core/luau.js';
 
 export const FIELD_VIEWS = Object.freeze([
 	Object.freeze({ name: 'height', label: 'Height' }),
 	Object.freeze({ name: 'slopeX', label: 'Slope along x' }),
-	Object.freeze({ name: 'dispX', label: 'Sideways push along x' }),
+	Object.freeze({ name: 'dispX', label: 'Push at this choppiness' }),
 ]);
 export const ZOOM = 6;
 const PALE = [232, 238, 242]; // style.css --ink

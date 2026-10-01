@@ -66,8 +66,7 @@ function fieldsInset(figure, ocean, onLayout) {
 		const canvas = element('canvas', { width: n, height: n });
 		canvas.setAttribute('aria-hidden', 'true');
 		const range = element('span', { className: 'inset-range' });
-		const label = view.name === 'dispX' ? `${view.label}, at this choppiness` : view.label;
-		const cell = element('div', { className: 'inset-field' }, [canvas, element('p', { className: 'inset-label', textContent: label }), range]);
+		const cell = element('div', { className: 'inset-field' }, [canvas, element('p', { className: 'inset-label', textContent: view.label }), range]);
 		cell.dataset.field = view.name;
 		return { view, canvas, context: canvas.getContext('2d'), range, cell };
 	});
@@ -91,18 +90,21 @@ function fieldsInset(figure, ocean, onLayout) {
 		const chop = ocean.live.chop;
 		const writeNumbers = draws % 2 === 0;
 		const probe = (PROBE_TEXEL[1] % n) * n + (PROBE_TEXEL[0] % n);
-		const next = { n, size: fields.size, chop, probe: { column: PROBE_TEXEL[0] % n, row: PROBE_TEXEL[1] % n } };
+		const next = { n, size: fields.size, chop, probe: { column: PROBE_TEXEL[0] % n, row: PROBE_TEXEL[1] % n }, push: state?.push ?? null };
 		for (const cell of cells) {
 			const values = fields[cell.view.name];
 			const { min, max } = fieldToRgba(values, image.data);
 			cell.context.putImageData(image, 0, 0);
 			const shown = cell.view.name === 'dispX' ? [min * chop, max * chop] : [min, max];
-			if (writeNumbers) cell.range.textContent = `${shown[0].toFixed(2)} to ${shown[1].toFixed(2)}`;
+			if (writeNumbers) {
+				cell.range.textContent = `${shown[0].toFixed(2)} to ${shown[1].toFixed(2)}`;
+				// What the push cell says, with what it was made from, so the shown number is what's tested.
+				if (cell.view.name === 'dispX') next.push = { min: shown[0], max: shown[1], field: [min, max], chop };
+			}
 			next[cell.view.name] = { min, max, value: values[probe] };
 		}
-		next.push = { min: next.dispX.min * chop, max: next.dispX.max * chop };
 		if (writeNumbers) {
-			line.textContent = `Each image is the engine's ${n} × ${n} grid, one number every ${trim(fields.size / n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and push are in studs; slope has no unit. The push is the sideways field times the choppiness, ${chop.toFixed(2)} here.`;
+			line.textContent = `Each image is the engine's ${n} × ${n} grid, one number every ${trim(fields.size / n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and push are in studs; slope has no unit. The push along x is the sideways field times the choppiness, ${chop.toFixed(2)} here.`;
 		}
 		draws += 1;
 		state = { ...next, draws };
@@ -264,11 +266,11 @@ function paintedInset(figure, materials, config, onLayout) {
 		cell.dataset.map = map.name;
 		return { map, canvas, context: canvas.getContext('2d'), range, cell, version: -1, colours: 0, width: 0, height: 0 };
 	});
-	// The normal image is one painted block tiled across it, except under ?calibrate=map
-	// (render/materials.js uploadMaskOrNormal).
+	// The normal image is one painted block the materials' sink tiles across it, except under
+	// ?calibrate=map (render/materials.js uploadMaskOrNormal, NormalTexels.tile).
 	const block = config?.calibrate === 'map' ? NORMAL_IMAGE_TEXELS : NORMAL_BLOCK_TEXELS;
-	const tiled = block < NORMAL_IMAGE_TEXELS ? ` The ripple map is one ${block} × ${block} block the painter repeats across it.` : '';
-	const line = element('p', { className: 'inset-line', textContent: `Each map is shrunk to ${PAINTED_TEXELS} × ${PAINTED_TEXELS} here; the sizes under them are the textures' own.${tiled}` });
+	const tiled = block < NORMAL_IMAGE_TEXELS ? ` The painter paints one ${block} × ${block} ripple block, and the materials repeat it across the ripple map.` : '';
+	const line = element('p', { className: 'inset-line', textContent: `Each map is drawn at ${PAINTED_TEXELS} × ${PAINTED_TEXELS} here; the sizes under them are the textures' own.${tiled}` });
 	body.replaceChildren(...cells.map((c) => c.cell), line);
 	onLayout();
 	let draws = 0;

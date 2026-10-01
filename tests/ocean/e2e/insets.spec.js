@@ -43,9 +43,16 @@ test("step 22: the 256-stud layer's height, slope and push as live images, with 
 	// Units, and the push as the surface moves: the sideways field times the live choppiness.
 	expect(engine.line).toContain('Height and push are in studs; slope has no unit');
 	expect(fields.chop).toBeGreaterThan(0);
-	expect(fields.push.min).toBeCloseTo(fields.dispX.min * fields.chop, 9);
-	expect(fields.push.max).toBeCloseTo(fields.dispX.max * fields.chop, 9);
 	await expect(page.locator('figure[data-inset="fields"] .inset-field[data-field="dispX"] .inset-label')).toContainText('at this choppiness');
+	// The number the push cell shows is chop times the field's range, read off the page with the hook in one task.
+	const shown = await page.evaluate(() => ({
+		text: document.querySelector('figure[data-inset="fields"] .inset-field[data-field="dispX"] .inset-range').textContent,
+		push: window.__insets.fields().push,
+	}));
+	expect(shown.text).toBe(`${shown.push.min.toFixed(2)} to ${shown.push.max.toFixed(2)}`);
+	expect(shown.push.chop).toBeGreaterThan(0);
+	expect(shown.push.min).toBeCloseTo(shown.push.field[0] * shown.push.chop, 9);
+	expect(shown.push.max).toBeCloseTo(shown.push.field[1] * shown.push.chop, 9);
 });
 
 test("step 22: a pixel of each image is its field's own value in fieldToRgba's colours", async ({ page }) => {
@@ -195,5 +202,8 @@ test.describe('on the Medium tier (phones by rule)', () => {
 		}
 		const s = await page.evaluate(() => window.__insets.sampling());
 		expect(Math.abs(s.value - s.engine)).toBeLessThan(1e-6);
+		// Nothing blank: the painted maps hold real pictures on this tier too.
+		await expect.poll(() => page.evaluate(() => window.__insets.painted().colours.colour), { timeout: 30_000 }).toBeGreaterThan(50);
+		await expect.poll(() => page.evaluate(() => window.__insets.painted().colours.normal), { timeout: 30_000 }).toBeGreaterThan(20);
 	});
 });

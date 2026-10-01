@@ -13,6 +13,17 @@
 	grid-column: 1 / -1;
 }
 
+/* A label that wraps further than its neighbours' keeps the ranges level: each sits at its cell's foot. */
+.inset-field {
+	display: flex;
+	flex-direction: column;
+}
+
+.inset-field .inset-range {
+	margin-top: auto;
+	padding-top: 4px;
+}
+
 .inset[data-inset="sampling"] .inset-body {
 	grid-template-columns: 1fr;
 	justify-items: start;
