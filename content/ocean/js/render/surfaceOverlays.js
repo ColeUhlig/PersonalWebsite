@@ -1,13 +1,13 @@
 // Arrows on the surface (piece C2; lane C owns this file; spec 10.7 steps 5, 8 and 9): each wave's
 // heading (step 5), the surface's normals with the tangent and binormal (step 8), and the
-// central-difference normal beside the exact one (step 9, Task 6). The arrows come from
-// page/overlayModel.js, read from the waves the surface is written from; each is a thin cylinder and
-// a cone, two instanced meshes for every arrow at once. Everything is made once; a frame writes
+// central-difference normal beside each exact one, with their mean angle (step 9, Task 6). The
+// arrows come from page/overlayModel.js, read from the waves the surface is written from; each is a
+// thin cylinder and a cone, two instanced meshes for every arrow at once. Everything is made once; a frame writes
 // matrices and colours into the instance buffers and allocates nothing. An arrow that is not finite
 // (it never should be) is drawn at zero size and reported through probe().finite. With no overlay
 // (every other step) a frame returns at once once the meshes are hidden: no sampling, no upload, no draw.
 import * as THREE from 'three';
-import { ARROW_STRIDE, MAX_ARROWS, directionArrows, normalArrows } from '../page/overlayModel.js';
+import { ARROW_STRIDE, MAX_ARROWS, directionArrows, normalArrows, slopeArrows } from '../page/overlayModel.js';
 
 const srgb = (hex) => new THREE.Color().setStyle(hex, THREE.SRGBColorSpace);
 // Normal (a darker accent), tangent and binormal (term colours), the central difference (orange),
@@ -49,6 +49,7 @@ export function createSurfaceOverlays({ view, ocean }) {
 	const size = new THREE.Vector3();
 	const matrix = new THREE.Matrix4();
 	const nothing = new THREE.Matrix4().makeScale(0, 0, 0);
+	const slope = { count: 0, meanAngle: 0 };
 	let kind = null;
 	let spacing = 4;
 	let count = 0;
@@ -85,7 +86,9 @@ export function createSurfaceOverlays({ view, ocean }) {
 		if (kind === null || waves === null) return 0;
 		if (kind === 'directions') return directionArrows(waves, t, focus, arrows);
 		if (kind === 'normals') return normalArrows(waves, t, focus, arrows);
-		return 0;
+		slopeArrows(waves, t, focus, spacing, arrows, slope);
+		meanAngle = slope.meanAngle;
+		return slope.count;
 	}
 
 	return {

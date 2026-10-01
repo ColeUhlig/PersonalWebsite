@@ -3,8 +3,10 @@
 // round the focus, the exact ones the engine's own WaveSampler gives from the waves' slopes (chop 0,
 // as these steps run, so a grid point is a vertex of the finest ring: they sit on the 2-stud
 // lattice); the tangent T = (1, dy/dx, 0) and binormal B = (0, dy/dz, 1) at the grid's centre; and
-// (Task 6) the central-difference normal beside the exact one. Arrows go into a Float64Array,
-// ARROW_STRIDE numbers each: base x, y, z, tip x, y, z, colour. Nothing allocates per call.
+// step 9: at each grid point the exact normal and the one the central difference gives from heights
+// `h` studs either side along x and z, and their mean angle in degrees; `readoutText` words it for
+// the panel. Arrows go into a Float64Array, ARROW_STRIDE numbers each: base x, y, z, tip x, y, z,
+// colour. Nothing allocates per call.
 import * as WaveSampler from '../core/waveSampler.js';
 
 export const ARROW_STRIDE = 7;
@@ -84,4 +86,57 @@ export function normalArrows(waves, t, focus, out) {
 	write(out, n, cx, y, cz, cx + NORMAL_LENGTH / tl, y + (sx * NORMAL_LENGTH) / tl, cz, COLOURS.TANGENT);
 	write(out, n + 1, cx, y, cz, cx, y + (sz * NORMAL_LENGTH) / bl, cz + NORMAL_LENGTH / bl, COLOURS.BINORMAL);
 	return n + 2;
+}
+
+const height = (waves, t, x, z) => sampleAt(waves, t, x, z)[1];
+
+/** The central-difference slopes (dy/dx, dy/dz) at (x, z) from heights h studs either side, into out. */
+export function differenceSlope(waves, t, x, z, h, out) {
+	out[0] = (height(waves, t, x + h, z) - height(waves, t, x - h, z)) / (2 * h);
+	out[1] = (height(waves, t, x, z + h) - height(waves, t, x, z - h)) / (2 * h);
+	return out;
+}
+
+const SLOPES = new Float64Array(2);
+const DEGREES = 180 / Math.PI;
+
+/** Exact and central-difference normals on the grid, in that order per point; the mean angle between them. */
+export function slopeArrows(waves, t, focus, h, out, result) {
+	const cx = lattice(focus[0]);
+	const cz = lattice(focus[1]);
+	const half = (GRID - 1) / 2;
+	let n = 0;
+	let sum = 0;
+	for (let i = 0; i < GRID; i++) {
+		for (let j = 0; j < GRID; j++) {
+			const x = cx + (i - half) * GRID_SPACING;
+			const z = cz + (j - half) * GRID_SPACING;
+			const s = sampleAt(waves, t, x, z);
+			const y = s[1] + LIFT;
+			const nx = s[3];
+			const ny = s[4];
+			const nz = s[5];
+			differenceSlope(waves, t, x, z, h, SLOPES);
+			const length = Math.hypot(SLOPES[0], 1, SLOPES[1]);
+			const dx = -SLOPES[0] / length;
+			const dy = 1 / length;
+			const dz = -SLOPES[1] / length;
+			sum += Math.acos(Math.min(1, Math.max(-1, nx * dx + ny * dy + nz * dz)));
+			write(out, n, x, y, z, x + nx * NORMAL_LENGTH, y + ny * NORMAL_LENGTH, z + nz * NORMAL_LENGTH, COLOURS.NORMAL);
+			write(out, n + 1, x, y, z, x + dx * NORMAL_LENGTH, y + dy * NORMAL_LENGTH, z + dz * NORMAL_LENGTH, COLOURS.DIFFERENCE);
+			n += 2;
+		}
+	}
+	result.count = n;
+	result.meanAngle = (sum / (GRID * GRID)) * DEGREES;
+	return result;
+}
+
+const angleText = (degrees) => (degrees < 0.1 ? degrees.toFixed(3) : degrees < 10 ? degrees.toFixed(1) : degrees.toFixed(0));
+const studsText = (studs) => String(Number(studs.toFixed(1)));
+
+/** The panel's live line: empty until there is a gap to show. */
+export function readoutText({ meanAngle, spacing }) {
+	if (!Number.isFinite(meanAngle)) return '';
+	return `On this sea just now, the two arrows differ by ${angleText(meanAngle)}° on average, sampling ${studsText(spacing)} studs either side.`;
 }

@@ -6,7 +6,7 @@ import * as expect from '../expect.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import { DIRECTIONS_WAVES } from '../../../content/ocean/js/stages/recipeKit.js';
-import { ARROW_STRIDE, COLOURS, GRID, MAX_ARROWS, MAX_DIRECTIONS, NORMAL_LENGTH, directionArrows, normalArrows } from '../../../content/ocean/js/page/overlayModel.js';
+import { ARROW_STRIDE, COLOURS, GRID, MAX_ARROWS, MAX_DIRECTIONS, NORMAL_LENGTH, differenceSlope, directionArrows, normalArrows, readoutText, slopeArrows } from '../../../content/ocean/js/page/overlayModel.js';
 
 const arrow = (out, i) => Array.from(out.subarray(i * ARROW_STRIDE, (i + 1) * ARROW_STRIDE));
 const unit = (v) => {
@@ -90,4 +90,46 @@ test('on the summed teaching bank each normal is square to the height field the 
 		const want = unit([-dx, 1, -dz]);
 		want.forEach((w, j) => expect.near(n[j], w, 1e-6, `arrow ${i} component ${j}`));
 	}
+});
+
+test('the central difference on one sine is exactly A k cos(theta) sin(kh)/(kh), and closes on the exact slope as h shrinks', () => {
+	const sine = WaveBanks.nextSine(null, { amplitude: 2, wavelength: 30, speed: 5 }, 0).bank;
+	const k = (2 * Math.PI) / 30;
+	const out = new Float64Array(2);
+	for (const h of [0.5, 4, 12]) {
+		differenceSlope(sine, 1.5, 3, 7, h, out);
+		const exact = 2 * k * Math.cos(k * 7 - k * 5 * 1.5);
+		expect.near(out[1], (exact * Math.sin(k * h)) / (k * h), 1e-9, `dz at h ${h}`);
+		expect.near(out[0], 0, 1e-12, `dx at h ${h}`);
+	}
+	const result = { count: 0, meanAngle: 0 };
+	const arrows = new Float64Array(MAX_ARROWS * ARROW_STRIDE);
+	const angles = [0.01, 0.5, 4, 16].map((h) => slopeArrows(sine, 1.5, [3, 7], h, arrows, result).meanAngle);
+	expect.truthy(angles[0] < 1e-3, `h 0.01: ${angles[0]} degrees`);
+	expect.truthy(angles[0] < angles[1] && angles[1] < angles[2] && angles[2] < angles[3], `the gap grows with h: ${angles.join(', ')}`);
+	expect.equal(result.count, 2 * GRID * GRID, 'an exact and a difference arrow per point');
+	expect.equal(arrows[6], COLOURS.NORMAL, 'exact first');
+	expect.equal(arrows[ARROW_STRIDE + 6], COLOURS.DIFFERENCE, 'then the difference');
+});
+
+// Review Focus 5 (the model's half; the browser's is in overlays.spec.js).
+test('the overlays hold at the sliders ends: spread 0 and 1, spacing 0.5 and 16, over the whole bank', () => {
+	const out = new Float64Array(MAX_ARROWS * ARROW_STRIDE);
+	const result = { count: 0, meanAngle: 0 };
+	for (const fan of [0, 1]) {
+		const waves = WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), fan), 32);
+		const n = directionArrows(waves, 100, [-37, 81], out);
+		expect.truthy(Array.from(out.subarray(0, n * ARROW_STRIDE)).every(Number.isFinite), `directions finite at spread ${fan}`);
+		for (const h of [0.5, 16]) {
+			slopeArrows(waves, 100, [-37, 81], h, out, result);
+			expect.truthy(Array.from(out.subarray(0, result.count * ARROW_STRIDE)).every(Number.isFinite), `slopes finite at spread ${fan}, h ${h}`);
+			expect.truthy(Number.isFinite(result.meanAngle) && result.meanAngle >= 0 && result.meanAngle < 90, `mean angle ${result.meanAngle}`);
+		}
+	}
+});
+
+test('the readout says the gap and the spacing, live numbers only', () => {
+	expect.equal(readoutText({ meanAngle: 3.217, spacing: 4 }), 'On this sea just now, the two arrows differ by 3.2° on average, sampling 4 studs either side.');
+	expect.equal(readoutText({ meanAngle: 0.0412, spacing: 0.5 }), 'On this sea just now, the two arrows differ by 0.041° on average, sampling 0.5 studs either side.');
+	expect.equal(readoutText({ meanAngle: null, spacing: 4 }), '');
 });
