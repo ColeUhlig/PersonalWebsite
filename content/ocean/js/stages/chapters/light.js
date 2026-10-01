@@ -4,6 +4,10 @@
 import { DECK, TEACHING, TEACHING_SUN, range, toggle } from '../recipeKit.js';
 
 const BANK = { ...TEACHING, source: 'bank', bank: { count: 16, fan: 1 } };
+// The deck shot turned 25 degrees towards the teaching sun (azimuth 215, 55 degrees left of the
+// deck's -z), so the sun sits 30 degrees left of the view and its highlight lands on the water in
+// the frame's left third; from DECK itself the glint falls just outside the left edge.
+const SUNWARD = Object.freeze({ position: DECK.position, target: [-67.6, 2, -105] });
 
 export const LIGHT = Object.freeze({
 	unlit: {
@@ -24,7 +28,7 @@ export const LIGHT = Object.freeze({
 		title: 'Highlights, Fresnel and the sky',
 		engine: BANK,
 		look: { material: 'terms', terms: { diffuse: true, specular: true, fresnel: true }, sun: TEACHING_SUN },
-		shot: DECK,
+		shot: SUNWARD,
 		sliders: [toggle('specular', 'Highlight', 'look.terms.specular', true), toggle('fresnel', 'Fresnel and sky', 'look.terms.fresnel', true)],
 	},
 });
