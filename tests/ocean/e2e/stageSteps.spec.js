@@ -54,15 +54,29 @@ for (const tier of TIERS) {
 			expect((await stage(page, 'graph')).band).toEqual([-0.5, 0.5]);
 			await waitFrames(page, 10);
 			expect((await stage(page, 'surface')).sumY).toBe(surface.sumY);
-			await stage(page, 'setSlider', 'amplitude', 1);
+			// Lane B tunes the sliders: every value here comes from the recipe (Task 0 fix round 1, U4).
+			const sliders = await stage(page, 'sliders');
+			const height = sliders.find((s) => s.id === 'amplitude');
+			const lower = height.min + 0.4 * (height.default - height.min);
+			await stage(page, 'setSlider', 'amplitude', lower);
 			await waitFrames(page, 3);
-			expect((await stage(page, 'surface')).maxAbsY).toBeLessThan(1.01);
-			// A longer wave changes less between neighbouring vertices (A k times the spacing). The sum
-			// of heights cannot tell: at phase 0 the sine is odd about the patches' centre.
+			const low = (await stage(page, 'sliders')).find((s) => s.id === 'amplitude').value;
+			expect((await stage(page, 'surface')).maxAbsY).toBeLessThan(low + 0.01);
+			// A longer wave changes less between neighbouring vertices (A k times the spacing), a
+			// shorter one more. The sum of heights cannot tell: at phase 0 the sine is odd about the
+			// patches' centre.
+			const length = sliders.find((s) => s.id === 'wavelength');
 			const before = (await stage(page, 'surface')).zSpread;
-			await stage(page, 'setSlider', 'wavelength', 90);
+			const longer = Math.min(length.max, 2 * length.default);
+			const target = longer >= 1.5 * length.default ? longer : length.min;
+			await stage(page, 'setSlider', 'wavelength', target);
 			await waitFrames(page, 3);
-			expect((await stage(page, 'surface')).zSpread).toBeLessThan(0.6 * before);
+			const after = (await stage(page, 'surface')).zSpread;
+			if (target > length.default) {
+				expect(after).toBeLessThan((0.5 + 0.5 * (length.default / target)) * before);
+			} else {
+				expect(after).toBeGreaterThan(1.2 * before);
+			}
 		});
 
 		test('moving-sine: the same wave, moving, along one axis only', async ({ page }) => {

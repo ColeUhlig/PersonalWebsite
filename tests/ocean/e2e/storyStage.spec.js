@@ -9,10 +9,10 @@ import { STEP_COUNT, stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { movingReach, polarRange, STORY_MAX_DISTANCE } from '../../../content/ocean/js/page/orbitLimits.js';
 import * as Tier from '../../../content/ocean/js/core/tier.js';
 import { oceanRunning, scrollToId, scrollToOpening, waitFrames, watchErrors } from './helpers/story.js';
+import { story } from './helpers/stage.js';
 
 const at = (id) => recipeFor(stepOf(id));
 
-const story = (page, name, ...args) => page.evaluate(([n, a]) => window.__ocean.story[n](...a), [name, args]);
 const camera = (page) => page.evaluate(() => window.__ocean.camera.position.toArray());
 const sub = (a, b) => a.map((v, i) => v - b[i]);
 const length = (v) => Math.hypot(...v);
@@ -341,6 +341,49 @@ test("while its panel is read a step stands at its own shot (Cole's hold ruling)
 	expect((await story(page, 'state')).progress).toBe(0);
 	const position = await camera(page);
 	at('gerstner').shot.position.forEach((value, i) => expect(position[i]).toBeCloseTo(value, 3));
+});
+
+// C2 (Task 0 fix round 1): a camera dragged while the orbit was free (late in the sum-of-sines
+// step, where the blend into into-3d has faded the graph's backdrop) goes back to the shot when
+// the visitor scrolls back up the same step and the graph's hold comes on: the graph is never seen
+// from off its shot.
+test("a camera dragged before the graph's hold comes on eases back to the shot when it does", async ({ page }) => {
+	const errors = watchErrors(page);
+	await oceanRunning(page);
+	await scrollToId(page, 'sum-of-sines', 0.95);
+	await page.waitForFunction(() => window.__ocean.story.orbitEnabled() && window.__ocean.story.graph().opacity < 0.5, null, { timeout: 60_000 });
+	await waitFrames(page, 5);
+	await page.mouse.move(1000, 420);
+	await page.mouse.down();
+	await page.mouse.move(1150, 380, { steps: 5 });
+	await page.mouse.up();
+	expect(await story(page, 'shotMode')).toBe('free');
+	await scrollToId(page, 'sum-of-sines', 0.3);
+	await page.waitForFunction(() => window.__ocean.story.shotMode() === 'shot', null, { timeout: 60_000 });
+	expect(await story(page, 'orbitEnabled')).toBe(false);
+	expect((await story(page, 'state')).step).toBe(stepOf('sum-of-sines'));
+	await expectAtShot(page);
+	expect(errors).toEqual([]);
+});
+
+// C2 (Task 0 fix round 1, pre-flight R13): each phase chart reads its own step's sea. A new sea on
+// the random-sea step leaves the time step's arrows on the time step's own seed.
+test("New sea on the random-sea step leaves the time step's arrows on the time step's own sea", async ({ page }) => {
+	const errors = watchErrors(page);
+	await oceanRunning(page);
+	await scrollToId(page, 'random-sea', 0.2);
+	await waitFrames(page, 5);
+	const RANDOM = stepOf('random-sea');
+	const TIME = stepOf('time');
+	expect(await story(page, 'seed', TIME)).toBe(at('time').engine.seed);
+	const before = await story(page, 'phaseArrows', 0, TIME);
+	expect(await story(page, 'phaseArrows', 0, RANDOM)).toEqual(before);
+	expect(await story(page, 'press', RANDOM, 'seed')).toBe(at('random-sea').engine.seed + 1);
+	expect(await story(page, 'seed', RANDOM)).toBe(at('random-sea').engine.seed + 1);
+	expect(await story(page, 'seed', TIME)).toBe(at('time').engine.seed);
+	expect(await story(page, 'phaseArrows', 0, TIME)).toEqual(before);
+	expect(await story(page, 'phaseArrows', 0, RANDOM)).not.toEqual(before);
+	expect(errors).toEqual([]);
 });
 
 test('a plain click on the ocean leaves the camera on its shot', async ({ page }) => {
