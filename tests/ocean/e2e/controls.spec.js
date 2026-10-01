@@ -202,6 +202,13 @@ test('the grid-size choice is a radio group: one tab stop, arrows and Home/End m
 	await expect(radio(8)).toBeFocused();
 	await page.keyboard.press('ArrowLeft');
 	await expect(radio(64)).toHaveAttribute('aria-checked', 'true');
+	// As ARIA's radio group has it (final review, parked item): Up goes to the previous option and
+	// Down to the next, like Left and Right (a range slider's Up goes up instead).
+	await page.keyboard.press('ArrowUp');
+	await expect(radio(32)).toHaveAttribute('aria-checked', 'true');
+	await expect(radio(32)).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	await expect(radio(64)).toHaveAttribute('aria-checked', 'true');
 	await expect(tabStops()).toHaveCount(1);
 	await expect(radio(64)).toHaveAttribute('tabindex', '0');
 	expect((await page.evaluate(() => window.__ocean.story.state())).values[String(S.fft)].transformN).toBe(64);

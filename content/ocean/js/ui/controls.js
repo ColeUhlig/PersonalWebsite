@@ -20,6 +20,9 @@ export const UNAVAILABLE_NOTE = "Not on this device's lighter tier";
 
 const UP_KEYS = new Set(['ArrowRight', 'ArrowUp']);
 const DOWN_KEYS = new Set(['ArrowLeft', 'ArrowDown']);
+// A radio group's keys (ARIA): Right and Down to the next option, Left and Up to the previous one.
+const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown']);
+const PREVIOUS_KEYS = new Set(['ArrowLeft', 'ArrowUp']);
 
 function element(tag, props = {}, children = []) {
 	const node = document.createElement(tag);
@@ -154,8 +157,8 @@ export function mountControls({ root, step, story, onChange = () => {} }) {
 			const open = buttons.filter((button) => !button.disabled);
 			const place = open.indexOf(buttons[at]);
 			const last = open.length - 1;
-			const step = UP_KEYS.has(event.key) ? (place === last ? 0 : place + 1)
-				: DOWN_KEYS.has(event.key) ? (place <= 0 ? last : place - 1)
+			const step = NEXT_KEYS.has(event.key) ? (place === last ? 0 : place + 1)
+				: PREVIOUS_KEYS.has(event.key) ? (place <= 0 ? last : place - 1)
 					: event.key === 'Home' ? 0
 						: event.key === 'End' ? last
 							: null;
