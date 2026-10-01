@@ -12,9 +12,12 @@
 //
 // The joystick convention (Cole judges it on a device): the phone steers the camera. Tipping the top
 // edge away lifts the camera, so it looks further down; bringing it towards you lowers it towards the
-// horizon. Turning the right edge away, or rolling the phone to the right like a steering wheel,
-// swings the view right. yaw is radians counter-clockwise seen from above (about +y), pitch is
-// radians the camera rises (its tilt from straight down shrinks).
+// horizon. Turning the right edge away (a twist about the screen's up axis) swings the view right.
+// Only those two turns count, each read about its own screen axis: a roll about the screen's normal
+// (a steering wheel) does nothing, so a turn on the spot swings the view the same way at any grip
+// (the share of it about the screen's up axis; held flat, a turn on the spot is a pure roll and does
+// nothing). yaw is radians counter-clockwise seen from above (about +y), pitch is radians the camera
+// rises (its tilt from straight down shrinks).
 
 export const TILT_LIMITS = Object.freeze({ yawDeg: 12, pitchDeg: 8 });
 // The smoothing's time constant and the ease back on a step change, both in play-clock seconds.
@@ -22,8 +25,10 @@ export const SMOOTHING_SECONDS = 0.25;
 export const RETURN_SECONDS = 1.2;
 // A frame's seconds are capped here, so a stall does not land the camera in one jump.
 export const MAX_STEP_SECONDS = 0.25;
-// A turn smaller than this, on either axis, is no turn: sensor noise on a phone held still never
-// moves the camera, so the story's zero-offset skip still fires. Larger turns lose this much.
+// A turn smaller than this about either screen axis is no turn: sensor noise on a phone held still
+// never moves the camera, so the story's zero-offset skip still fires. Larger turns lose this much.
+// Each axis is banded on its own, and each reads a single device axis, so noise on other axes never
+// adds into it.
 export const DEAD_BAND_DEG = 0.1;
 // Closer than this (radians) the smoothing lands on its target, so a still phone is exactly still
 // and an offset that has gone back to zero costs the story nothing.
@@ -50,6 +55,10 @@ export function quarterTurn(angle) {
 	}
 	return (((Math.round(angle / 90) * 90) % 360) + 360) % 360;
 }
+
+// The screen's quarter turns' cosines and sines, exact, so each screen axis is one device axis.
+const QUARTER_COS = Object.freeze({ 0: 1, 90: 0, 180: -1, 270: 0 });
+const QUARTER_SIN = Object.freeze({ 0: 0, 90: 1, 180: 0, 270: -1 });
 
 // Quaternions as [w, x, y, z]. Kept arrays, so a frame allocates nothing.
 const baseQ = [1, 0, 0, 0];
@@ -116,17 +125,16 @@ export function orientationToOffset(reading, baseline, screenAngle, out = { yaw:
 	const scale = half < 1e-12 ? 2 * sign : (2 * Math.atan2(half, sign * q[0]) * sign) / half;
 	const x = q[1] * scale;
 	const y = q[2] * scale;
-	const z = q[3] * scale;
 	// About the screen's axes: its right and up are the device's x and y turned by the screen angle
-	// (at 90 the device is turned anticlockwise, so screen right is the device's -y, up its +x).
-	const c = Math.cos(angle * DEG);
-	const s = Math.sin(angle * DEG);
+	// (at 90 the device is turned anticlockwise, so screen right is the device's -y, up its +x). The
+	// turn about the screen's normal (a roll) is not read.
+	const c = QUARTER_COS[angle];
+	const s = QUARTER_SIN[angle];
 	const aboutRight = x * c - y * s;
 	const aboutUp = x * s + y * c;
 	// Positive about the right axis brings the top edge towards the visitor (the camera drops);
-	// positive about the up axis takes the right edge away, and negative about the screen's normal
-	// is a roll to the right: both swing the view right (yaw negative).
-	out.yaw = clamp(banded(z - aboutUp), -YAW_MAX, YAW_MAX);
+	// positive about the up axis takes the right edge away (the view swings right: yaw negative).
+	out.yaw = clamp(banded(-aboutUp), -YAW_MAX, YAW_MAX);
 	out.pitch = clamp(banded(-aboutRight), -PITCH_MAX, PITCH_MAX);
 	return out;
 }

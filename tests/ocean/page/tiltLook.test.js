@@ -78,7 +78,7 @@ test('the limits, the dead band, the smoothing and the return are the brief\'s, 
 	expect.equal(RETURN_SECONDS, 1.2, 'return');
 });
 
-test('the joystick convention: top edge away lifts the camera, right edge away or a roll right swings the view right', () => {
+test('the joystick convention: top edge away lifts the camera, right edge away swings the view right', () => {
 	const M = held(45, 0);
 	const away = offsetFor(M, SCREEN_RIGHT[0](-3), 0);
 	near(away.pitch, banded(3), 'top edge away: the camera rises and looks down');
@@ -86,9 +86,6 @@ test('the joystick convention: top edge away lifts the camera, right edge away o
 	const right = offsetFor(M, SCREEN_UP[0](3), 0);
 	near(right.yaw, banded(-3), 'right edge away: the view swings right (the camera clockwise from above)');
 	near(right.pitch, 0, 'no pitch from a twist');
-	const roll = offsetFor(M, Rz(-3), 0);
-	near(roll.yaw, banded(-3), 'a roll to the right (clockwise as the visitor sees the screen): the view swings right');
-	near(roll.pitch, 0, 'no pitch from a roll');
 	expect.equal(isZeroOffset(offsetFor(M, Rz(0), 0)), true, 'the baseline itself is no offset');
 });
 
@@ -120,6 +117,57 @@ test('a small move through upright changes the offset smoothly, with no jump at 
 				expect.truthy(Math.abs(offset.pitch - previous.pitch) <= 0.31 * DEG, `screen ${angle}, step ${k}: no jump`);
 			}
 			previous = offset;
+		}
+	}
+});
+
+test('a roll (a steering wheel, about the screen\'s normal) is no turn, at any grip and screen angle', () => {
+	for (const angle of [0, 90, 180, 270]) {
+		for (const [name, lean] of Object.entries(LEANS)) {
+			for (const degrees of [-5, 5, -20]) {
+				const roll = offsetFor(held(lean, angle), Rz(degrees), angle);
+				expect.equal(roll.yaw, 0, `screen ${angle}, ${name}, roll ${degrees}: yaw`);
+				expect.equal(roll.pitch, 0, `screen ${angle}, ${name}, roll ${degrees}: pitch`);
+			}
+		}
+	}
+});
+
+// A turn on the spot is about the world's vertical: the phone at M turned by Rz(degrees) in world
+// axes. Its share about the screen's up axis is the cosine of the lean back from upright.
+const onTheSpot = (M, degrees, angle) => orientationToOffset(reading(mul(Rz(degrees), M)), reading(M), angle);
+const GRIPS = Object.freeze({ 'nearly flat': 80, 'at 45°': 45, 'at 30°': 30, '5° from upright': 5, upright: 0.5 });
+
+test('a 5° turn on the spot swings the view the same way at every grip, and held flat it is a pure roll', () => {
+	for (const angle of [0, 90, 180, 270]) {
+		for (const [name, lean] of Object.entries(GRIPS)) {
+			for (const degrees of [5, -5]) {
+				const offset = onTheSpot(held(lean, angle), degrees, angle);
+				// Turning right (clockwise from above, degrees < 0) brings the right edge towards the
+				// visitor: in the joystick convention the view swings left (yaw positive).
+				near(offset.yaw, banded(-degrees * Math.cos(lean * DEG)), `screen ${angle}, ${name}, turn ${degrees}: yaw`);
+				expect.truthy(Math.sign(offset.yaw) === -Math.sign(degrees), `screen ${angle}, ${name}, turn ${degrees}: one direction at every grip`);
+				near(offset.pitch, 0, `screen ${angle}, ${name}, turn ${degrees}: pitch`);
+			}
+		}
+		const flat = onTheSpot(held(90, angle), -5, angle);
+		expect.truthy(isZeroOffset(flat), `screen ${angle}, flat: a turn on the spot is a pure roll, no offset`);
+	}
+});
+
+test('noise of ±0.08° about each of the screen\'s axes is no offset, flat, at 45° and near upright', () => {
+	for (const angle of [0, 90, 180, 270]) {
+		for (const lean of [90, 45, 2]) {
+			const M = held(lean, angle);
+			for (const right of [-0.08, 0.08]) {
+				for (const up of [-0.08, 0.08]) {
+					for (const normal of [-0.08, 0.08]) {
+						const T = mul(SCREEN_RIGHT[angle](right), mul(SCREEN_UP[angle](up), Rz(normal)));
+						const offset = offsetFor(M, T, angle);
+						expect.truthy(isZeroOffset(offset), `screen ${angle}, lean ${lean}, noise ${right}/${up}/${normal}: ${offset.yaw}, ${offset.pitch}`);
+					}
+				}
+			}
 		}
 	}
 });
