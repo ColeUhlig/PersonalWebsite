@@ -177,3 +177,19 @@ test('step 13 draws the tile edges at multiples of the tile, and its neighbours 
 		expect((await stage(page, 'overlays')).tiles.shown, id).toBe(false);
 	}
 });
+
+// Task 15 polish (the walk: on a phone the heading arrows and the frame's T and B were a few pixels
+// thick in the ocean's top half): on the narrow layout every arrow is drawn thicker, its length
+// unchanged (the lengths are the model's, page/overlayModel.js); on a wide screen as before.
+for (const { width, height, girth } of [{ width: 390, height: 844, girth: 1.8 }, { width: 1366, height: 767, girth: 1 }]) {
+	test(`the arrows' girth on a ${width} × ${height} screen is ${girth}× the base`, async ({ page }) => {
+		await page.setViewportSize({ width, height });
+		for (const id of ['directions', 'normals', 'slopes']) {
+			await load(page, `step=${id}&freeze=12`, 10);
+			await waitFrames(page, 3);
+			const probe = await stage(page, 'overlays');
+			expect(probe.arrows, id).toBeGreaterThan(0);
+			expect(probe.girth, id).toBe(girth);
+		}
+	});
+}

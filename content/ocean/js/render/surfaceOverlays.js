@@ -36,6 +36,10 @@ const SHAFTS = Object.freeze([NORMAL_SHAFT, FRAME_SHAFT, FRAME_SHAFT, DIFFERENCE
 const headOf = (role) => (role === COLOURS.FRAME_NORMAL ? FRAME_HEAD : role >= COLOURS.WAVE ? HEADING_THICKNESS : HEADS[role]);
 const shaftOf = (role) => (role === COLOURS.FRAME_NORMAL ? FRAME_SHAFT : role >= COLOURS.WAVE ? HEADING_THICKNESS : SHAFTS[role]);
 const UP = new THREE.Vector3(0, 1, 0);
+// Task 15: on the narrow layout (a phone's top half) every arrow is this much thicker, shaft and
+// head, its length unchanged: at the base girth the heading arrows and the frame's T and B were a few
+// pixels across there.
+const NARROW_GIRTH = 1.8;
 
 export function createSurfaceOverlays({ view, ocean }) {
 	const arrows = new Float64Array(MAX_ARROWS * ARROW_STRIDE);
@@ -72,6 +76,7 @@ export function createSurfaceOverlays({ view, ocean }) {
 	const narrow = window.matchMedia(NARROW_QUERY);
 	const colour = new THREE.Color();
 	let colourUploads = 0;
+	let girth = 1;
 	let kind = null;
 	let spacing = 4;
 	let count = 0;
@@ -141,9 +146,10 @@ export function createSurfaceOverlays({ view, ocean }) {
 			count = draw(t, focus);
 			finite = true;
 			const recolour = kind !== colouredKind || count > colouredCount;
+			girth = narrow.matches ? NARROW_GIRTH : 1;
 			for (let i = 0; i < count; i++) {
 				const role = arrows[i * ARROW_STRIDE + 6];
-				place(i, headOf(role), shaftOf(role), recolour);
+				place(i, headOf(role) * girth, shaftOf(role) * girth, recolour);
 			}
 			shafts.count = count;
 			heads.count = count;
@@ -168,7 +174,7 @@ export function createSurfaceOverlays({ view, ocean }) {
 			const shown = Math.min(count, 2);
 			const colours = Array.from({ length: shown }, (_, i) => hex(shafts, i));
 			const headColours = Array.from({ length: shown }, (_, i) => hex(heads, i));
-			return { kind, arrows: count, spacing, meanAngle, finite, tiles: tiles.probe(), first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, headColours, colourUploads };
+			return { kind, arrows: count, spacing, girth, meanAngle, finite, tiles: tiles.probe(), first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, headColours, colourUploads };
 		},
 	};
 }
