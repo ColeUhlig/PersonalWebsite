@@ -108,3 +108,70 @@ test("the card steps aside over the finale's blocks and comes back on the way up
 	await expect(box(page)).toBeVisible();
 	await expect(page.locator('#mathbox .mathbox-sentence')).toHaveText(mathFor('glow').changed);
 });
+
+// Task 2 (spec 10.3; Review Focus 3): the phone's bar under the ocean and its sheet.
+for (const width of [320, 390]) {
+	test.describe(`the pinned bar at ${width} px`, () => {
+		test.use({ viewport: { width, height: 760 }, hasTouch: true, isMobile: true });
+
+		// Pre-flight R22 (lane A's call, ledger): like the desktop card, the bar stays hidden over the
+		// opening, so the page before the first scroll is A2's; it pins under the ocean from step 1.
+		test('hidden over the opening; from step 1 under the ocean, never over a panel, never scrolling the page sideways', async ({ page }) => {
+			await page.goto('/ocean/');
+			await expect(box(page)).toBeHidden();
+			await scrollToId(page, 'sine', 0.1);
+			await expect(box(page)).toBeVisible();
+			expect(await page.evaluate(() => window.__mathbox.shown())).toBe('sine');
+			const bar = await box(page).boundingBox();
+			expect(Math.abs(bar.y - 380)).toBeLessThanOrEqual(1);
+			expect(Math.round(bar.height)).toBe(44);
+			expect(bar.width).toBeLessThanOrEqual(width);
+			for (const id of ['sine', 'slopes', 'layers']) {
+				await page.evaluate((step) => document.querySelector(`section[data-step-id="${step}"]`).scrollIntoView(), id);
+				await page.waitForTimeout(200);
+				const panel = await page.locator(`section[data-step-id="${id}"] .panel`).boundingBox();
+				expect(panel.y, `${id}'s panel starts below the bar`).toBeGreaterThanOrEqual(bar.y + bar.height - 1);
+			}
+			expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth)).toBe(true);
+			await scrollToOpening(page);
+			await expect(box(page)).toBeHidden();
+		});
+
+		test('opens to a sheet by tap and by Enter, closes by Escape and by its button, and gives focus back', async ({ page }) => {
+			await page.goto('/ocean/');
+			await scrollToId(page, 'diffuse', 0.1);
+			await page.locator('#mathbox .mathbox-open').tap();
+			await expect(box(page)).toHaveClass(/is-open/);
+			await expect(page.locator('#mathbox .mathbox-close')).toBeFocused();
+			await expect(page.locator('#mathbox .mathbox-sentence')).toBeVisible();
+			const sheet = await box(page).boundingBox();
+			expect(Math.abs(sheet.y + sheet.height - 760)).toBeLessThanOrEqual(1);
+			await page.keyboard.press('Escape');
+			await expect(box(page)).not.toHaveClass(/is-open/);
+			await expect(page.locator('#mathbox .mathbox-open')).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(box(page)).toHaveClass(/is-open/);
+			await page.locator('#mathbox .mathbox-close').tap();
+			await expect(box(page)).not.toHaveClass(/is-open/);
+			expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth)).toBe(true);
+		});
+	});
+}
+
+test.describe('reduced motion', () => {
+	test.use({ reducedMotion: 'reduce' });
+
+	test('entering a step never pulses the new terms; they keep their quiet tint', async ({ page }) => {
+		await page.goto('/ocean/');
+		await page.evaluate(() => {
+			window.__entered = 0;
+			new MutationObserver(() => {
+				if (document.getElementById('mathbox').classList.contains('is-entering')) window.__entered += 1;
+			}).observe(document.getElementById('mathbox'), { attributes: true, attributeFilter: ['class'] });
+		});
+		await scrollToId(page, 'sine', 0.1);
+		await scrollToId(page, 'moving-sine', 0.1);
+		await expect(page.locator('#mathbox .mathbox-sentence')).toHaveText(mathFor('moving-sine').changed);
+		expect(await page.evaluate(() => window.__entered)).toBe(0);
+	});
+});

@@ -100,3 +100,135 @@
 		display: none;
 	}
 }
+
+/* The bar's and the sheet's controls are a phone's only. */
+.mathbox-open,
+.mathbox-close {
+	display: none;
+}
+
+/* Task 2: under 900 px the box is a slim bar pinned at the top of the lower half, directly under the
+   ocean (whose half ends at 50svh); the lower half's padding already makes room for it (style.css
+   --mathbar-height). */
+@media (max-width: 899.98px) {
+	.mathbox {
+		top: 50vh;
+		top: 50svh;
+		right: 0;
+		left: 0;
+		width: auto;
+		height: var(--mathbar-height);
+		max-height: none;
+		overflow: hidden;
+		padding: 0 var(--gutter);
+		border-radius: 0;
+		border-width: 1px 0;
+		display: flex;
+		align-items: center;
+		box-shadow: none;
+	}
+
+	.mathbox-head,
+	.mathbox-changed,
+	.mathbox-toggle {
+		display: none;
+	}
+
+	.mathbox-body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* One line, small, fading out at the right rather than wrapping. */
+	.mathbox-eq {
+		margin: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		-webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+		mask-image: linear-gradient(to right, #000 85%, transparent);
+	}
+
+	.mathbox .tex-rendered {
+		font-size: 0.8rem;
+	}
+
+	.mathbox .tex-rendered {
+		padding: 0;
+	}
+
+	.mathbox .tex-rendered > .katex {
+		white-space: nowrap;
+	}
+
+	.mathbox-eq code {
+		white-space: nowrap;
+	}
+
+	/* The whole bar is the button that opens the sheet. */
+	.mathbox-open {
+		display: block;
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		border: 0;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.mathbox-open:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -3px;
+	}
+
+	/* Open: a sheet over the lower half, the whole box inside it. */
+	.mathbox.is-open {
+		height: auto;
+		bottom: 0;
+		/* Opaque: the panel under the sheet must not show through its text. */
+		background: var(--body-bg);
+		display: block;
+		overflow-y: auto;
+		padding: 12px var(--gutter) 20px;
+		border-width: 1px 0 0;
+	}
+
+	.mathbox.is-open .mathbox-head,
+	.mathbox.is-open .mathbox-changed {
+		display: flex;
+	}
+
+	.mathbox.is-open .mathbox-changed {
+		display: block;
+		margin-top: 8px;
+	}
+
+	.mathbox.is-open .mathbox-eq {
+		white-space: normal;
+		-webkit-mask-image: none;
+		mask-image: none;
+	}
+
+	.mathbox.is-open .tex-rendered {
+		font-size: 1rem;
+	}
+
+	.mathbox.is-open .tex-rendered .katex-display > .katex {
+		white-space: normal;
+	}
+
+	.mathbox.is-open .mathbox-open {
+		display: none;
+	}
+
+	.mathbox.is-open .mathbox-close {
+		display: inline-block;
+		padding: 4px 12px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: transparent;
+		color: var(--ink);
+		font: inherit;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+}

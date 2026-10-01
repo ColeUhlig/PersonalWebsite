@@ -8,11 +8,16 @@
 // Hide/Show button collapses it to its title, remembered per viewer (page/mathBoxModel.js). Over the
 // finale's full-width blocks and the footer it has nothing new to say and would cover their text, so
 // on a desktop it steps aside while one of them is in the top half of the screen (pre-flight R14).
-// Task 2 adds the phone's pinned bar and sheet.
+// On a narrow screen (spec 10.3: under 900 px) it is a slim bar pinned at the top of the lower half,
+// under the ocean, with the equation on one line; tapping it (or Enter or Space on it) opens a sheet
+// over the lower half with the whole box; Escape or the close button closes it and gives focus back to
+// the bar. Like the desktop card, the bar stays hidden over the opening (pre-flight R22, lane A's
+// call), so the page before the first scroll is A2's.
 import { loadKatex } from './math.js';
 import { KATEX_OPTIONS, stackEquations } from '../page/mathTrust.js';
 import { FRESH_SECONDS, PROMPT, entryFor, readCollapsed, writeCollapsed } from '../page/mathBoxModel.js';
 import { mathFor } from '../page/mathSteps.js';
+import { NARROW_QUERY } from '../page/scrollMap.js';
 import { stepOf } from '../stages/steps.js';
 
 const TITLE = 'The math so far';
@@ -20,6 +25,8 @@ const CHANGED_LABEL = 'What changed: ';
 // What the card steps aside for (R14), and where: the top half of the screen, where the card sits.
 const YIELD_TO = '.step-finale .block, footer.site';
 const YIELD_MARGIN = '0px 0px -50% 0px';
+// The bar's one line: inline style keeps fractions short enough for its height.
+const BAR_OPTIONS = Object.freeze({ ...KATEX_OPTIONS, displayMode: false });
 
 function element(tag, props = {}, children = []) {
 	const node = document.createElement(tag);
@@ -52,7 +59,7 @@ function watchYield(root) {
 	for (const target of targets) observer.observe(target);
 }
 
-const inert = Object.freeze({ hooks: Object.freeze({ shown: () => null, state: () => 'absent', collapsed: () => false, show() {} }) });
+const inert = Object.freeze({ hooks: Object.freeze({ shown: () => null, state: () => 'absent', collapsed: () => false, show() {}, open() {}, close() {}, isOpen: () => false }) });
 
 export function mountMathBox({ root, watchReading, reducedMotion = false, load = loadKatex, storage = safeStorage() }) {
 	if (!root) return inert;
@@ -67,7 +74,15 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 	const changed = element('p', { className: 'mathbox-changed' }, [element('span', { className: 'mathbox-label', textContent: CHANGED_LABEL }), sentence]);
 	changed.setAttribute('aria-live', 'polite');
 	const body = element('div', { id: 'mathbox-body', className: 'mathbox-body' }, [eq, changed]);
-	root.replaceChildren(head, body);
+	const open = element('button', { type: 'button', className: 'mathbox-open' });
+	open.setAttribute('aria-label', 'Open the math');
+	open.setAttribute('aria-expanded', 'false');
+	open.setAttribute('aria-controls', 'mathbox-body');
+	const close = element('button', { type: 'button', className: 'mathbox-close', textContent: 'Close' });
+	head.append(close);
+	root.replaceChildren(head, body, open);
+	const narrow = window.matchMedia(NARROW_QUERY);
+	let isOpen = false;
 
 	let katex = null;
 	let loading = null;
@@ -77,12 +92,15 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 	let freshTimer = 0;
 	let reportedRender = false;
 
-	// The equation as KaTeX's markup, or as its TeX source when KaTeX is not here (or throws).
+	// The equation as KaTeX's markup, or as its TeX source when KaTeX is not here (or throws). The
+	// phone's bar holds one line, so there it is set inline and unstacked (fading out at the right);
+	// the card and the open sheet stack its equations one per line.
 	function render(entry) {
 		if (katex) {
 			try {
 				const target = element('div', { className: 'tex-rendered' });
-				katex.render(stackEquations(entry.tex), target, KATEX_OPTIONS);
+				const bar = narrow.matches && !isOpen;
+				katex.render(bar ? entry.tex : stackEquations(entry.tex), target, bar ? BAR_OPTIONS : KATEX_OPTIONS);
 				eq.replaceChildren(target);
 				return;
 			} catch (error) {
@@ -127,6 +145,8 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 		current = entry;
 		root.hidden = entry === null;
 		if (entry === null) {
+			// Back over the opening the sheet has nothing to hold.
+			if (isOpen) setOpen(false);
 			sentence.textContent = PROMPT;
 			return;
 		}
@@ -139,13 +159,52 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 
 	function setCollapsed(next, remember = true) {
 		collapsed = next;
-		body.hidden = next;
+		// The phone's bar has no collapse: its sheet opens and closes instead.
+		body.hidden = next && !narrow.matches;
 		toggle.textContent = next ? 'Show' : 'Hide';
 		toggle.setAttribute('aria-expanded', String(!next));
 		root.classList.toggle('is-collapsed', next);
 		if (remember) writeCollapsed(storage, next);
 	}
 
+	function setOpen(next) {
+		const was = isOpen;
+		isOpen = next && narrow.matches;
+		root.classList.toggle('is-open', isOpen);
+		// The sheet stacks the equations the bar runs on one line.
+		if (was !== isOpen && current) render(current);
+		open.setAttribute('aria-expanded', String(isOpen));
+		if (isOpen) {
+			body.hidden = false;
+			close.focus();
+		} else {
+			body.hidden = collapsed && !narrow.matches;
+		}
+	}
+
+	open.addEventListener('click', () => {
+		setOpen(true);
+	});
+	close.addEventListener('click', () => {
+		setOpen(false);
+		open.focus();
+	});
+	root.addEventListener('keydown', (event) => {
+		if (event.key === 'Escape' && isOpen) {
+			event.preventDefault();
+			setOpen(false);
+			open.focus();
+		}
+	});
+	// Crossing the breakpoint (a rotated phone, a resized window) closes the sheet, applies the
+	// desktop collapse again and redraws the entry for the new layout.
+	narrow.addEventListener('change', () => {
+		setOpen(false);
+		setCollapsed(collapsed, false);
+		const keep = current;
+		current = null;
+		show(keep);
+	});
 	toggle.addEventListener('click', () => setCollapsed(!collapsed));
 	setCollapsed(collapsed, false);
 	watchYield(root);
@@ -158,6 +217,9 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 			collapsed: () => collapsed,
 			// Test hook: shows step `id`'s entry as if it were being read.
 			show: (id) => show(Object.freeze({ step: stepOf(id), id, ...mathFor(id) })),
+			open: () => setOpen(true),
+			close: () => setOpen(false),
+			isOpen: () => isOpen,
 		}),
 	});
 }
