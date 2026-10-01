@@ -155,6 +155,25 @@ test('the swing into step 4 is one smooth camera move while the backdrop fades a
 	expect(graph.band[1]).toBeGreaterThan(300);
 });
 
+// End's smooth scroll can still be running when the last step is read (fix round 1: 35,858 of
+// 37,678), and a Home pressed then is lost; and the finale grows about 570 px in the same frames the
+// scroll lands, so the foot it was heading for moves (fix round 2). Wait for the page to rest, which
+// is scrollY unchanged for 10 frames wherever that is; resting short of the foot, scroll to the
+// foot as it now is and wait again.
+async function restAtFoot(page) {
+	await page.waitForFunction(() => {
+		const state = (window.__footRest ??= { y: -1, still: 0 });
+		const y = window.scrollY;
+		state.still = y === state.y ? state.still + 1 : 0;
+		state.y = y;
+		if (state.still < 10) return false;
+		if (y + window.innerHeight >= document.documentElement.scrollHeight - 2) return true;
+		window.scrollTo(0, document.documentElement.scrollHeight);
+		state.still = 0;
+		return false;
+	}, null, { polling: 'raf', timeout: 30_000 });
+}
+
 // Review Focus 1.
 test("a fling across the graph's boundary lands clean", async ({ page }) => {
 	test.setTimeout(240_000);
@@ -167,13 +186,7 @@ test("a fling across the graph's boundary lands clean", async ({ page }) => {
 	await page.waitForFunction((last) => window.__page.reading().step === last && window.__ocean.story.state().step === last && window.__ocean.story.graph().band === null, STEP_COUNT, { timeout: 30_000 });
 	expect((await story(page, 'look')).clipped).toBe(false);
 	expect(await story(page, 'orbitEnabled')).toBe(true);
-	// End's smooth scroll can still be running when the last step is read (fix round 1: 35,858 of
-	// 37,678), and a Home pressed then is lost: wait until the page rests at its foot for a few frames.
-	await page.waitForFunction(() => {
-		const atFoot = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
-		window.__restingAtFoot = atFoot ? (window.__restingAtFoot ?? 0) + 1 : 0;
-		return window.__restingAtFoot >= 5;
-	}, null, { polling: 'raf', timeout: 30_000 });
+	await restAtFoot(page);
 	await page.keyboard.press('Home');
 	// Home scrolls smoothly too: let it land at the top, or it carries on after the next jump and
 	// takes the page back to the opening.
@@ -237,4 +250,49 @@ test('the curve fades out, not pops, when the band releases', async ({ page }) =
 	expect(samples.some((s) => s > 0.02 && s < 0.98), `a fade, not a pop: ${samples.map((s) => s.toFixed(2)).join(' ')}`).toBe(true);
 	await page.waitForFunction(() => window.__ocean.stage.graph().curve === null, null, { timeout: 10_000 });
 	expect((await stage(page, 'graph')).band).toBe(null);
+});
+
+// Fix round 2: on a phone the graph's words never print over each other, at small and large heights
+// and with the λ bracket over the crests or under the troughs, and they stay on the canvas.
+test.describe('on a phone', () => {
+	test.use({ viewport: { width: 390, height: 844 } });
+
+	const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+	async function wordsKeepClear(page, label) {
+		const { labelRects, lambdaSide } = await stage(page, 'graph');
+		const { width, height } = await page.evaluate(() => ({ width: document.getElementById('ocean').clientWidth, height: document.getElementById('ocean').clientHeight }));
+		expect(labelRects.length, `${label}: words drawn`).toBeGreaterThan(3);
+		for (const r of labelRects) {
+			expect(r.x0 >= 0 && r.x1 <= width && r.y0 >= 0 && r.y1 <= height, `${label}: "${r.text}" on the canvas ${JSON.stringify(r)}`).toBe(true);
+		}
+		for (let i = 0; i < labelRects.length; i++) {
+			for (let j = i + 1; j < labelRects.length; j++) {
+				expect(overlaps(labelRects[i], labelRects[j]), `${label}: "${labelRects[i].text}" over "${labelRects[j].text}"`).toBe(false);
+			}
+		}
+		return lambdaSide;
+	}
+
+	// At 22 studs no crest pair fits between a 390-pixel phone's axes at the sine's phase, so the
+	// bracket goes under the troughs: the case where its word met the distance numbers at small A.
+	test('the words keep clear of each other at small and large heights', async ({ page }) => {
+		test.setTimeout(180_000);
+		const sides = new Set();
+		for (const wavelength of [20, 22]) {
+			for (const amplitude of [0.5, 0.75, 1, 4]) {
+				await load(page, `step=sine&freeze=12&s.amplitude=${amplitude}&s.wavelength=${wavelength}`, 10);
+				sides.add(await wordsKeepClear(page, `A ${amplitude}, λ ${wavelength}`));
+			}
+		}
+		expect([...sides].sort()).toEqual(['crest', 'trough']);
+	});
+
+	test('the words keep clear of each other with the λ bracket over the crests or under the troughs', async ({ page }) => {
+		const sides = new Set();
+		for (let t = 0; t < 2.5; t += 0.3) {
+			await load(page, `step=moving-sine&freeze=${t.toFixed(1)}`, 10);
+			sides.add(await wordsKeepClear(page, `t ${t.toFixed(1)}`));
+		}
+		expect([...sides].sort()).toEqual(['crest', 'trough']);
+	});
 });

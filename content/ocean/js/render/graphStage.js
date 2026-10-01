@@ -23,7 +23,7 @@
 // go into a buffer made once, and a label's text is rebuilt only when its number changes (R18).
 // The probe's `components` is a number: how many component curves are drawn.
 import * as THREE from 'three';
-import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, floorDepth, graphSpan, lambdaPair, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
+import { AXIS_LEFT_PX, AXIS_RIGHT_PX, CURVE_POINTS, LINE_LIFT, MAX_COMPONENTS, axisLayout, axisOpacityOf, axisTicksInto, componentWaves, crestAfter, niceAtLeast, floorDepth, graphSpan, lambdaPair, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve, studsPerPixelAt, uprightLean } from '../page/graphModel.js';
 import { GRAPH_OFF, GRAPH_PLANE_X, graphBand } from '../stages/graph.js';
 import { createAxes, createLabel } from './graphLabels.js';
 
@@ -48,6 +48,12 @@ const TICK_LABELS = 16;
 const TICK_COLOUR = '#a9bcc8'; // --ink-dim
 // Pixels the λ bracket stays in from the frame's right edge.
 const BRACKET_EDGE_PX = 8;
+// The least spacing on screen between height ticks, so small heights do not crush their numbers.
+const MIN_TICK_PX = 22;
+// Pixels from the λ bracket (under the troughs) down to the distance numbers' row.
+const FOOT_BELOW_MARKS_PX = 24;
+// Pixels over the crests the height word sits at least, clear of the λ word over a crest pair.
+const WORD_OVER_CRESTS_PX = 44;
 // About one distance tick per this many pixels (a phone's top half gets three or four), at most eight.
 const TICK_SPACING_PX = 90;
 const MAX_DISTANCE_TICKS = 8;
@@ -115,6 +121,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 	const yTicks = new Float64Array(TICK_LABELS);
 	const shownLabels = [];
 	let markers = null;
+	let lambdaSide = null;
 	let heightScale = Number.NaN;
 	let lambdaShown = Number.NaN;
 	let amplitudeShown = Number.NaN;
@@ -234,6 +241,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		if (!on) {
 			drawing = false;
 			markers = null;
+			lambdaSide = null;
 			shownLabels.length = 0;
 			return;
 		}
@@ -269,6 +277,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		heightAxes.end(0);
 		shownLabels.length = 0;
 		markers = null;
+		lambdaSide = null;
 	}
 
 	function tickLabel(slot, value, height, x, y, z, spp, opacity, anchor) {
@@ -298,7 +307,18 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		const yScale = current.yScale;
 		// A quarter over the tallest crest, kept inside the frame with room for the height word over
 		// it and the distance numbers and word under its foot.
-		const heightTop = Math.max(0.5 * yScale, Math.min(Math.max(tallest, 0.5) * yScale * 1.25, layout.top - 30 * sppLeft, -layout.bottom - 44 * sppLeft));
+		const heightRoom = Math.min(layout.top - 30 * sppLeft, -layout.bottom - 44 * sppLeft);
+		const wantedTop = Math.max(tallest, 0.5) * yScale * 1.25;
+		// Height ticks at least MIN_TICK_PX apart; the axis reaches at least one of them each way (a
+		// small wave would otherwise show no number at all), as far as the frame allows.
+		const yStep = Math.max(niceStep(wantedTop / yScale, 3), niceAtLeast((MIN_TICK_PX * sppLeft) / yScale));
+		const heightTop = Math.max(0.5 * yScale, Math.min(Math.max(wantedTop, yStep * yScale), heightRoom));
+		const sine = ocean.stageSettings?.source === 'sine' ? ocean.waves : null;
+		const marking = sine !== null && sine.packed[2] > 0;
+		// The distance numbers' row: under the height axis' foot, and on the sine steps under the λ
+		// bracket too (a trough pair is drawn under the curve), as far as the frame allows.
+		const marksDepth = marking ? sine.packed[2] * sine.weights[0] * yScale + FOOT_BELOW_MARKS_PX * sppLeft : 0;
+		const footDepth = Math.max(heightTop, Math.min(marksDepth, -layout.bottom - 34 * sppLeft));
 		axes.begin();
 		heightAxes.begin();
 		axes.segment(x, 0, left, x, 0, right);
@@ -307,7 +327,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		const axisPx = spanInput.heightPx * spanInput.aspect - AXIS_LEFT_PX - AXIS_RIGHT_PX;
 		const wanted = Math.min(MAX_DISTANCE_TICKS, Math.max(2, Math.round(axisPx / TICK_SPACING_PX)));
 		const zCount = axisTicksInto(left, right, niceStep(right - left, wanted), zTicks);
-		const yCount = axisTicksInto(-heightTop / yScale, heightTop / yScale, niceStep(heightTop / yScale, 3), yTicks);
+		const yCount = axisTicksInto(-heightTop / yScale, heightTop / yScale, yStep, yTicks);
 		shownLabels.length = 0;
 		let slot = 0;
 		for (let i = 0; i < zCount; i++) {
@@ -315,7 +335,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			const spp = studsPerPixelAt(spanInput, z);
 			axes.segment(x, -5 * spp, z, x, 5 * spp, z);
 			if (slot < TICK_LABELS) {
-				tickLabel(slot, z, 0, x, -heightTop - 14 * spp, z, spp, opacity, 'centre');
+				tickLabel(slot, z, 0, x, -footDepth - 14 * spp, z, spp, opacity, 'centre');
 				slot += 1;
 			}
 		}
@@ -335,18 +355,20 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			heightScale = scale;
 			words.height.set(scale === 1 ? 'height (studs)' : `height (studs, drawn ×${scale})`);
 		}
-		// Clear of the λ marker's words, which sit just over the crests; inside the frame's top.
-		const wordY = Math.min(heightTop + 30 * sppLeft, layout.top);
+		// Clear of the λ marker's words, which sit just over the crests (22 px over them, and the
+		// words are 19 px tall); inside the frame's top.
+		const crestTop = marking ? sine.packed[2] * sine.weights[0] * yScale : 0;
+		const wordY = Math.min(Math.max(heightTop + 30 * sppLeft, crestTop + WORD_OVER_CRESTS_PX * sppLeft), layout.top);
 		words.height.place(x, wordY, left + wordY * lean, sppLeft, heightOpacity, 'left');
 		words.distance.set('distance (studs)');
-		words.distance.place(x, -heightTop - 32 * sppRight, right, sppRight, opacity, 'right');
+		words.distance.place(x, Math.max(-footDepth - 32 * sppRight, layout.bottom), right, sppRight, opacity, 'right');
 		if (heightOpacity > 0) shownLabels.push(words.height.text());
 		shownLabels.push(words.distance.text());
-		const sine = ocean.stageSettings?.source === 'sine' ? ocean.waves : null;
-		if (sine !== null && sine.packed[2] > 0) {
+		if (marking) {
 			markSine(sine, t, x, opacity, left, right);
 		} else {
 			markers = null;
+			lambdaSide = null;
 			words.lambda.hide();
 			words.amplitude.hide();
 		}
@@ -382,10 +404,14 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 				lambdaShown = shownLength;
 				words.lambda.set(`λ = ${shownLength} studs`);
 			}
-			words.lambda.place(x, lift + side * 12 * spp, (first + second) / 2, spp, opacity);
+			// Over the bracket either way: above the crests for a crest pair; for a trough pair between
+			// the bracket and the axis, where the curve is at its crest midway, clear of the numbers below.
+			words.lambda.place(x, lift + 12 * spp, (first + second) / 2, spp, opacity);
+			lambdaSide = pair.crest ? 'crest' : 'trough';
 			shownLabels.push(words.lambda.text());
 		} else {
 			words.lambda.hide();
+			lambdaSide = null;
 		}
 		const crest = pair !== null && pair.crest ? pair.start : crestAfter(k, omega, phase, t, left + wavelength * 0.25);
 		if (crest < right) {
@@ -405,6 +431,18 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		}
 	}
 
+	// Every visible label's text box on screen (CSS pixels), for the overlap test.
+	function labelRects() {
+		const width = view.renderer.domElement.clientWidth;
+		const height = view.renderer.domElement.clientHeight;
+		const rects = [];
+		for (const label of [...Object.values(words), ...ticks]) {
+			const rect = group.visible ? label.rect(camera, width, height) : null;
+			if (rect !== null) rects.push(rect);
+		}
+		return rects;
+	}
+
 	function probe() {
 		const p = curve.points;
 		const last = (CURVE_POINTS - 1) * 3;
@@ -422,6 +460,8 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			axes: drawing && band !== null && axisOpacityOf(shown) > 0,
 			labels: drawing && band !== null && axisOpacityOf(shown) > 0 ? [...shownLabels] : [],
 			markers,
+			lambdaSide,
+			labelRects: labelRects(),
 			curve: drawing ? { points: CURVE_POINTS, maxAbsY: tallest, first: [p[0], p[1], p[2]], last: [p[last], p[last + 1], p[last + 2]] } : null,
 		};
 	}

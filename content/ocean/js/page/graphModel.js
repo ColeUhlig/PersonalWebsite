@@ -199,8 +199,13 @@ export function studsPerPixelAt(camera, z) {
  * 0 when the camera does not face the plane.
  */
 export function uprightLean(position, forward, z) {
-	return readView({ position, forward, fovDegrees: 70, aspect: 1, heightPx: 1 }) ? clampLean(leanW(z - VIEW.z0)) : 0;
+	LEAN_INPUT.position = position;
+	LEAN_INPUT.forward = forward;
+	return readView(LEAN_INPUT) ? clampLean(leanW(z - VIEW.z0)) : 0;
 }
+
+// uprightLean's input to readView, made once (the field of view and frame do not change a lean).
+const LEAN_INPUT = { position: null, forward: null, fovDegrees: 70, aspect: 1, heightPx: 1 };
 
 // The axes and their words show over the top half of the backdrop's fade only: they belong to the
 // flat picture, and in the swing's oblique view they would float about the frame.
@@ -328,6 +333,14 @@ export function niceStep(range, targetCount) {
 	const power = 10 ** Math.floor(Math.log10(raw));
 	const scaled = raw / power;
 	const nice = scaled < 1.5 ? 1 : scaled < 3.5 ? 2 : scaled < 7.5 ? 5 : 10;
+	return Number((nice * power).toPrecision(6));
+}
+
+// The smallest round step (1, 2 or 5 times a power of ten) at least `least`.
+export function niceAtLeast(least) {
+	const power = 10 ** Math.floor(Math.log10(least));
+	const scaled = least / power;
+	const nice = scaled <= 1 + 1e-9 ? 1 : scaled <= 2 + 1e-9 ? 2 : scaled <= 5 + 1e-9 ? 5 : 10;
 	return Number((nice * power).toPrecision(6));
 }
 

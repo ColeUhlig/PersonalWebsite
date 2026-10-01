@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
-import { CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, componentWaves, floorDepth, graphSpan, uprightLean, axisLayout, axisOpacityOf, lambdaPair, AXIS_LEFT_PX, AXIS_RIGHT_PX, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
+import { CURVE_POINTS, FLOOR_MARGIN, LINE_LIFT, MAX_COMPONENTS, MAX_SPAN_HALF, SPAN_MARGIN, axisTicks, axisTicksInto, niceAtLeast, componentWaves, floorDepth, graphSpan, uprightLean, axisLayout, axisOpacityOf, lambdaPair, AXIS_LEFT_PX, AXIS_RIGHT_PX, niceStep, ribbon, ribbonIndices, sampleComponent, sampleCurve } from '../../../content/ocean/js/page/graphModel.js';
 import { GRAPH_PLANE_X } from '../../../content/ocean/js/stages/graph.js';
 import { GRAPH_SHOT } from '../../../content/ocean/js/stages/recipeKit.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
@@ -239,4 +239,14 @@ test('lambdaPair always finds a crest or trough pair across 1.5 wavelengths, at 
 	expect.truthy(crests > 0 && troughs > 0, `both kinds used (${crests} crests, ${troughs} troughs)`);
 	expect.truthy(lambdaPair(k, 0, 0, 0, -38, 38).crest, 'crests when they fit');
 	expect.equal(lambdaPair(k, 0, 0, 0, -10, 10), null, 'nothing across one wavelength');
+});
+
+// Fix round 2: the height ticks keep a minimum spacing on screen, so the step is at least a size.
+test('niceAtLeast: the smallest 1, 2 or 5 times a power of ten at least a size', () => {
+	expect.equal(niceAtLeast(0.13), 0.2, 'over a tenth');
+	expect.equal(niceAtLeast(0.2), 0.2, 'exactly');
+	expect.equal(niceAtLeast(0.21), 0.5, 'past two tenths');
+	expect.equal(niceAtLeast(3), 5, 'three');
+	expect.equal(niceAtLeast(7), 10, 'seven');
+	expect.equal(niceAtLeast(1), 1, 'one');
 });

@@ -15,6 +15,10 @@ const FONT_PX = 13;
 const SCALE = 2; // canvas pixels per CSS pixel, for crisp text
 const AXIS_OPACITY = 0.8;
 export const MAX_SEGMENTS = 96;
+// Pixels of padding drawn around a label's text (left and right, top and bottom).
+export const PAD_X = 4;
+export const PAD_Y = 3;
+const SCRATCH = new THREE.Vector3();
 
 export function createAxes({ order = 11 } = {}) {
 	const positions = new Float32Array(MAX_SEGMENTS * 2 * 3);
@@ -65,7 +69,7 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 	sprite.visible = false;
 	let text = null;
 	let widthPx = 1;
-	const heightPx = FONT_PX + 6;
+	const heightPx = FONT_PX + 2 * PAD_Y;
 	return {
 		sprite,
 		text: () => text,
@@ -74,7 +78,7 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 			if (next === text) return;
 			text = next;
 			context.font = `${FONT_PX * SCALE}px system-ui, sans-serif`;
-			widthPx = Math.ceil(context.measureText(next).width / SCALE) + 8;
+			widthPx = Math.ceil(context.measureText(next).width / SCALE) + 2 * PAD_X;
 			if (canvas.width !== widthPx * SCALE) {
 				// A new size: drop the GPU copy so it is made again at this size (WebGL2 texture
 				// storage cannot be resized in place). Setting the width also clears the canvas.
@@ -89,9 +93,9 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 			context.lineJoin = 'round';
 			context.lineWidth = HALO_PX * SCALE;
 			context.strokeStyle = HALO;
-			context.strokeText(next, 4 * SCALE, (heightPx / 2) * SCALE);
+			context.strokeText(next, PAD_X * SCALE, (heightPx / 2) * SCALE);
 			context.fillStyle = colour;
-			context.fillText(next, 4 * SCALE, (heightPx / 2) * SCALE);
+			context.fillText(next, PAD_X * SCALE, (heightPx / 2) * SCALE);
 			texture.needsUpdate = true;
 		},
 		// `anchor` is 'left', 'centre' or 'right' of the point.
@@ -104,6 +108,15 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 		},
 		hide() {
 			sprite.visible = false;
+		},
+		// The text's box on screen in CSS pixels (padding left out), or null while hidden; for the
+		// probe, not the frame.
+		rect(camera, viewWidth, viewHeight) {
+			if (!sprite.visible || text === null) return null;
+			SCRATCH.copy(sprite.position).project(camera);
+			const x = ((SCRATCH.x + 1) / 2) * viewWidth - sprite.center.x * widthPx;
+			const y = ((1 - SCRATCH.y) / 2) * viewHeight - heightPx / 2;
+			return { text, x0: x + PAD_X, y0: y + PAD_Y, x1: x + widthPx - PAD_X, y1: y + heightPx - PAD_Y };
 		},
 	};
 }
