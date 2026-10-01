@@ -47,8 +47,6 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'one wave cascade, 64 × 64 cells at seed 7', source: FACTS, quote: 'the proof panel runs one wave cascade, 64 × 64 cells at seed 7' },
 	{ phrase: 'γ = 3.3 sharpens the peak', source: 'site:content/ocean/js/core/spectrum.js', quote: 'gamma: 3.3' },
 	{ phrase: 'This live ocean needs WebGL 2', source: 'site:content/ocean/js/webgl.js', quote: 'asks for WebGL 2 only' },
-	// The teaching recipes (facts.test.js checks the count in the recipe's data).
-	{ phrase: 'The page keeps only the 4 tallest (the small ones would blur at this distance)', source: FACTS, quote: "the tiling step sums the bank's 4 tallest waves" },
 	// C2 lane G, step 6 (spec 10: never "all directions").
 	{ phrase: 'Their headings fan out within 45° either side of one heading', source: FACTS, quote: "the teaching bank's headings lie within 45° either side of one heading" },
 	// The proof panel's runtime (proofPanel.js fills its note from runtime.js; copy.test.js checks it).

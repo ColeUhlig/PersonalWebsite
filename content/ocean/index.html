@@ -81,7 +81,7 @@
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(k_i x - \omega_i t + \varphi_i)</code></div>
-					<p class="math-note">N waves, each with its own height A, wavenumber k, speed ω and starting phase φ, added up point by point.</p>
+					<p class="math-note">N waves, each with its own height A, wavenumber k, frequency ω and starting phase φ, added up point by point.</p>
 				</details>
 			</article>
 		</section>
@@ -168,7 +168,7 @@
 		<section class="step" id="step-8" data-step="8" data-step-id="normals" aria-labelledby="step-8-title">
 			<article class="panel">
 				<h2 id="step-8-title">Which way the surface faces</h2>
-				<p>To light a surface you need to know which way each bit of it faces. That direction is called the normal: the arrows sticking straight out of the surface here. At the centre, two more arrows lie along the surface, tipped by its slope: one pointing along x (the tangent) and one along z (the binormal). The arrow at right angles to both of them is the normal; the math calls that a cross product.</p>
+				<p>To light a surface you need to know which way each bit of it faces. That direction is called the normal: the arrows sticking straight out of the surface here. At the centre, two more arrows lie along the surface, tipped by its slope: one pointing along x (the tangent, orange) and one along z (the binormal, pink). The arrow at right angles to both of them is the normal; the math calls that a cross product.</p>
 				<div class="controls" data-controls="8" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
@@ -246,7 +246,7 @@
 		<section class="step" id="step-13" data-step="13" data-step-id="tiling" aria-labelledby="step-13-title">
 			<article class="panel">
 				<h2 id="step-13-title">The tiling problem</h2>
-				<p>Fly up and the trick falls apart. The page keeps only the 4 tallest (the small ones would blur at this distance). For this page I nudged each of the Roblox ocean's waves, but not the lone sine from the start, so a whole number of its crests fits across a square tile, both ways. The FFT ocean coming up can only make waves like that, so these follow its rule. With the spread full, as it is here, they fit a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here. The dashed lines are the tile's edges: the waves in one square are the waves in the next.</p>
+				<p>Fly up and the trick falls apart. The page keeps only the few tallest (the small ones would blur at this distance). For this page I nudged each of the Roblox ocean's waves, but not the lone sine from the start, so a whole number of its crests fits across a square tile, both ways. The FFT ocean coming up can only make waves like that, so these follow its rule. With the spread full, as it is here, they fit a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here. The dashed lines are the tile's edges: the waves in one square are the waves in the next.</p>
 				<div class="controls" data-controls="13" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
@@ -375,7 +375,7 @@
 		<section class="step" id="step-20" data-step="20" data-step-id="choppiness" aria-labelledby="step-20-title">
 			<article class="panel">
 				<h2 id="step-20-title">Choppiness</h2>
-				<p>So far the FFT only moves points up and down, and the sea looks soft. Run another set of transforms over the same waves and you get a sideways push for every point, toward the crests, which is what sharpens them. It's the Gerstner idea again, done for the whole spectrum at once. Drag Choppiness down to zero and the crests go soft again; push it up and they sharpen until they start to fold over.</p>
+				<p>So far the FFT only moves points up and down. Run another set of transforms over the same waves and you get a sideways push for every point, toward the crests, which is what sharpens them. It's the Gerstner idea again, done for the whole spectrum at once. Drag Choppiness down to zero and the crests go soft again; push it up and they sharpen until they start to fold over.</p>
 				<div class="controls" data-controls="20" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>

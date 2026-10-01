@@ -65,7 +65,7 @@ test('the teaching bank sits on the 256-stud tile', () => {
 	expect.equal(WaveBanks.TEACHING_TILE, 256, 'tile');
 });
 
-// copySources.js quotes this test's name for the tiling step's "4 tallest".
+// The tiling step's "the few tallest" (the copy names no count, by rule): the recipe's own count.
 test("the tiling step sums the bank's 4 tallest waves", async () => {
 	const { recipeFor } = await import('../../../content/ocean/js/stages/recipes.js');
 	const { stepOf } = await import('../../../content/ocean/js/stages/steps.js');
