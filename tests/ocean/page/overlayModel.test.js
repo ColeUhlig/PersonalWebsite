@@ -51,7 +51,8 @@ test('normals: a grid of exact normals on the surface, and T, B square to n with
 		const got = unit([tx - bx, ty - by, tz - bz]);
 		want.forEach((w, j) => expect.near(got[j], w, 1e-9, `arrow ${i} component ${j}`));
 		expect.near(Math.hypot(tx - bx, ty - by, tz - bz), NORMAL_LENGTH, 1e-9, `arrow ${i} length`);
-		expect.near(Math.abs(bx) % 2, 0, 1e-9, `arrow ${i} on the 2-stud lattice`);
+		expect.near(Math.abs(bx) % 2, 0, 1e-9, `arrow ${i} on the 2-stud lattice in x`);
+		expect.near(Math.abs(bz) % 2, 0, 1e-9, `arrow ${i} on the 2-stud lattice in z`);
 	}
 	const t = arrow(out, GRID * GRID);
 	const b = arrow(out, GRID * GRID + 1);
@@ -66,6 +67,39 @@ test('normals: a grid of exact normals on the surface, and T, B square to n with
 	expect.near(dot(n, bv), 0, 1e-9, 'B square to n');
 	const cross = [bv[1] * tv[2] - bv[2] * tv[1], bv[2] * tv[0] - bv[0] * tv[2], bv[0] * tv[1] - bv[1] * tv[0]];
 	expect.near(dot(unit(cross), n), 1, 1e-9, 'n is along B x T');
+});
+
+// Task 5 review, fix round 1: at spread 0 every heading is +z, so arrows from one hub would lie on
+// top of each other and the tallest wave's could vanish under another of equal length.
+test('at spread 0 no two heading arrows coincide: each sits on its own rung of the hub', () => {
+	const out = new Float64Array(MAX_ARROWS * ARROW_STRIDE);
+	const line = WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), 0), DIRECTIONS_WAVES);
+	const count = directionArrows(line, 3, [0, -10], out);
+	expect.equal(count, DIRECTIONS_WAVES, 'every wave drawn');
+	for (let i = 0; i < count; i++) {
+		for (let j = i + 1; j < count; j++) {
+			const a = arrow(out, i);
+			const b = arrow(out, j);
+			expect.truthy(Math.abs(a[1] - b[1]) >= 0.5, `arrows ${i} and ${j} at heights ${a[1]} and ${b[1]}`);
+		}
+	}
+});
+
+test('a heading arrow is as long as its wave, the longest drawn wave 24 studs, none clamped equal', () => {
+	const out = new Float64Array(MAX_ARROWS * ARROW_STRIDE);
+	const bank = WaveBanks.withCount(WaveBanks.teachingBank(), DIRECTIONS_WAVES);
+	const count = directionArrows(bank, 3, [0, 0], out);
+	const wavelengths = Array.from({ length: count }, (_, i) => (2 * Math.PI) / bank.packed[i * WaveSampler.STRIDE]);
+	const longest = Math.max(...wavelengths);
+	for (let i = 0; i < count; i++) {
+		const [bx, , bz, tx, , tz] = arrow(out, i);
+		expect.near(Math.hypot(tx - bx, tz - bz), Math.max((24 * wavelengths[i]) / longest, 6), 1e-9, `wave ${i} length`);
+	}
+	const lengths = Array.from({ length: count }, (_, i) => {
+		const [bx, , bz, tx, , tz] = arrow(out, i);
+		return Math.hypot(tx - bx, tz - bz);
+	});
+	expect.equal(new Set(lengths.map((l) => l.toFixed(6))).size, count, `distinct lengths ${lengths.join(', ')}`);
 });
 
 test("the directions step's frozen wave count (R17) gets one arrow per wave", () => {

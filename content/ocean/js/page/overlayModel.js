@@ -1,12 +1,13 @@
 // The arrows of the surface overlays (piece C2; lane C owns this file; spec 10.7 steps 5, 8 and 9;
-// browser-free): each wave's heading from a hub above the surface; the surface's normals on a grid
-// round the focus, the exact ones the engine's own WaveSampler gives from the waves' slopes (chop 0,
-// as these steps run, so a grid point is a vertex of the finest ring: they sit on the 2-stud
-// lattice); the tangent T = (1, dy/dx, 0) and binormal B = (0, dy/dz, 1) at the grid's centre; and
-// step 9: at each grid point the exact normal and the one the central difference gives from heights
-// `h` studs either side along x and z, and their mean angle in degrees; `readoutText` words it for
-// the panel. Arrows go into a Float64Array, ARROW_STRIDE numbers each: base x, y, z, tip x, y, z,
-// colour. Nothing allocates per call.
+// browser-free): each wave's heading from a hub above the surface, one rung up it per wave, its
+// length in proportion to the wave's; the surface's normals on a grid round the focus, the exact ones
+// the engine's own WaveSampler gives from the waves' slopes (chop 0, as these steps run, so a grid
+// point is a vertex of the finest ring: they sit on the 2-stud lattice); the tangent
+// T = (1, dy/dx, 0) and binormal B = (0, dy/dz, 1) at the grid's centre; and step 9: at each grid
+// point the exact normal and the one the central difference gives from heights `h` studs either side
+// along x and z, and their mean angle in degrees; `readoutText` words it for the panel. Arrows go
+// into a Float64Array, ARROW_STRIDE numbers each: base x, y, z, tip x, y, z, colour. Nothing
+// allocates per call.
 import * as WaveSampler from '../core/waveSampler.js';
 
 export const ARROW_STRIDE = 7;
@@ -20,11 +21,14 @@ export const NORMAL_LENGTH = 3;
 const LIFT = 0.15;
 // Studs the heading hub floats above the surface.
 const HUB_LIFT = 1.5;
-// A heading arrow's length: this share of its wave's length, held between these studs, so a longer
-// wave reads as a longer arrow and the shortest still reads on a phone from the step's shot.
-const HEADING_SHARE = 0.4;
-const HEADING_MIN = 10;
-const HEADING_MAX = 24;
+// Studs between one heading arrow and the next up the hub, so arrows along one heading (spread 0)
+// lie one above another instead of on top of each other.
+const HUB_STEP = 0.8;
+// A heading arrow's length in studs: the longest drawn wave's is HEADING_LONGEST and every other is
+// in proportion to its wavelength, never shorter than HEADING_MIN (none is clamped from above, so two
+// long waves never look equal).
+const HEADING_LONGEST = 24;
+const HEADING_MIN = 6;
 const STRIDE = WaveSampler.STRIDE;
 const SAMPLE = new Float64Array(7);
 
@@ -41,17 +45,29 @@ function write(out, i, bx, by, bz, tx, ty, tz, colour) {
 
 const sampleAt = (waves, t, x, z) => WaveSampler.sample(waves.packed, waves.count, t, x, z, 0, waves.weights, 0, SAMPLE);
 
-/** One arrow per summed wave with height (at most MAX_DIRECTIONS), along its heading. */
+// Whether a wave is drawn as a heading: it is summed with some weight and has height.
+const drawn = (waves, wave) => waves.weights[wave] !== 0 && waves.packed[wave * STRIDE + 2] !== 0;
+
+/** One arrow per summed wave with height (at most MAX_DIRECTIONS), along its heading, each a rung up the hub. */
 export function directionArrows(waves, t, focus, out) {
 	const hx = focus[0];
 	const hz = focus[1];
 	const hy = sampleAt(waves, t, hx, hz)[1] + HUB_LIFT;
+	// The smallest k among the waves that will be drawn is the longest wavelength.
+	let kLongest = Infinity;
+	for (let wave = 0, seen = 0; wave < waves.count && seen < MAX_DIRECTIONS; wave++) {
+		if (!drawn(waves, wave)) continue;
+		kLongest = Math.min(kLongest, waves.packed[wave * STRIDE]);
+		seen += 1;
+	}
 	let n = 0;
 	for (let wave = 0; wave < waves.count && n < MAX_DIRECTIONS; wave++) {
+		if (!drawn(waves, wave)) continue;
 		const o = wave * STRIDE;
-		if (waves.weights[wave] === 0 || waves.packed[o + 2] === 0) continue;
-		const length = Math.min(Math.max(((2 * Math.PI) / waves.packed[o]) * HEADING_SHARE, HEADING_MIN), HEADING_MAX);
-		write(out, n, hx, hy, hz, hx + waves.packed[o + 4] * length, hy, hz + waves.packed[o + 5] * length, COLOURS.WAVE + n);
+		// lambda / lambdaLongest = kLongest / k.
+		const length = Math.max((HEADING_LONGEST * kLongest) / waves.packed[o], HEADING_MIN);
+		const y = hy + n * HUB_STEP;
+		write(out, n, hx, y, hz, hx + waves.packed[o + 4] * length, y, hz + waves.packed[o + 5] * length, COLOURS.WAVE + n);
 		n += 1;
 	}
 	return n;

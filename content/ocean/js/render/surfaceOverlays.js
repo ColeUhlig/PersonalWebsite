@@ -20,6 +20,9 @@ const HEAD_LENGTH = 0.6;
 // How much thicker the heading arrows are than the normals: they are seen from about 90 studs away
 // (the directions shot), the normals from about 40, and must read at 390 px wide.
 const HEADING_THICKNESS = 5;
+// The normals' (and the tangent's, binormal's and difference's) shafts against the base cylinder: a
+// shaft of one is about a pixel wide on a phone.
+const NORMAL_SHAFT = 1.5;
 const UP = new THREE.Vector3(0, 1, 0);
 
 export function createSurfaceOverlays({ view, ocean }) {
@@ -55,10 +58,20 @@ export function createSurfaceOverlays({ view, ocean }) {
 	let count = 0;
 	let meanAngle = null;
 	let finite = true;
+	// The kind and the number of arrows the instance colours were last written for.
+	let colouredKind = null;
+	let colouredCount = 0;
 
-	// Arrow i's two instances, thicker for the long heading arrows so they read from higher up.
-	function place(i, thick) {
+	// Arrow i's two instances: its shaft `shaft` times the base cylinder's girth, its head `head` times
+	// the base cone. Its colour is written only when `recolour` (a new kind, or more arrows than were
+	// coloured): an arrow's colour depends on nothing but the kind and its index.
+	function place(i, head, shaft, recolour) {
 		const o = i * ARROW_STRIDE;
+		if (recolour) {
+			const colour = PALETTE[Math.min(arrows[o + 6], PALETTE.length - 1)];
+			shafts.setColorAt(i, colour);
+			heads.setColorAt(i, colour);
+		}
 		base.set(arrows[o], arrows[o + 1], arrows[o + 2]);
 		tip.set(arrows[o + 3], arrows[o + 4], arrows[o + 5]);
 		direction.subVectors(tip, base);
@@ -71,13 +84,10 @@ export function createSurfaceOverlays({ view, ocean }) {
 		}
 		direction.divideScalar(length);
 		turn.setFromUnitVectors(UP, direction);
-		size.set(thick, Math.max(length - HEAD_LENGTH * thick, 0.01), thick);
+		size.set(shaft, Math.max(length - HEAD_LENGTH * head, 0.01), shaft);
 		shafts.setMatrixAt(i, matrix.compose(base, turn, size));
-		size.set(thick, thick, thick);
+		size.set(head, head, head);
 		heads.setMatrixAt(i, matrix.compose(tip, turn, size));
-		const colour = PALETTE[Math.min(arrows[o + 6], PALETTE.length - 1)];
-		shafts.setColorAt(i, colour);
-		heads.setColorAt(i, colour);
 	}
 
 	function draw(t, focus) {
@@ -101,8 +111,10 @@ export function createSurfaceOverlays({ view, ocean }) {
 			if (kind === null && count === 0) return;
 			count = draw(t, focus);
 			finite = true;
-			const thick = kind === 'directions' ? HEADING_THICKNESS : 1;
-			for (let i = 0; i < count; i++) place(i, thick);
+			const head = kind === 'directions' ? HEADING_THICKNESS : 1;
+			const shaft = kind === 'directions' ? HEADING_THICKNESS : NORMAL_SHAFT;
+			const recolour = kind !== colouredKind || count > colouredCount;
+			for (let i = 0; i < count; i++) place(i, head, shaft, recolour);
 			shafts.count = count;
 			heads.count = count;
 			shafts.visible = count > 0;
@@ -110,8 +122,12 @@ export function createSurfaceOverlays({ view, ocean }) {
 			if (count > 0) {
 				shafts.instanceMatrix.needsUpdate = true;
 				heads.instanceMatrix.needsUpdate = true;
+			}
+			if (count > 0 && recolour) {
 				shafts.instanceColor.needsUpdate = true;
 				heads.instanceColor.needsUpdate = true;
+				colouredKind = kind;
+				colouredCount = count;
 			}
 		},
 		probe() {
