@@ -509,6 +509,13 @@ details.math summary {
 	color: var(--chart-ink);
 }
 
+/* Task 15: the FFT step's timing chart rewrites its notes as it goes (waiting, timing, measured), so
+   its body keeps room from the start for the measured state at its tallest: the 68 px bars and five
+   lines of notes (a 0.8rem line at 1.4) with their two 6 px gaps. Nothing under it moves. */
+.chart[data-chart="transforms"] .chart-body {
+	min-height: calc(68px + 12px + 5 * 1.4 * 0.8rem);
+}
+
 .chart-line {
 	fill: none;
 	stroke: var(--chart-a);

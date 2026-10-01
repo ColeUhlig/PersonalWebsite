@@ -399,8 +399,10 @@ for (const scheme of ['dark', 'light']) {
 test("step 17's arrows are held still at their starting angles; step 18's turn", async ({ page }) => {
 	test.setTimeout(180_000);
 	await oceanRunning(page);
-	// Step 18's figure (and its sea's arrow cache) is built on its first show, not at the story's start.
-	await expect(page.locator(`${TURNING_FIGURE} .chart-body svg`)).toHaveCount(0);
+	// Step 18's arrows (and its sea's arrow cache) are built on its first show, not at the story's
+	// start; since Task 15 its empty box is there from the start, holding the height it draws at.
+	await expect(page.locator(`${TURNING_FIGURE} .chart-body svg`)).toHaveCount(1);
+	await expect(page.locator(`${TURNING_FIGURE} .chart-body line.chart-arrow`)).toHaveCount(0);
 	const ends = (motion) => page.evaluate((m) => [...document.querySelectorAll(`figure[data-chart="phase"][data-motion="${m}"] line.chart-arrow`)].map((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`), motion);
 	await scrollToId(page, 'random-sea', 0.2);
 	await expect.poll(async () => (await ends('still')).length, { timeout: 30_000 }).toBe(8);

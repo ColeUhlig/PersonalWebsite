@@ -107,6 +107,9 @@ function canvasFor(figure, width, label, notes = []) {
 // frame: the chart says so. The spikes are true at any moment (each wave keeps its height and bin).
 const SNAPSHOT_NOTE = 'The line is a snapshot of the sea when the chart drew; the spikes are the same at any moment.';
 
+const FREQUENCY_LABEL = 'The waves of the flat graph over one tile, a snapshot of the sea when the chart drew, and the same waves as spikes, one for each wave at how many times it repeats across the tile';
+const FOURIER_LABEL = 'Three tones summed into a chord, and the chord rebuilt from the tones still switched on, with each tone as a spike underneath';
+
 function frequencyChart(figure, story, ocean, onLayout) {
 	const step = stepOf('frequency');
 	let state = { count: 0, peaks: [] };
@@ -118,7 +121,7 @@ function frequencyChart(figure, story, ocean, onLayout) {
 		const heights = amplitudes(forward(profile));
 		const width = widthOf(figure);
 		const { top, bottom } = boxes(width);
-		const root = canvasFor(figure, width, 'The waves of the flat graph over one tile, a snapshot of the sea when the chart drew, and the same waves as spikes, one for each wave at how many times it repeats across the tile', [SNAPSHOT_NOTE]);
+		const root = canvasFor(figure, width, FREQUENCY_LABEL, [SNAPSHOT_NOTE]);
 		frame(root, top, 'height (studs)');
 		frame(root, bottom, 'size (studs)');
 		const range = Math.max(...profile.map(Math.abs), 1e-9) * 1.15;
@@ -131,7 +134,12 @@ function frequencyChart(figure, story, ocean, onLayout) {
 			onLayout();
 		}
 	}
-	return { draw, state: () => state };
+	// Task 15: the chart's box at mount, empty, with its note: the height it will draw at, so its
+	// first drawing (on screen) moves nothing under the reader.
+	function reserve() {
+		canvasFor(figure, widthOf(figure), FREQUENCY_LABEL, [SNAPSHOT_NOTE]);
+	}
+	return { draw, reserve, state: () => state };
 }
 
 function fourierChart(figure, story, onLayout) {
@@ -144,7 +152,7 @@ function fourierChart(figure, story, onLayout) {
 		const result = chord(notes);
 		const width = widthOf(figure);
 		const { top, bottom } = boxes(width);
-		const root = canvasFor(figure, width, 'Three tones summed into a chord, and the chord rebuilt from the tones still switched on, with each tone as a spike underneath');
+		const root = canvasFor(figure, width, FOURIER_LABEL);
 		frame(root, top, 'sound');
 		frame(root, bottom, 'size');
 		const range = Math.max(...result.chord.map(Math.abs), 1e-9) * 1.15;
@@ -158,7 +166,11 @@ function fourierChart(figure, story, onLayout) {
 			onLayout();
 		}
 	}
-	return { draw, state: () => state };
+	// Task 15: the chart's box at mount, empty (see frequencyChart's reserve).
+	function reserve() {
+		canvasFor(figure, widthOf(figure), FOURIER_LABEL);
+	}
+	return { draw, reserve, state: () => state };
 }
 
 // Runs a chart's drawing, logging a throw so one chart's fault never stops the other.
@@ -176,6 +188,7 @@ export function mountFrequencyCharts({ story, ocean, onLayout = () => {} }) {
 	const fourierFigure = document.querySelector('figure.chart[data-chart="fourier"]');
 	if (frequencyFigure) charts.frequency = { figure: frequencyFigure, chart: frequencyChart(frequencyFigure, story, ocean, onLayout), step: stepOf('frequency') };
 	if (fourierFigure) charts.fourier = { figure: fourierFigure, chart: fourierChart(fourierFigure, story, onLayout), step: stepOf('fourier') };
+	for (const { chart } of Object.values(charts)) safely('reserve', () => chart.reserve());
 	const drawn = new Set();
 	const draw = (name) => safely(name, () => {
 		charts[name].chart.draw();

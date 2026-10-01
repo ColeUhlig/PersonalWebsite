@@ -199,6 +199,8 @@ const PHASE_STEP = Object.freeze({ still: stepOf('random-sea'), turning: stepOf(
 // labels are in studs), so the widest, "256 studs" (about 59 px at 12 px), never spills into the
 // next ring's column on a 320 px phone (about 55 px columns).
 const LABEL_ROOM = 64;
+// The arrows the engine deals each phase figure (engine/charts.js createPhaseArrows' count).
+const PHASE_ARROW_COUNT = 8;
 
 // The words for each motion: the SVG's label and the note under it (both live, in .chart-body).
 const PHASE_WORDS = Object.freeze({
@@ -218,15 +220,20 @@ function phaseChart(figure, story, onLayout) {
 	let arrows = [];
 	let frame = 0;
 	let reported = false;
-	function build(waves) {
+	// The figure's size at its width: four rings a row, two rows (the engine's eight arrows).
+	function layout() {
 		const width = widthOf(figure);
 		const column = width / 4;
 		const radius = Math.min(32, column / 2 - 6);
 		const row = radius * 2 + 32;
+		return { width, column, radius, row, height: row * 2 + 4 };
+	}
+	function build(waves) {
+		const { width, column, radius, row, height } = layout();
 		const unit = column >= LABEL_ROOM ? ' studs' : '';
 		const tallest = Math.max(...waves.map((a) => a.amplitude));
 		const [label, words] = PHASE_WORDS[motion](waves.length, tallest);
-		const root = canvasFor(figure, width, row * 2 + 4, label, [words]);
+		const root = canvasFor(figure, width, height, label, [words]);
 		const defs = svg('defs');
 		// One marker per figure (two phase figures share the page), so no id is used twice.
 		const marker = svg('marker', { id: `chart-arrowhead-${motion}`, viewBox: '0 0 6 6', refX: 5, refY: 3, markerWidth: 4, markerHeight: 4, orient: 'auto' });
@@ -290,6 +297,14 @@ function phaseChart(figure, story, onLayout) {
 	// screen. The turning one waits for its first show: its sea's arrow cache is not built at the
 	// story's start (main-thread time a phone needs then).
 	if (motion === 'still') guardedTurn();
+	// Task 15: the turning one holds its box from the start instead, empty, with its note's words
+	// (the longest arrow's length a placeholder of the same width, the same number of lines), so its
+	// first drawing moves nothing under the reader. Its arrows come on its first show.
+	else {
+		const { width, height } = layout();
+		const [label, words] = PHASE_WORDS[motion](PHASE_ARROW_COUNT, 0);
+		canvasFor(figure, width, height, label, [words]);
+	}
 	// A new seed or a new width: the arrows are rebuilt now if nothing else will (the still figure,
 	// or a turning one shown before and off screen now), else on the loop's next turn or first show.
 	function draw() {

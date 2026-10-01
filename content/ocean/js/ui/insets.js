@@ -41,6 +41,8 @@ function element(tag, props = {}, children = []) {
 }
 
 const studs = (value) => `${value.toFixed(2)} studs`;
+// Task 15: a range's widest usual form, written hidden at mount to hold the inset's height.
+const RESERVED_RANGE = '-00.00 to 00.00';
 const trim = (value) => String(Number(value.toFixed(2)));
 
 // Runs `draw` every `ms` while `figure` is on screen.
@@ -65,12 +67,16 @@ function fieldsInset(figure, ocean, onLayout) {
 	const cells = FIELD_VIEWS.map((view) => {
 		const canvas = element('canvas', { width: n, height: n });
 		canvas.setAttribute('aria-hidden', 'true');
-		const range = element('span', { className: 'inset-range' });
+		const range = element('span', { className: 'inset-range is-reserved', textContent: RESERVED_RANGE });
 		const cell = element('div', { className: 'inset-field' }, [canvas, element('p', { className: 'inset-label', textContent: view.label }), range]);
 		cell.dataset.field = view.name;
 		return { view, canvas, context: canvas.getContext('2d'), range, cell };
 	});
 	const line = element('p', { className: 'inset-line' });
+	const describe = (fields, chop) => `Each image is the engine's ${fields.n} × ${fields.n} grid, one number every ${trim(fields.size / fields.n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and push are in studs; slope has no unit. The push along x is the sideways field times the choppiness, ${chop.toFixed(2)} here.`;
+	// Task 15: the line is true at mount too (the grid and the choppiness now), so it is written now
+	// and the inset has its height before it first draws.
+	line.textContent = describe(ocean.store.display[0], ocean.live.chop);
 	body.replaceChildren(...cells.map((c) => c.cell), line);
 	onLayout();
 	let state = null;
@@ -98,13 +104,14 @@ function fieldsInset(figure, ocean, onLayout) {
 			const shown = cell.view.name === 'dispX' ? [min * chop, max * chop] : [min, max];
 			if (writeNumbers) {
 				cell.range.textContent = `${shown[0].toFixed(2)} to ${shown[1].toFixed(2)}`;
+				cell.range.classList.remove('is-reserved');
 				// What the push cell says, with what it was made from, so the shown number is what's tested.
 				if (cell.view.name === 'dispX') next.push = { min: shown[0], max: shown[1], field: [min, max], chop };
 			}
 			next[cell.view.name] = { min, max, value: values[probe] };
 		}
 		if (writeNumbers) {
-			line.textContent = `Each image is the engine's ${n} × ${n} grid, one number every ${trim(fields.size / n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and push are in studs; slope has no unit. The push along x is the sideways field times the choppiness, ${chop.toFixed(2)} here.`;
+			line.textContent = describe(fields, chop);
 		}
 		draws += 1;
 		state = { ...next, draws };
@@ -191,13 +198,16 @@ function drawBlend(context, side, scale, n, zoom) {
 	context.stroke();
 }
 
+const samplingLine = (x, column, column1, size, value, engine) => `At x ${x.toFixed(2)}, column ${column} blends with column ${column1}. The ${trim(size)}-stud layer's height there is ${studs(value)}; the engine's own sampler says ${studs(engine)}.`;
+
 function samplingInset(figure, ocean, onLayout) {
 	const body = figure.querySelector('.inset-body');
 	const scale = Math.min(window.devicePixelRatio || 1, 2);
 	const side = SAMPLING_PX * scale;
 	const canvas = element('canvas', { width: side, height: side });
 	canvas.setAttribute('aria-hidden', 'true');
-	const line = element('p', { className: 'inset-line' });
+	// Task 15: the line's widest usual form holds its place, hidden, until the first drawing.
+	const line = element('p', { className: 'inset-line is-reserved', textContent: samplingLine(255.99, 63, 0, 256, -10, -10) });
 	body.replaceChildren(canvas, line);
 	onLayout();
 	const context = canvas.getContext('2d');
@@ -218,7 +228,8 @@ function samplingInset(figure, ocean, onLayout) {
 		drawBlend(context, side, scale, fields.n, zoom);
 		const engine = Cascade.sampleHeight(fields, point[0], point[1], engineOut)[0];
 		if (draws % 2 === 0) {
-			line.textContent = `At x ${point[0].toFixed(2)}, column ${blend.column} blends with column ${blend.column1}. The ${trim(fields.size)}-stud layer's height there is ${studs(blend.value)}; the engine's own sampler says ${studs(engine)}.`;
+			line.textContent = samplingLine(point[0], blend.column, blend.column1, fields.size, blend.value, engine);
+			line.classList.remove('is-reserved');
 		}
 		draws += 1;
 		state = {
@@ -266,6 +277,16 @@ function paintedInset(figure, materials, config, onLayout) {
 		cell.dataset.map = map.name;
 		return { map, canvas, context: canvas.getContext('2d'), range, cell, version: -1, colours: 0, width: 0, height: 0 };
 	});
+	// Task 15: each texture's size is known at mount, so its line is written now and the inset has its
+	// height before it first draws.
+	for (const cell of cells) {
+		const texture = materials.textures[cell.map.name];
+		if (texture?.image) {
+			cell.width = texture.image.width;
+			cell.height = texture.image.height;
+			cell.range.textContent = `${cell.width} × ${cell.height} texels`;
+		}
+	}
 	// The normal image is one painted block the materials' sink tiles across it, except under
 	// ?calibrate=map (render/materials.js uploadMaskOrNormal, NormalTexels.tile).
 	const block = config?.calibrate === 'map' ? NORMAL_IMAGE_TEXELS : NORMAL_BLOCK_TEXELS;

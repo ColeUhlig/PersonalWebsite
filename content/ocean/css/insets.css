@@ -73,3 +73,10 @@
 .inset[data-inset="painted"] canvas {
 	image-rendering: auto;
 }
+
+/* Task 15: text written at mount only to hold its place (the ranges' and the sampling line's
+   widest usual form), hidden until the first drawing writes the real numbers, so the inset keeps
+   its height when it first draws. */
+.inset .is-reserved {
+	visibility: hidden;
+}
