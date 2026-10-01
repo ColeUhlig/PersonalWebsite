@@ -197,9 +197,10 @@ test('the fft step does not re-time for the grid size it already shows', async (
 	expect(await recordedStates(page)).toEqual([]);
 });
 
-// Fix round 1: with the peak near 3 rad/s neither side of the peak line had room for its label,
-// and the chart threw (nine reachable settings; wind 7 m/s at 5,000 m is one).
-// At 1366 px the label fits beside the line; at 390 px it is the case the old code threw on.
+// Fix round 1: with the peak near 3 rad/s the old placement found no room for the peak's label on
+// either side of the peak line, and the chart threw (nine reachable settings; wind 7 m/s at 5,000 m
+// is one; tests/ocean/page/spectrumLayout.test.js checks every setting at two chart widths). Here
+// the page draws it at a laptop's and a phone's chart width, with no error.
 for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) test(`the jonswap step labels the peak at wind 7 m/s and 5,000 m without an error (${viewport.width} px)`, async ({ page }) => {
 	const errors = watchErrors(page);
 	await page.setViewportSize(viewport);
@@ -293,6 +294,21 @@ test('the fft step checks a device with n = 32 before timing 64 × 64 chosen fir
 	expect(await page.evaluate(() => window.__chartCalls)).not.toContain(64);
 });
 
+// Final review (parked item): a reader just scrolling past step 19, focus on nothing, keeps focus on
+// nothing when the chart moves the choice back from a grid too slow to time.
+test('moving the choice back takes no focus from a reader who was not on the control', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`).click({ force: true });
+	await page.evaluate(() => document.activeElement.blur());
+	expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="32"]`)).toHaveAttribute('aria-checked', 'true');
+	expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+});
+
 // Fix round 2: load only slows a timing, so the fastest believable one judges. A first n = 32
 // reading spiked by load (3.0 ms, predicting 48 ms at 64) switches 64 off; a faster later reading
 // (here at 16) switches it back on.
@@ -319,7 +335,8 @@ test('a load-spiked first timing switches 64 × 64 off only until a faster timin
 
 test('a spike that the second reading does not repeat never switches 64 × 64 off', async ({ page }) => {
 	await oceanRunning(page);
-	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 3.0, fft: 0.02 }, 64: { naive: 28, fft: 0.066 } });
+	// n = 32's times come from the getter below: a spike first, then a faster reading.
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 64: { naive: 28, fft: 0.066 } });
 	await page.evaluate(() => {
 		const stub = window.__stubTimes;
 		let calls = 0;
