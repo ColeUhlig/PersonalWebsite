@@ -9,6 +9,8 @@ import * as Charts from '../../../content/ocean/js/engine/charts.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import * as WaveField from '../../../content/ocean/js/core/waveField.js';
 import * as Spectrum from '../../../content/ocean/js/core/spectrum.js';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { cascadeOptions } from '../../../content/ocean/js/proof/proofConfig.js';
 
 // The structural numbers the page's copy quotes, measured from the code the ocean runs. The copy
