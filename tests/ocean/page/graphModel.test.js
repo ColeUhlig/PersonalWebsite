@@ -10,6 +10,7 @@ import { GRAPH_SHOT } from '../../../content/ocean/js/stages/recipeKit.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { blendRecipes } from '../../../content/ocean/js/stages/blend.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { presets } from '../../../content/ocean/js/core/tier.js';
 
 const unit = (v) => {
 	const l = Math.hypot(...v);
@@ -59,6 +60,21 @@ test("graphSpan from step 4's oblique shot puts both ends of the curve outside t
 	const grazing = graphSpan({ position: [-10, 5, 0], forward: unit([0.2, -0.05, -1]), fovDegrees: 70, aspect: 16 / 9, heightPx: 767 });
 	expect.truthy(Number.isFinite(grazing.zMin) && Number.isFinite(grazing.zMax) && grazing.zMin < grazing.zMax, 'finite and ordered at a grazing angle');
 	expect.truthy(grazing.zMax - grazing.zMin <= 2 * MAX_SPAN_HALF + 1e-9, 'no wider than the cap');
+});
+
+// Task 14: on a 21:9 screen step 4's line runs to the horizon inside the frame, so its far end is the
+// cap. The cap reaches the far edge of the sea's outermost ring (High's, the widest; its window snaps
+// by twice its spacing), so no waved sheet shows past the curve's end.
+test("graphSpan from step 4's shot on a 21:9 screen draws the curve out to the outermost ring's far edge", () => {
+	const shot = recipeFor(stepOf('into-3d')).shot;
+	const forward = forwardOf(shot);
+	const outer = presets.High.rings.at(-1);
+	const farEdge = shot.target[2] - outer.halfExtent - 2 * outer.spacing;
+	for (const aspect of [21 / 9, 16 / 9]) {
+		const span = graphSpan({ position: shot.position, forward, fovDegrees: 70, aspect, heightPx: 768 });
+		expect.truthy(span.zMin <= farEdge, `aspect ${aspect.toFixed(2)}: the curve ends at z ${span.zMin.toFixed(1)}, the sheet at ${farEdge}`);
+		expect.truthy((span.zMax - span.zMin) / (CURVE_POINTS - 1) <= 3.01, 'points no more than three studs apart');
+	}
 });
 
 test('sampleCurve is the engine sampler along the plane, drawn yScale times taller, just in front of it', () => {

@@ -10,15 +10,17 @@ import * as WaveSampler from '../core/waveSampler.js';
 import { bankExtent } from '../engine/waveBanks.js';
 import { GRAPH_PLANE_X } from '../stages/graph.js';
 
-// 513: an oblique view (step 4) sees up to 2 * MAX_SPAN_HALF studs of the plane, and the points stay
-// three studs apart there (the graph steps' waves are 23 studs and longer).
-export const CURVE_POINTS = 513;
+// 769: an oblique view (step 4) sees up to 2 * MAX_SPAN_HALF studs of the plane, and the points stay
+// three studs apart there (the graph steps' waves are 20 studs and longer).
+export const CURVE_POINTS = 769;
 export const MAX_COMPONENTS = 8;
 // How much wider than the frame the curve is drawn, so the swing never shows its ends.
 export const SPAN_MARGIN = 1.6;
 // Studs either side of the view's centre the curve reaches at most, where an edge of the frame never
-// meets the curve's line (it runs to the horizon inside the frame).
-export const MAX_SPAN_HALF = 768;
+// meets the curve's line (it runs to the horizon inside the frame). Task 14: far enough that, from
+// step 4 on a 21:9 screen, the curve runs out to the far edge of the sea's outermost ring (1,024
+// studs from its snapped centre), so no waved sheet shows past its end.
+export const MAX_SPAN_HALF = 1152;
 // Studs under the deepest trough the summed waves can reach where the stage clips the sheet: the
 // skirts hang below the clipped edge down to the bounds' depth, and the sheet never reaches this low.
 export const FLOOR_MARGIN = 0.25;
