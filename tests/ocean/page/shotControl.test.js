@@ -204,3 +204,25 @@ test('release eases the camera back to the shot even from a visitor holding it o
 	shots.release();
 	close(shots.frame(3, AWAY, SHOT, 0, { ease: false }).position, SHOT.position, 'with the clock stopped it goes straight there');
 });
+
+// C2 (Task 14, from Task 0 fix round 1's review): a release while the camera is already easing back
+// carries on with that ease; it never restarts it from wherever the camera has got to.
+test('release during a return leaves the return running', () => {
+	const shots = createShotControl();
+	shots.orbited(3);
+	shots.release();
+	let pose = shots.frame(3, AWAY, SHOT, 0);
+	for (let i = 0; i < 10; i++) {
+		pose = shots.frame(3, pose, SHOT, 0.05);
+	}
+	expect.equal(shots.mode(), 'returning', 'part way back');
+	const carryOn = createShotControl();
+	carryOn.orbited(3);
+	carryOn.release();
+	let reference = carryOn.frame(3, AWAY, SHOT, 0);
+	for (let i = 0; i < 10; i++) {
+		reference = carryOn.frame(3, reference, SHOT, 0.05);
+	}
+	shots.release();
+	close(shots.frame(3, pose, SHOT, 0.05).position, carryOn.frame(3, reference, SHOT, 0.05).position, 'the same next pose as a return never released again');
+});

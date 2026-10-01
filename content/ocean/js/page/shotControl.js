@@ -108,8 +108,9 @@ export function createShotControl({ returnSeconds = RETURN_SECONDS } = {}) {
 		},
 		// C2 (Task 0 fix round 1): the shot must take the camera back now, even from the visitor
 		// (the flat graph's hold came on): ease to it from wherever the camera is at the next frame.
+		// A return already under way carries on (Task 14): restarting it would jerk the camera.
 		release() {
-			if (mode !== 'shot') {
+			if (mode === 'free') {
 				mode = 'returning';
 				from = null;
 				elapsed = 0;
