@@ -13,11 +13,11 @@
 //   transforms (step 9): the wave-by-wave sum against the FFT, timed in this browser when the chart
 //     comes on screen and again for each new grid size, read as page/transformTiming.js rules (a
 //     rounded speedup, one re-measure, the operation ratio when the timing was disturbed). A grid
-//     whose single naive run would freeze the page on this device (judged from a smaller timing) is
-//     switched off with a note instead of run.
+//     whose single naive run would freeze the page on this device (judged from the fastest smaller
+//     timing seen) is switched off with a note instead of run, until a faster timing says otherwise.
 import { arrowEnd, linePath, niceTicks } from '../page/chartGeometry.js';
 import { SPECTRUM, peakLabelSpot, spectrumPlot, spectrumScales } from '../page/spectrumLayout.js';
-import { formatMs, formatSteps, formatTiny, operationRatio, roundSpeedup, timeTransforms, tooSlowToTime } from '../page/transformTiming.js';
+import { fasterJudge, formatMs, formatSteps, formatTiny, operationRatio, roundSpeedup, timeTransforms, tooSlowToTime } from '../page/transformTiming.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MIN_WIDTH = 240;
@@ -161,7 +161,8 @@ function spectrumChart(figure, story, onLayout) {
 		text.setAttribute('x', spot.x0.toFixed(1));
 		text.setAttribute('y', spot.base);
 		// A patch of the chart's background behind it, so the label reads where it crosses the line.
-		root.insertBefore(svg('rect', { class: 'chart-label-bg', x: (spot.x0 - 3).toFixed(1), y: spot.base - SPECTRUM.ascent - 1, width: (width + 6).toFixed(1), height: SPECTRUM.ascent + SPECTRUM.descent + 2, rx: 3 }), text);
+		const { patch } = SPECTRUM;
+		root.insertBefore(svg('rect', { class: 'chart-label-bg', x: (spot.x0 - patch.x).toFixed(1), y: spot.base - SPECTRUM.ascent - patch.y, width: (width + 2 * patch.x).toFixed(1), height: SPECTRUM.ascent + SPECTRUM.descent + 2 * patch.y, rx: 3 }), text);
 	}
 	function draw() {
 		const curve = story.charts.spectrum();
@@ -339,48 +340,83 @@ function transformChart(figure, story, onLayout) {
 		onLayout();
 	}
 
-	// Switches off every option this device cannot time without freezing the page, with a note the
-	// option points to; `unjudgeable` (the judging timing was disturbed twice, so nothing is known)
-	// switches off every option bigger than the judging grid too, rather than risk the freeze.
-	function blockTooSlow(unjudgeable = false) {
-		for (const option of options()) {
-			const slow = tooSlowToTime(option, judge);
-			if (!(slow || (unjudgeable && slow === null && option > JUDGING_N))) continue;
+	const isBlocked = (option) => optionButton(option)?.dataset.blocked !== undefined;
+
+	// Switches each option this device cannot time without freezing the page off, with a note the
+	// option points to, and back on once a faster timing says it can. Only a believable timing
+	// judges (page/transformTiming.js fasterJudge): a disturbed one says nothing about speed.
+	function applyBlocks() {
+		const slider = story.sliders(9).find((s) => s.id === 'transformN');
+		let first = null;
+		for (const option of slider.options) {
 			const button = optionButton(option);
-			if (!button || button.dataset.blocked !== undefined) continue;
-			button.dataset.blocked = '';
-			button.disabled = true;
-			button.setAttribute('aria-describedby', SLOW_NOTE_ID);
-			const control = gridControl();
-			if (control && !document.getElementById(SLOW_NOTE_ID)) {
-				const span = document.createElement('span');
-				span.className = 'control-note';
-				span.id = SLOW_NOTE_ID;
-				span.textContent = SLOW_NOTE(option);
-				control.append(span);
+			if (!button) continue;
+			if (tooSlowToTime(option, judge) === true) {
+				first ??= option;
+				button.dataset.blocked = '';
+				button.disabled = true;
+				button.setAttribute('aria-describedby', SLOW_NOTE_ID);
+			} else if (button.dataset.blocked !== undefined) {
+				delete button.dataset.blocked;
+				button.disabled = !slider.available;
+				button.removeAttribute('aria-describedby');
 			}
+		}
+		const existing = document.getElementById(SLOW_NOTE_ID);
+		if (first === null) {
+			existing?.remove();
+		} else if (existing) {
+			existing.textContent = SLOW_NOTE(first);
+		} else {
+			const span = document.createElement('span');
+			span.className = 'control-note';
+			span.id = SLOW_NOTE_ID;
+			span.textContent = SLOW_NOTE(first);
+			gridControl()?.append(span);
 		}
 	}
 
-	// Times `n` (re-measuring once when the reading is not believable), keeping a believable timing
-	// of 16 or more as the judge for bigger grids.
+	// Times `n` (re-measuring once when the reading is not believable). Load only ever slows a
+	// reading, so the fastest believable timing seen judges bigger grids; before a reading switches
+	// a grid off, a second reading of the same grid has its say, so one spike never decides, and the
+	// faster of the two is the one shown.
 	async function timed(n, current) {
-		const verdict = await timeTransforms(measureFn, n, afterPaint, { stillWanted: current });
-		if (verdict?.result && verdict.result.n >= 16) {
-			judge = verdict.result;
+		let verdict = await timeTransforms(measureFn, n, afterPaint, { stillWanted: current });
+		if (!verdict) return null;
+		judge = fasterJudge(judge, verdict.result);
+		const wouldBlock = () => options().some((option) => tooSlowToTime(option, judge) === true && !isBlocked(option));
+		if (verdict.result && wouldBlock()) {
+			await afterPaint();
+			if (!current()) return null;
+			const again = await timeTransforms(measureFn, n, afterPaint, { stillWanted: current });
+			if (!again) return null;
+			judge = fasterJudge(judge, again.result);
+			if (again.result && again.result.naiveMs < verdict.result.naiveMs) verdict = again;
 		}
-		if (verdict) blockTooSlow();
+		applyBlocks();
 		return verdict;
+	}
+
+	// Moves the choice back to the judging grid (its option is never switched off), taking focus
+	// with it when the visitor's focus was on the option just switched off (which drops it).
+	function chooseJudgingGrid(from) {
+		const back = optionButton(JUDGING_N);
+		const active = document.activeElement;
+		const focusHere = active === null || active === document.body || active === optionButton(from) || gridControl()?.contains(active);
+		back?.click();
+		if (focusHere) back?.focus({ preventScroll: true });
 	}
 
 	// Shows "measuring" and lets it paint, then runs each long task (the one-off warm-up, each timing)
 	// in its own turn of the event loop, with a painted frame between them. A grid bigger than any
 	// timed so far is judged first from a 32 × 32 timing; one too slow is not run: the chart shows
-	// the 32 × 32 timing and the choice goes back to it.
+	// the 32 × 32 timing and the choice goes back to it. A judging timing disturbed twice judges
+	// nothing, and the grid asked for is timed the normal way.
 	async function measure() {
 		const mine = ++run;
 		const current = () => mine === run;
-		let n = gridSize();
+		const asked = gridSize();
+		let n = asked;
 		wanted = n;
 		figure.dataset.state = 'measuring';
 		showMeasuring(n);
@@ -396,14 +432,13 @@ function transformChart(figure, story, onLayout) {
 		if (n > JUDGING_N && tooSlowToTime(n, judge) === null) {
 			verdict = await timed(JUDGING_N, current);
 			if (!verdict || !current()) return;
-			if (judge === null) blockTooSlow(true);
 		}
-		if (optionButton(n)?.dataset.blocked !== undefined) {
+		if (isBlocked(n)) {
 			n = JUDGING_N;
 			wanted = n;
 			verdict ??= await timed(n, current);
 			if (!verdict || !current()) return;
-			optionButton(n)?.click();
+			chooseJudgingGrid(asked);
 		} else {
 			verdict = await timed(n, current);
 			if (!verdict || !current()) return;

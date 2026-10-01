@@ -14,9 +14,11 @@ export const SPECTRUM = Object.freeze({
 	// (3 m/s at 5,000 m sits 4.3 decades down).
 	decades: 5,
 	headroom: 1.5,
-	// The peak label's text box about its baseline (12 px text).
+	// The peak label's text box about its baseline (12 px text), and how far its background patch
+	// (ui/charts.js) reaches past it.
 	ascent: 11,
 	descent: 3,
+	patch: Object.freeze({ x: 3, y: 1 }),
 });
 
 export function spectrumPlot(width) {
@@ -38,8 +40,8 @@ export function curvePoints(curve, { x, y }, plot) {
 	return curve.omega.map((w, i) => [x(w), Math.min(Math.max(y(curve.physical[i]), plot.top), plot.bottom)]);
 }
 
-// The peak label's spot ({ x0, base, clear }): beside the peak line, low in the plot or high,
-// clear of the curve; see chartGeometry.placeLabel.
+// The peak label's spot ({ x0, base, clear }): beside the peak line, low in the plot or high, its
+// background patch clear of the curve; see chartGeometry.placeLabel.
 export function peakLabelSpot(curve, scales, plot, labelWidth) {
 	return placeLabel({
 		anchor: scales.x(curve.peakOmega),
@@ -47,6 +49,7 @@ export function peakLabelSpot(curve, scales, plot, labelWidth) {
 		rows: [plot.bottom - 6, plot.top + 15],
 		ascent: SPECTRUM.ascent,
 		descent: SPECTRUM.descent,
+		margin: SPECTRUM.patch,
 		plot,
 		points: curvePoints(curve, scales, plot),
 	});

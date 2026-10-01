@@ -154,6 +154,14 @@ test('the fetch slider moves under the arrow keys at both ends, and reads out it
 
 test('the grid-size choice is a radio group: one tab stop, arrows and Home/End move the choice', async ({ page }) => {
 	await oceanRunning(page);
+	// The FFT timing chart switches 64 off on a machine too slow to time it (ui/charts.js), and a
+	// loaded test machine can be; a fast stand-in timing keeps every option on, so this test is about
+	// the keys alone.
+	await page.evaluate(() => window.__charts.useTransforms((n) => {
+		const cells = n * n;
+		const naiveMs = cells * cells * 1.7e-6;
+		return { n, naiveMs, fftMs: naiveMs / ((cells / Math.log2(n)) * 0.6), speedup: (cells / Math.log2(n)) * 0.6, operations: { naive: cells * cells, fft: cells * Math.log2(n) }, maxDifference: 1e-14, batches: { naive: 3, fft: 5 } };
+	}));
 	const radio = (n) => page.locator(`#step-9 [data-slider="transformN"] button[data-option="${n}"]`);
 	const tabStops = () => page.locator('#step-9 [data-slider="transformN"] button[tabindex="0"]');
 	await expect(tabStops()).toHaveCount(1);

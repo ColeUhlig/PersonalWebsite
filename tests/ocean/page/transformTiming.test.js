@@ -3,7 +3,7 @@
 // operation ratio instead when both readings are out.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { formatMs, formatSteps, formatTiny, isPlausible, MAX_NAIVE_BLOCK_MS, operationRatio, PLAUSIBLE, predictNaiveMs, roundSpeedup, timeTransforms, tooSlowToTime } from '../../../content/ocean/js/page/transformTiming.js';
+import { formatMs, formatSteps, formatTiny, isPlausible, fasterJudge, MAX_NAIVE_BLOCK_MS, operationRatio, PLAUSIBLE, predictNaiveMs, roundSpeedup, timeTransforms, tooSlowToTime } from '../../../content/ocean/js/page/transformTiming.js';
 
 // A measureTransforms result at grid size n with the given speedup.
 function reading(n, speedup) {
@@ -122,4 +122,21 @@ test("a grid size is too slow to time when the naive sum's predicted run would f
 	expect.equal(tooSlowToTime(32, timed(32, 7.4)), false, 'the size already timed is never too slow');
 	expect.equal(tooSlowToTime(64, timed(8, 0.05)), null, 'too small a grid to judge from');
 	expect.equal(tooSlowToTime(64, null), null, 'nothing timed yet');
+});
+
+// Fix round 2: load only ever slows a timing down, so the judge is the fastest believable timing
+// seen, compared per step of the naive sum (n^4 of them), whatever grid it was taken on.
+test('the judge is the fastest believable timing seen', () => {
+	const timed = (n, naiveMs) => ({ n, naiveMs });
+	const spiked = timed(32, 3.0);
+	const calm = timed(32, 1.8);
+	expect.equal(fasterJudge(null, spiked), spiked, 'the first timing judges');
+	expect.equal(tooSlowToTime(64, fasterJudge(null, spiked)), true, 'a load-spiked reading alone switches 64 off');
+	expect.equal(fasterJudge(spiked, calm), calm, 'a faster one takes over');
+	expect.equal(tooSlowToTime(64, fasterJudge(spiked, calm)), false, 'and switches 64 back on');
+	expect.equal(fasterJudge(calm, spiked), calm, 'a slower one never does');
+	const sixteen = timed(16, 0.11);
+	expect.equal(fasterJudge(spiked, sixteen), sixteen, 'compared per step: 0.11 ms at 16 beats 3.0 ms at 32');
+	expect.equal(fasterJudge(calm, timed(8, 0.001)), calm, 'a grid under 16 never judges');
+	expect.equal(fasterJudge(calm, null), calm, 'nothing new');
 });

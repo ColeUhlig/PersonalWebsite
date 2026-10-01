@@ -73,22 +73,24 @@ const SLIDE_STEP = 2;
  * polyline `points` and inside `plot`. Tried in turn: right of the mark, then left of it, on each
  * row; then slid along each row without covering the mark, nearest first; then covering it. When
  * no spot is clear, it sits on the last row centred on the mark (clamped to the plot), with
- * `clear: false`, so there is always a spot. Returns { x0, base, clear } (x0 = the label's left).
+ * `clear: false`, so there is always a spot. `margin` ({ x, y }) widens the box kept clear and
+ * inside the plot past the text on every side (a background patch behind the label). Returns
+ * { x0, base, clear } (x0 = the text's left).
  */
-export function placeLabel({ anchor, width, rows, ascent, descent, plot, points, gap = 4 }) {
-	const fits = (x0) => x0 >= plot.left && x0 + width <= plot.right;
+export function placeLabel({ anchor, width, rows, ascent, descent, plot, points, gap = 4, margin = { x: 0, y: 0 } }) {
+	const fits = (x0) => x0 - margin.x >= plot.left && x0 + width + margin.x <= plot.right;
 	const covers = (x0) => x0 < anchor + gap && x0 + width > anchor - gap;
 	const beside = [anchor + gap, anchor - gap - width].filter(fits);
 	const slid = [];
-	for (let x0 = plot.left; x0 + width <= plot.right; x0 += SLIDE_STEP) slid.push(x0);
+	for (let x0 = plot.left + margin.x; x0 + width + margin.x <= plot.right; x0 += SLIDE_STEP) slid.push(x0);
 	const distance = (x0) => Math.abs(x0 + width / 2 - anchor);
 	const near = (list) => [...list].sort((a, b) => distance(a) - distance(b));
 	const order = [beside, near(slid.filter((x0) => !covers(x0))), near(slid.filter(covers))];
 	for (const xs of order) {
-		const spots = rows.flatMap((base) => xs.map((x0) => ({ x0, base, x1: x0 + width, y0: base - ascent, y1: base + descent })));
+		const spots = rows.flatMap((base) => xs.map((x0) => ({ x0: x0 - margin.x, text: x0, base, x1: x0 + width + margin.x, y0: base - ascent - margin.y, y1: base + descent + margin.y })));
 		const found = firstClearBox(points, spots);
 		if (found !== -1) {
-			return Object.freeze({ x0: spots[found].x0, base: spots[found].base, clear: true });
+			return Object.freeze({ x0: spots[found].text, base: spots[found].base, clear: true });
 		}
 	}
 	const x0 = Math.max(plot.left, Math.min(anchor - width / 2, plot.right - width));

@@ -73,3 +73,15 @@ test('a label beside a mark goes right of it, else left, else slides along, else
 	expect.equal(blocked.x0, 40, 'centred on the mark');
 	expect.equal(spot(100, 300).x0, 0, 'wider than the plot: from its left edge');
 });
+
+// Fix round 2: the label's background patch reaches past the text, so the patch, not just the
+// text, has to stay clear of the line.
+test("a label's margin is kept clear of the line too", () => {
+	const plot = { left: 0, right: 200, top: 0, bottom: 100 };
+	// A flat line at y = 84: just under a text box ending at 83, inside a 3-unit margin.
+	const line = [[0, 84], [200, 84]];
+	const spot = (margin) => placeLabel({ anchor: 50, width: 60, rows: [80, 20], ascent: 10, descent: 3, plot, points: line, margin });
+	expect.equal(spot(undefined).base, 80, 'without a margin the low row is clear');
+	expect.equal(spot({ x: 3, y: 3 }).base, 20, 'with one it is not, so the label goes high');
+	expect.equal(spot({ x: 3, y: 3 }).x0, 54, 'still right of the mark');
+});

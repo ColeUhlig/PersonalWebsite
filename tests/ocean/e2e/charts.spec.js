@@ -114,6 +114,19 @@ test("step 8's arrows stop being redrawn while the chart is off screen", async (
 	expect(await arrow.getAttribute('x2')).toBe(parked);
 });
 
+// Whether this machine may time 64 × 64 now. A loaded machine can be legitimately too slow: its
+// fastest n = 32 timing (the one on show) predicts a single naive n = 64 run over 40 ms (16 times
+// the n = 32 one), and then 64 must be switched off with its note rather than run.
+async function mayTime64(page) {
+	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	if (await option.isEnabled()) return true;
+	const naive = await page.evaluate(() => Number.parseFloat(document.querySelector('#step-9 figure.chart svg .chart-bar-naive + text').textContent));
+	expect(naive * 16, `64 × 64 switched off after a ${naive} ms n = 32 timing`).toBeGreaterThan(40);
+	await expect(page.locator('#step-9 [data-slider="transformN"]')).toContainText('too slow to time here without freezing the page');
+	console.log(`[charts.spec] this machine is loaded: n = 32 took ${naive} ms, so 64 × 64 is switched off`);
+	return false;
+}
+
 test('step 9 times both ways in the visitor browser, again for a new grid size', async ({ page }) => {
 	await oceanRunning(page);
 	await scrollToStep(page, 9, 0.2);
@@ -123,8 +136,9 @@ test('step 9 times both ways in the visitor browser, again for a new grid size',
 	await expect(figure).toContainText('32 × 32');
 	const widths = await figure.evaluate((f) => [f.querySelector('.chart-bar-naive').getAttribute('width'), f.querySelector('.chart-bar-fft').getAttribute('width')].map(Number));
 	expect(widths[0]).toBeGreaterThan(widths[1]);
-	await page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]').click();
-	await expect(figure).toContainText('64 × 64', { timeout: 60_000 });
+	const next = (await mayTime64(page)) ? 64 : 16;
+	await page.locator(`#step-9 [data-slider="transformN"] button[data-option="${next}"]`).click();
+	await expect(figure).toContainText(`${next} × ${next}`, { timeout: 60_000 });
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 });
 
@@ -134,7 +148,9 @@ test('step 9 prints a rounded, believable speedup or says the timing was disturb
 	await oceanRunning(page);
 	await scrollToStep(page, 9, 0.2);
 	const figure = page.locator('#step-9 figure.chart');
-	for (const n of [8, 64]) {
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	const sizes = (await mayTime64(page)) ? [8, 64] : [8, 16];
+	for (const n of sizes) {
 		await recordStates(page);
 		await page.locator(`#step-9 [data-slider="transformN"] button[data-option="${n}"]`).click();
 		await expect(figure).toContainText(`${n} × ${n}`, { timeout: 60_000 });
@@ -170,8 +186,10 @@ test('step 9 does not re-time for the grid size it already shows', async ({ page
 
 // Fix round 1: with the peak near 3 rad/s neither side of the peak line had room for its label,
 // and the chart threw (nine reachable settings; wind 7 m/s at 5,000 m is one).
-test('step 7 labels the peak at wind 7 m/s and 5,000 m without an error', async ({ page }) => {
+// At 1366 px the label fits beside the line; at 390 px it is the case the old code threw on.
+for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) test(`step 7 labels the peak at wind 7 m/s and 5,000 m without an error (${viewport.width} px)`, async ({ page }) => {
 	const errors = watchErrors(page);
+	await page.setViewportSize(viewport);
 	await oceanRunning(page);
 	await scrollToStep(page, 7, 0.2);
 	await setRange(page, 7, 'wind', 7);
@@ -197,14 +215,15 @@ function textOutsideViewBox(page, step) {
 }
 
 // A stand-in for engine/charts.js measureTransforms (through the charts' test hook): `naive` and
-// `fft` milliseconds per grid size.
+// `fft` milliseconds per grid size, from a table the test can change (setStubTimes).
 function stubTransforms(page, times) {
 	return page.evaluate((table) => {
 		window.__chartCalls = [];
+		window.__stubTimes = table;
 		window.__charts.useTransforms((n) => {
 			window.__chartCalls.push(n);
 			const cells = n * n;
-			const { naive, fft } = table[n];
+			const { naive, fft } = window.__stubTimes[n];
 			return { n, waves: cells, naiveMs: naive, fftMs: fft, speedup: naive / fft, operations: { naive: cells * cells, fft: cells * Math.log2(n) }, maxDifference: 3e-14, batches: { naive: 3, fft: 5 } };
 		});
 	}, times);
@@ -223,6 +242,9 @@ for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 
 		await expect(figure).toContainText('1.0 M steps');
 		expect(await page.evaluate(() => window.__chartCalls.filter((n) => n === 32).length)).toBe(2);
 		expect(await textOutsideViewBox(page, 9)).toEqual([]);
+		// A disturbed timing judges nothing: 64 × 64 stays on offer, with no "too slow" note.
+		await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]')).toBeEnabled();
+		await expect(page.locator('#step-9 [data-slider="transformN"]')).not.toContainText('too slow');
 	});
 }
 
@@ -230,7 +252,7 @@ for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 
 // for over 100 ms, so the 64 option is switched off, with a note, instead of run.
 test('step 9 switches off 64 × 64 where the n = 32 timing says it would freeze the page', async ({ page }) => {
 	await oceanRunning(page);
-	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 16: { naive: 0.46, fft: 0.0125 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
 	await scrollToStep(page, 9, 0.2);
 	const figure = page.locator('#step-9 figure.chart');
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
@@ -251,8 +273,64 @@ test('step 9 checks a device with n = 32 before timing 64 × 64 chosen first', a
 	const figure = page.locator('#step-9 figure.chart');
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 	await expect(figure).toContainText('32 × 32');
-	await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="32"]')).toHaveAttribute('aria-checked', 'true');
+	const back = page.locator('#step-9 [data-slider="transformN"] button[data-option="32"]');
+	await expect(back).toHaveAttribute('aria-checked', 'true');
+	// The pressed option was switched off under the visitor's focus; focus moves with the choice.
+	await expect(back).toBeFocused();
 	expect(await page.evaluate(() => window.__chartCalls)).not.toContain(64);
+});
+
+// Fix round 2: load only slows a timing, so the fastest believable one judges. A first n = 32
+// reading spiked by load (3.0 ms, predicting 48 ms at 64) switches 64 off; a faster later reading
+// (here at 16) switches it back on.
+test('a load-spiked first timing switches 64 × 64 off only until a faster timing', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 16: { naive: 0.11, fft: 0.003 }, 32: { naive: 3.0, fft: 0.02 }, 64: { naive: 28, fft: 0.066 } });
+	await scrollToStep(page, 9, 0.2);
+	const figure = page.locator('#step-9 figure.chart');
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	await expect(option).toBeDisabled();
+	// Before switching 64 off it took a second reading: one spike alone never decides.
+	expect(await page.evaluate(() => window.__chartCalls.filter((n) => n === 32).length)).toBe(2);
+	await page.evaluate(() => {
+		window.__stubTimes[32] = { naive: 1.8, fft: 0.015 };
+	});
+	await page.locator('#step-9 [data-slider="transformN"] button[data-option="16"]').click();
+	await expect(figure).toContainText('16 × 16 grid', { timeout: 60_000 });
+	await expect(option).toBeEnabled();
+	await expect(page.locator('#step-9 [data-slider="transformN"]')).not.toContainText('too slow');
+	await option.click();
+	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
+});
+
+test('a spike that the second reading does not repeat never switches 64 × 64 off', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 3.0, fft: 0.02 }, 64: { naive: 28, fft: 0.066 } });
+	await page.evaluate(() => {
+		const stub = window.__stubTimes;
+		let calls = 0;
+		Object.defineProperty(stub, 32, { get: () => (calls++ === 0 ? { naive: 3.0, fft: 0.02 } : { naive: 1.8, fft: 0.015 }) });
+	});
+	await scrollToStep(page, 9, 0.2);
+	const figure = page.locator('#step-9 figure.chart');
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]')).toBeEnabled();
+	await expect(figure).toContainText('1.80 ms');
+});
+
+// Fix round 2: a judging timing disturbed twice says nothing about speed, so 64 × 64 is timed the
+// normal way rather than switched off.
+test('a disturbed judging timing leaves 64 × 64 to the normal timing', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 50, fft: 0.001 }, 64: { naive: 28, fft: 0.066 } });
+	await page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]').click({ force: true });
+	await scrollToStep(page, 9, 0.2);
+	const figure = page.locator('#step-9 figure.chart');
+	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
+	await expect(figure).toHaveAttribute('data-state', 'done');
+	await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]')).toBeEnabled();
+	await expect(page.locator('#step-9 [data-slider="transformN"]')).not.toContainText('too slow');
 });
 
 test('a fast device still times 64 × 64', async ({ page }) => {

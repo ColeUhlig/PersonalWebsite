@@ -92,6 +92,16 @@ export function predictNaiveMs(timed, n) {
 	return timed.naiveMs * (n / timed.n) ** 4;
 }
 
+// The judge for bigger grids: the fastest believable timing seen (at 16 or more), compared per step
+// of the naive sum, since load only ever slows a reading down. `timed` may be null.
+export function fasterJudge(judge, timed) {
+	if (!timed || timed.n < MIN_JUDGING_N) {
+		return judge;
+	}
+	const perStep = (t) => t.naiveMs / t.n ** 4;
+	return judge === null || perStep(timed) < perStep(judge) ? timed : judge;
+}
+
 // Whether a grid of `n` would freeze the page, judged from an earlier timing (a measureTransforms
 // result): true or false, or null when there is nothing to judge from yet.
 export function tooSlowToTime(n, timed) {
