@@ -1,5 +1,6 @@
-// The lighting terms of steps 10 to 13 (piece C2; lane D owns this file; spec 10.6; browser-free): the
-// reference for render/termsMaterial.js's shader, which is the same arithmetic in GLSL. The water's
+// The lighting terms worn by diffuse, highlights, gerstner and tiling (piece C2; lane D owns this
+// file; spec 10.6; browser-free): the reference for render/termsMaterial.js's shader, which is the
+// same arithmetic in GLSL. The water's
 // own colour is c_d = c_sea (a + k_sun max(0, n.s)), where a is the sky ambient (a hemisphere light:
 // ground below, sky above, by the normal's height); the highlight is c_s = k_spec (n.h)^p, Blinn-Phong
 // on the half vector h between the sun s and the eye v. Without Fresnel the two add: c = c_d + c_s.
@@ -8,7 +9,10 @@
 //   c = (1 - F) c_d + F (c_s + c_sky)
 // c_sky is a two-colour gradient (horizon to zenith) read by the reflected ray's height, not the
 // scene's sky. Each term switches on alone; with all off the sea is its own flat colour. Colours
-// are linear.
+// are linear. k_sun and a are render/lighting.js's SUN_INTENSITY and AMBIENT_INTENSITY as they
+// stand: three's lit sea divides the sun and ambient by pi (BRDF_Lambert) and this shader does not,
+// on purpose. The ratio of sun to ambient is the place's, and the brighter teal was chosen over the
+// dim navy the division gives, so do not "fix" it.
 // This is a browser demonstration only: a Roblox script cannot write a shader, so in Roblox these
 // terms come from the engine's own lighting (its sun, ambient and sky reflections on the material),
 // and nothing here runs there.

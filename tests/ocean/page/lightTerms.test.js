@@ -1,5 +1,6 @@
 // The lighting terms' reference (piece C2, lane D; spec 10.6): what each term adds, as the math box
-// writes it, c = (1 - F)(c_sea (a + max(0, n.s)) + (n.h)^p) + F c_sky. The shader
+// writes it: c = (1 - F) diffuse + F (specular + sky) with Fresnel on, diffuse + specular with it
+// off, where diffuse = c_sea (a + k_sun max(0, n.s)) and specular = k_spec (n.h)^p. The shader
 // (render/termsMaterial.js) is this, line for line.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
