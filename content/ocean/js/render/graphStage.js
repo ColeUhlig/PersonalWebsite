@@ -358,7 +358,7 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			return;
 		}
 		const x = GRAPH_PLANE_X - LINE_LIFT;
-		const { left, right, sppLeft, sppRight, lean } = layout;
+		const { left, right, sppLeft, lean } = layout;
 		const heightOpacity = opacity * layout.upright;
 		const yScale = current.yScale;
 		// A quarter over the tallest crest, kept inside the frame with room for the height word over
@@ -371,21 +371,41 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		const heightTop = Math.max(0.5 * yScale, Math.min(Math.max(wantedTop, yStep * yScale), heightRoom));
 		const sine = ocean.stageSettings?.source === 'sine' ? ocean.waves : null;
 		const marking = sine !== null && sine.packed[2] > 0;
+		const crestTop = marking ? sine.packed[2] * sine.weights[0] * yScale : 0;
 		// The distance numbers' row: under the height axis' foot, and on the sine steps under the λ
 		// bracket too (a trough pair is drawn under the curve), as far as the frame allows.
-		const marksDepth = marking ? sine.packed[2] * sine.weights[0] * yScale + FOOT_BELOW_MARKS_PX * sppLeft : 0;
+		const marksDepth = marking ? crestTop + FOOT_BELOW_MARKS_PX * sppLeft : 0;
 		const footDepth = Math.max(heightTop, Math.min(marksDepth, -layout.bottom - 34 * sppLeft));
 		footClear = clearOf(x, -footDepth, right, FOOT_LABELS_PX);
 		axes.begin();
 		heightAxes.begin();
 		axes.segment(x, 0, left, x, 0, right);
 		heightAxes.segment(x, -heightTop, left - heightTop * lean, x, heightTop, left + heightTop * lean);
+		shownLabels.length = 0;
+		tickNumbers(x, layout, heightTop, yStep, footDepth, opacity, heightOpacity);
+		axisWords(x, layout, heightTop, footDepth, crestTop, opacity, heightOpacity);
+		if (marking) {
+			markSine(sine, t, x, opacity, left, right);
+		} else {
+			markers = null;
+			lambdaSide = null;
+			words.lambda.hide();
+			words.amplitude.hide();
+		}
+		axes.end(opacity);
+		heightAxes.end(heightOpacity);
+	}
+
+	// The ticks on both axes and their numbers: the distance numbers along the graph's foot (short of
+	// the page's pills, footClear), the height numbers left of the height axis.
+	function tickNumbers(x, layout, heightTop, yStep, footDepth, opacity, heightOpacity) {
+		const { left, right, sppLeft, lean } = layout;
+		const yScale = current.yScale;
 		// The axis spans the frame less its insets on screen, however oblique the view.
 		const axisPx = spanInput.heightPx * spanInput.aspect - spanInput.leftPx - AXIS_LEFT_PX - AXIS_RIGHT_PX;
 		const wanted = Math.min(MAX_DISTANCE_TICKS, Math.max(2, Math.round(axisPx / TICK_SPACING_PX)));
 		const zCount = axisTicksInto(left, right, niceStep(right - left, wanted), zTicks);
 		const yCount = axisTicksInto(-heightTop / yScale, heightTop / yScale, yStep, yTicks);
-		shownLabels.length = 0;
 		let slot = 0;
 		for (let i = 0; i < zCount; i++) {
 			const z = zTicks[i];
@@ -407,36 +427,27 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 			}
 		}
 		for (let i = slot; i < TICK_LABELS; i++) ticks[i].hide();
-		const scale = Math.round(yScale * 10) / 10;
+	}
+
+	// The two axes' words: the height word over the height axis, clear of the λ marker's words over
+	// the crests (22 px over them, and the words are 19 px tall) and inside the frame's top; the
+	// distance word under the foot's numbers, short of the page's pills.
+	function axisWords(x, layout, heightTop, footDepth, crestTop, opacity, heightOpacity) {
+		const { left, right, sppLeft, sppRight, lean } = layout;
+		const scale = Math.round(current.yScale * 10) / 10;
 		if (scale !== heightScale) {
 			heightScale = scale;
 			words.height.set(scale === 1 ? 'height (studs)' : `height (studs, drawn ×${scale})`);
 		}
-		// Clear of the λ marker's words, which sit just over the crests (22 px over them, and the
-		// words are 19 px tall); inside the frame's top.
-		const crestTop = marking ? sine.packed[2] * sine.weights[0] * yScale : 0;
 		const wordY = Math.min(Math.max(heightTop + 30 * sppLeft, crestTop + WORD_OVER_CRESTS_PX * sppLeft), layout.top);
 		words.height.place(x, wordY, left + wordY * lean, sppLeft, heightOpacity, 'left');
 		words.distance.set('distance (studs)');
 		words.distance.place(x, Math.max(-footDepth - 32 * sppRight, layout.bottom), Math.min(right, footClear), sppRight, opacity, 'right');
 		if (heightOpacity > 0) shownLabels.push(words.height.text());
 		shownLabels.push(words.distance.text());
-		if (marking) {
-			markSine(sine, t, x, opacity, left, right);
-		} else {
-			markers = null;
-			lambdaSide = null;
-			words.lambda.hide();
-			words.amplitude.hide();
-		}
-		axes.end(opacity);
-		heightAxes.end(heightOpacity);
 	}
 
-	// The sine's crest-to-crest length and its height. The λ bracket rides a crest pair between the
-	// height axis and the frame's right edge (pre-flight R10: preferring the pair a quarter wave in
-	// from the axis), or a trough pair under the curve when no crest pair fits there, so it never blinks
-	// out as the wave slides (graphModel.js lambdaPair). The height is marked at a crest.
+	// The sine's crest-to-crest length and its height (markLength, markHeight).
 	function markSine(sine, t, x, opacity, left, right) {
 		const k = sine.packed[0];
 		const omega = sine.packed[1];
@@ -446,53 +457,66 @@ export function createGraphStage({ view, ocean, look, reducedMotion = false }) {
 		const top = amplitude * current.yScale;
 		const shownLength = Number(wavelength.toFixed(1));
 		const shownHeight = Number(amplitude.toFixed(2));
+		const pair = markLength(k, omega, phase, t, x, top, wavelength, shownLength, opacity, left);
+		const crest = pair !== null && pair.crest ? pair.start : crestAfter(k, omega, phase, t, left + wavelength * 0.25);
+		markHeight(crest, x, top, shownHeight, opacity, right);
+		if (markers === null || markers.wavelength !== shownLength || markers.amplitude !== shownHeight) {
+			markers = { wavelength: shownLength, amplitude: shownHeight };
+		}
+	}
+
+	// The λ bracket and its word. It rides a crest pair between the height axis and the frame's right
+	// edge (pre-flight R10: preferring the pair a quarter wave in from the axis), or a trough pair under
+	// the curve when no crest pair fits there, so it never blinks out as the wave slides (graphModel.js
+	// lambdaPair). Returns the pair (pairOut, reused) or null.
+	function markLength(k, omega, phase, t, x, top, wavelength, shownLength, opacity, left) {
 		// Crest pairs end short of the math box over the canvas's top right, where their bracket would go
 		// up into it; trough pairs, under the curve, may run to the frame's edge.
 		const frameEdge = span.frameMax - BRACKET_EDGE_PX * studsPerPixelAt(spanInput, span.frameMax);
 		const crestRow = top + 22 * studsPerPixelAt(spanInput, (left + frameEdge) / 2);
 		const pair = lambdaPair(k, omega, phase, t, left, frameEdge, pairOut, clearOfBox(x, crestRow, frameEdge));
-		if (pair !== null) {
-			const first = pair.start;
-			const second = first + wavelength;
-			const spp = studsPerPixelAt(spanInput, (first + second) / 2);
-			const side = pair.crest ? 1 : -1;
-			const lift = side * (top + 10 * spp);
-			axes.segment(x, lift, first, x, lift, second);
-			axes.segment(x, lift - 4 * spp, first, x, lift + 4 * spp, first);
-			axes.segment(x, lift - 4 * spp, second, x, lift + 4 * spp, second);
-			if (shownLength !== lambdaShown) {
-				lambdaShown = shownLength;
-				words.lambda.set(`λ = ${shownLength} studs`);
-			}
-			// Over the bracket either way: above the crests for a crest pair; for a trough pair between
-			// the bracket and the axis, where the curve is at its crest midway, clear of the numbers below.
-			// Under the troughs it may come down into the pills' rows: then it moves left, out of them.
-			const half = (words.lambda.width() / 2) * spp;
-			const centre = (first + second) / 2;
-			const clear = pair.crest ? Infinity : clearOf(x, lift + 12 * spp, centre, 10);
-			words.lambda.place(x, lift + 12 * spp, Math.min(centre, clear - half), spp, opacity);
-			lambdaSide = pair.crest ? 'crest' : 'trough';
-			shownLabels.push(words.lambda.text());
-		} else {
+		if (pair === null) {
 			words.lambda.hide();
 			lambdaSide = null;
+			return null;
 		}
-		const crest = pair !== null && pair.crest ? pair.start : crestAfter(k, omega, phase, t, left + wavelength * 0.25);
-		if (crest < right) {
-			const spp = studsPerPixelAt(spanInput, crest);
-			axes.segment(x, 0, crest, x, top, crest + top * uprightLean(positionArray, forwardArray, crest));
-			if (shownHeight !== amplitudeShown) {
-				amplitudeShown = shownHeight;
-				words.amplitude.set(`A = ${shownHeight} studs`);
-			}
-			words.amplitude.place(x, top / 2, crest + 6 * spp, spp, opacity, 'left');
-			shownLabels.push(words.amplitude.text());
-		} else {
+		const first = pair.start;
+		const second = first + wavelength;
+		const spp = studsPerPixelAt(spanInput, (first + second) / 2);
+		const lift = (pair.crest ? 1 : -1) * (top + 10 * spp);
+		axes.segment(x, lift, first, x, lift, second);
+		axes.segment(x, lift - 4 * spp, first, x, lift + 4 * spp, first);
+		axes.segment(x, lift - 4 * spp, second, x, lift + 4 * spp, second);
+		if (shownLength !== lambdaShown) {
+			lambdaShown = shownLength;
+			words.lambda.set(`λ = ${shownLength} studs`);
+		}
+		// Over the bracket either way: above the crests for a crest pair; for a trough pair between
+		// the bracket and the axis, where the curve is at its crest midway, clear of the numbers below.
+		// Under the troughs it may come down into the pills' rows: then it moves left, out of them.
+		const half = (words.lambda.width() / 2) * spp;
+		const centre = (first + second) / 2;
+		const clear = pair.crest ? Infinity : clearOf(x, lift + 12 * spp, centre, 10);
+		words.lambda.place(x, lift + 12 * spp, Math.min(centre, clear - half), spp, opacity);
+		lambdaSide = pair.crest ? 'crest' : 'trough';
+		shownLabels.push(words.lambda.text());
+		return pair;
+	}
+
+	// The height marked at a crest: a line from the axis up to the crest and the "A = ..." word beside it.
+	function markHeight(crest, x, top, shownHeight, opacity, right) {
+		if (crest >= right) {
 			words.amplitude.hide();
+			return;
 		}
-		if (markers === null || markers.wavelength !== shownLength || markers.amplitude !== shownHeight) {
-			markers = { wavelength: shownLength, amplitude: shownHeight };
+		const spp = studsPerPixelAt(spanInput, crest);
+		axes.segment(x, 0, crest, x, top, crest + top * uprightLean(positionArray, forwardArray, crest));
+		if (shownHeight !== amplitudeShown) {
+			amplitudeShown = shownHeight;
+			words.amplitude.set(`A = ${shownHeight} studs`);
 		}
+		words.amplitude.place(x, top / 2, crest + 6 * spp, spp, opacity, 'left');
+		shownLabels.push(words.amplitude.text());
 	}
 
 	// Every visible label's text box on screen (CSS pixels), for the overlap test.
