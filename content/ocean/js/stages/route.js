@@ -1,11 +1,10 @@
-// The dev route (A3; not a twin): `?step=N&progress=P` drives the stage director straight from the
-// URL, with `s.<slider>=<value>` for the step's own sliders, `shot=0` to leave the camera free and
-// `drift=<seconds>` to pin the finale's drifting camera to that point of its circle (a frozen
-// clock never turns it), so every step can be loaded, tested and screenshotted without the story
-// page. A value that does
-// not fit is clamped or dropped with a warning, never handed to the maths; a key given twice takes
-// its first value, with a warning.
-import { STEP_COUNT } from './recipes.js';
+// The dev route (A3; not a twin): `?step=N&progress=P`, or a step id (`?step=into-3d`, C2), drives the
+// stage director straight from the URL, with `s.<slider>=<value>` for the step's own sliders,
+// `shot=0` to leave the camera free and `drift=<seconds>` to pin the finale's drifting camera to that
+// point of its circle (a frozen clock never turns it), so every step can be loaded, tested and
+// screenshotted without the story page. A value that does not fit is clamped or dropped with a
+// warning, never handed to the maths; a key given twice takes its first value, with a warning.
+import { STEP_COUNT, STEP_IDS, stepOf } from './steps.js';
 import { clampSlider } from './sliders.js';
 
 function readNumber(query, name, fallback, min, max, warnings, whole = false) {
@@ -42,7 +41,19 @@ export function parseStageRoute(search) {
 			warnings.push(`${name} is given more than once; using the first, ${name}=${query.get(name)}`);
 		}
 	}
-	const step = readNumber(query, 'step', 1, 1, STEP_COUNT, warnings, true);
+	const raw = query.get('step').trim();
+	let step;
+	if (/^[a-z][a-z0-9-]*$/.test(raw)) {
+		// C2: a step's id (?step=into-3d).
+		if (STEP_IDS.includes(raw)) {
+			step = stepOf(raw);
+		} else {
+			warnings.push(`step=${raw} is not a step; using 1`);
+			step = 1;
+		}
+	} else {
+		step = readNumber(query, 'step', 1, 1, STEP_COUNT, warnings, true);
+	}
 	const progress = readNumber(query, 'progress', 0, 0, 1, warnings);
 	const drift = readNumber(query, 'drift', null, 0, Number.MAX_SAFE_INTEGER, warnings);
 	// No prototype: a key such as s.__proto__ is kept as a name like any other, so the resolver

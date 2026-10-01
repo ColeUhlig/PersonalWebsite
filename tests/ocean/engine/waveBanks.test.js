@@ -188,3 +188,45 @@ test('a teaching tile that is not a finite positive length is refused with a nam
 		expect.truthy(message.includes('tile'), `tile = ${tile}: ${message}`);
 	}
 });
+
+// C2 (spec 10.4): the teaching bank's spread.
+test('withFan(bank, 1) is the bank itself; withFan(bank, 0) lays every wave along +z on the lattice', () => {
+	const full = WaveBanks.teachingBank();
+	expect.equal(WaveBanks.withFan(full, 1), full, 'the identical object at 1');
+	const line = WaveBanks.withFan(full, 0);
+	const unit = (2 * Math.PI) / WaveBanks.TEACHING_TILE;
+	const STRIDE = WaveSampler.STRIDE;
+	for (let wave = 0; wave < full.count; wave++) {
+		const o = wave * STRIDE;
+		expect.equal(line.packed[o + 4], 0, `wave ${wave} dx`);
+		expect.equal(line.packed[o + 5], 1, `wave ${wave} dz`);
+		const n = line.packed[o] / unit;
+		expect.near(n, Math.round(n), 1e-9, `wave ${wave} sits on the lattice`);
+		expect.truthy(Math.round(n) >= 1, `wave ${wave} moves`);
+		expect.equal(line.packed[o + 2], full.packed[o + 2], `wave ${wave} keeps its height`);
+		expect.equal(line.packed[o + 3], full.packed[o + 3], `wave ${wave} keeps its phase`);
+		expect.near(line.packed[o + 1], Math.sqrt(9.81 * line.packed[o]), 1e-9, `wave ${wave} deep-water dispersion`);
+	}
+	// Along one axis: nothing changes along x, and the sum repeats every tile along z.
+	const out = new Float64Array(7);
+	const at = (x, z) => WaveSampler.sample(line.packed, line.count, 3.7, x, z, 0, line.weights, 0, out)[1];
+	expect.near(at(0, 10), at(37, 10), 1e-9, 'no change along x');
+	expect.near(at(5, 10), at(5, 10 + WaveBanks.TEACHING_TILE), 1e-9, 'repeats every tile');
+});
+
+test('withFan between 0 and 1 stays finite, and refuses a spread outside 0..1', () => {
+	const full = WaveBanks.teachingBank();
+	for (const fan of [0.001, 0.25, 0.5, 0.999]) {
+		const bank = WaveBanks.withFan(full, fan);
+		expect.truthy([...bank.packed].every(Number.isFinite), `finite at ${fan}`);
+		for (let wave = 0; wave < bank.count; wave++) {
+			const o = wave * WaveSampler.STRIDE;
+			expect.near(Math.hypot(bank.packed[o + 4], bank.packed[o + 5]), 1, 1e-12, `unit heading at ${fan}`);
+		}
+	}
+	for (const bad of [-0.01, 1.01, Number.NaN]) {
+		let message = '';
+		try { WaveBanks.withFan(full, bad); } catch (error) { message = error.message; }
+		expect.truthy(message.includes('fan'), `refused ${bad}`);
+	}
+});

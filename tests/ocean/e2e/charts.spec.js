@@ -1,7 +1,15 @@
-// The story's three charts (piece C, Task 8): step 7's spectrum, step 8's phase arrows and step 9's
-// FFT timing, drawn live from the ocean's own numbers.
+// The story's three charts (piece C, Task 8): the jonswap step's spectrum, the time step's phase
+// arrows and the fft step's FFT timing, drawn live from the ocean's own numbers.
 import { test, expect } from '@playwright/test';
-import { oceanRunning, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { oceanRunning, scrollToId, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
+
+// The charts' steps by id (piece C2, Task 0): the spectrum is the jonswap step's; the turning phase
+// arrows are the time step's (the random-sea step's still arrows are lane E's); the FFT timing is
+// the fft step's.
+const SPECTRUM = stepOf('jonswap');
+const PHASE = stepOf('time');
+const TIMING = stepOf('fft');
 
 function contrast(a, b) {
 	const lum = (rgb) => {
@@ -26,38 +34,38 @@ function setRange(page, step, id, value) {
 
 // Records every data-state the timing figure takes from now on.
 function recordStates(page) {
-	return page.evaluate(() => {
-		const figure = document.querySelector('#step-9 figure.chart');
+	return page.evaluate((step) => {
+		const figure = document.querySelector(`#step-${step} figure.chart`);
 		window.__chartStates = [];
 		new MutationObserver(() => window.__chartStates.push(figure.dataset.state)).observe(figure, { attributes: true, attributeFilter: ['data-state'] });
-	});
+	}, TIMING);
 }
 const recordedStates = (page) => page.evaluate(() => [...window.__chartStates]);
 
 test.describe.configure({ timeout: 240_000 });
 
-test('step 7 draws the spectrum of the sea on screen, and a stronger wind moves it', async ({ page }) => {
+test('the jonswap step draws the spectrum of the sea on screen, and a stronger wind moves it', async ({ page }) => {
 	const errors = watchErrors(page);
 	await oceanRunning(page);
-	await scrollToStep(page, 7, 0.2);
-	const line = page.locator('#step-7 figure.chart path.chart-line');
+	await scrollToId(page, 'jonswap', 0.2);
+	const line = page.locator(`#step-${SPECTRUM} figure.chart path.chart-line`);
 	await expect(line).toHaveCount(1);
 	const before = await line.getAttribute('d');
 	expect(before.split('L').length).toBeGreaterThan(100);
-	await expect(page.locator('#step-7 figure.chart .chart-band')).toHaveCount(3);
-	const peakBefore = await page.locator('#step-7 figure.chart .chart-peak-label').textContent();
-	await setRange(page, 7, 'wind', 22);
+	await expect(page.locator(`#step-${SPECTRUM} figure.chart .chart-band`)).toHaveCount(3);
+	const peakBefore = await page.locator(`#step-${SPECTRUM} figure.chart .chart-peak-label`).textContent();
+	await setRange(page, SPECTRUM, 'wind', 22);
 	await expect.poll(() => line.getAttribute('d')).not.toBe(before);
-	await expect(page.locator('#step-7 figure.chart .chart-peak-label')).not.toHaveText(peakBefore);
+	await expect(page.locator(`#step-${SPECTRUM} figure.chart .chart-peak-label`)).not.toHaveText(peakBefore);
 	expect(errors).toEqual([]);
 });
 
 // The axis is fixed (its top is the stormiest sea the sliders allow), so the calmest and the
 // stormiest seas both keep their peak inside the plot.
-test("step 7's axis holds the peak of every sea the sliders allow, labelled as computed live", async ({ page }) => {
+test("the jonswap step's axis holds the peak of every sea the sliders allow, labelled as computed live", async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 7, 0.2);
-	const figure = page.locator('#step-7 figure.chart');
+	await scrollToId(page, 'jonswap', 0.2);
+	const figure = page.locator(`#step-${SPECTRUM} figure.chart`);
 	await expect(figure).toContainText('Computed from the sea on screen');
 	const peakY = () => figure.evaluate((f) => {
 		const plot = f.querySelector('.chart-plot');
@@ -65,8 +73,8 @@ test("step 7's axis holds the peak of every sea the sliders allow, labelled as c
 		return { top: Number(plot.getAttribute('y')), bottom: Number(plot.getAttribute('y')) + Number(plot.getAttribute('height')), peak: Math.min(...ys) };
 	});
 	for (const [wind, fetch] of [[3, 5000], [25, 200000]]) {
-		await setRange(page, 7, 'wind', wind);
-		await setRange(page, 7, 'fetch', fetch === 5000 ? 0 : 1000);
+		await setRange(page, SPECTRUM, 'wind', wind);
+		await setRange(page, SPECTRUM, 'fetch', fetch === 5000 ? 0 : 1000);
 		await page.waitForTimeout(100);
 		const { top, bottom, peak } = await peakY();
 		expect(peak, `wind ${wind}, fetch ${fetch}: the peak is inside the plot`).toBeGreaterThan(top);
@@ -75,10 +83,10 @@ test("step 7's axis holds the peak of every sea the sliders allow, labelled as c
 	await expect(figure.locator('.chart-peak-label')).toContainText('studs');
 });
 
-test("step 8's arrows are eight real waves, turning while the ocean runs", async ({ page }) => {
+test("the time step's arrows are eight real waves, turning while the ocean runs", async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 8, 0.2);
-	const arrows = page.locator('#step-8 figure.chart line.chart-arrow');
+	await scrollToId(page, 'time', 0.2);
+	const arrows = page.locator(`#step-${PHASE} figure.chart line.chart-arrow`);
 	await expect(arrows).toHaveCount(8);
 	const first = async () => arrows.first().evaluate((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`);
 	const before = await first();
@@ -88,10 +96,10 @@ test("step 8's arrows are eight real waves, turning while the ocean runs", async
 
 // The arrows are labelled with their wavelengths in studs (the ocean's unit), and nothing
 // gives an arrow a speed of its own: they turn at the speeds the dispersion gives them.
-test("step 8's arrows are labelled in studs and computed from the sea on screen", async ({ page }) => {
+test("the time step's arrows are labelled in studs and computed from the sea on screen", async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 8, 0.2);
-	const figure = page.locator('#step-8 figure.chart');
+	await scrollToId(page, 'time', 0.2);
+	const figure = page.locator(`#step-${PHASE} figure.chart`);
 	await expect(figure.locator('line.chart-arrow')).toHaveCount(8);
 	const labels = await figure.locator('text.chart-wavelength').allTextContents();
 	expect(labels).toHaveLength(8);
@@ -102,12 +110,12 @@ test("step 8's arrows are labelled in studs and computed from the sea on screen"
 	expect(words).toContain('the dispersion gives them');
 });
 
-test("step 8's arrows stop being redrawn while the chart is off screen", async ({ page }) => {
+test("the time step's arrows stop being redrawn while the chart is off screen", async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 8, 0.2);
-	const arrow = page.locator('#step-8 figure.chart line.chart-arrow').first();
+	await scrollToId(page, 'time', 0.2);
+	const arrow = page.locator(`#step-${PHASE} figure.chart line.chart-arrow`).first();
 	await expect(arrow).toHaveCount(1);
-	await scrollToStep(page, 12, 0.5);
+	await scrollToId(page, 'glow', 0.5);
 	await waitFrames(page, 5);
 	const parked = await arrow.getAttribute('x2');
 	await waitFrames(page, 20);
@@ -118,41 +126,41 @@ test("step 8's arrows stop being redrawn while the chart is off screen", async (
 // fastest n = 32 timing (the one on show) predicts a single naive n = 64 run over 40 ms (16 times
 // the n = 32 one), and then 64 must be switched off with its note rather than run.
 async function mayTime64(page) {
-	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	const option = page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`);
 	if (await option.isEnabled()) return true;
-	const naive = await page.evaluate(() => Number.parseFloat(document.querySelector('#step-9 figure.chart svg .chart-bar-naive + text').textContent));
+	const naive = await page.evaluate((step) => Number.parseFloat(document.querySelector(`#step-${step} figure.chart svg .chart-bar-naive + text`).textContent), TIMING);
 	expect(naive * 16, `64 × 64 switched off after a ${naive} ms n = 32 timing`).toBeGreaterThan(40);
-	await expect(page.locator('#step-9 [data-slider="transformN"]')).toContainText('too slow to time here without freezing the page');
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"]`)).toContainText('too slow to time here without freezing the page');
 	console.log(`[charts.spec] this machine is loaded: n = 32 took ${naive} ms, so 64 × 64 is switched off`);
 	return false;
 }
 
-test('step 9 times both ways in the visitor browser, again for a new grid size', async ({ page }) => {
+test('the fft step times both ways in the visitor browser, again for a new grid size', async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 	await expect(figure).toContainText(/Measured in your browser just now|disturbed by other work on this device/);
 	await expect(figure).toContainText('32 × 32');
 	const widths = await figure.evaluate((f) => [f.querySelector('.chart-bar-naive').getAttribute('width'), f.querySelector('.chart-bar-fft').getAttribute('width')].map(Number));
 	expect(widths[0]).toBeGreaterThan(widths[1]);
 	const next = (await mayTime64(page)) ? 64 : 16;
-	await page.locator(`#step-9 [data-slider="transformN"] button[data-option="${next}"]`).click();
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="${next}"]`).click();
 	await expect(figure).toContainText(`${next} × ${next}`, { timeout: 60_000 });
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 });
 
 // The A3 T6 ruling: a rounded speedup ("about N×") no larger than the operation ratio allows, or,
 // when the timing was disturbed twice, the operation ratio instead.
-test('step 9 prints a rounded, believable speedup or says the timing was disturbed', async ({ page }) => {
+test('the fft step prints a rounded, believable speedup or says the timing was disturbed', async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 	const sizes = (await mayTime64(page)) ? [8, 64] : [8, 16];
 	for (const n of sizes) {
 		await recordStates(page);
-		await page.locator(`#step-9 [data-slider="transformN"] button[data-option="${n}"]`).click();
+		await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="${n}"]`).click();
 		await expect(figure).toContainText(`${n} × ${n}`, { timeout: 60_000 });
 		await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 		expect(await recordedStates(page)).toContain('measuring');
@@ -173,13 +181,13 @@ test('step 9 prints a rounded, believable speedup or says the timing was disturb
 
 // ocean:slider fires only when a value really changed, and the chart re-times only for a new grid
 // size: pressing the option already chosen times nothing.
-test('step 9 does not re-time for the grid size it already shows', async ({ page }) => {
+test('the fft step does not re-time for the grid size it already shows', async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 	await recordStates(page);
-	await page.locator('#step-9 [data-slider="transformN"] button[data-option="32"]').click();
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="32"]`).click();
 	await waitFrames(page, 10);
 	expect(await recordedStates(page)).toEqual([]);
 });
@@ -187,18 +195,18 @@ test('step 9 does not re-time for the grid size it already shows', async ({ page
 // Fix round 1: with the peak near 3 rad/s neither side of the peak line had room for its label,
 // and the chart threw (nine reachable settings; wind 7 m/s at 5,000 m is one).
 // At 1366 px the label fits beside the line; at 390 px it is the case the old code threw on.
-for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) test(`step 7 labels the peak at wind 7 m/s and 5,000 m without an error (${viewport.width} px)`, async ({ page }) => {
+for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) test(`the jonswap step labels the peak at wind 7 m/s and 5,000 m without an error (${viewport.width} px)`, async ({ page }) => {
 	const errors = watchErrors(page);
 	await page.setViewportSize(viewport);
 	await oceanRunning(page);
-	await scrollToStep(page, 7, 0.2);
-	await setRange(page, 7, 'wind', 7);
-	await setRange(page, 7, 'fetch', 0);
-	const figure = page.locator('#step-7 figure.chart');
+	await scrollToId(page, 'jonswap', 0.2);
+	await setRange(page, SPECTRUM, 'wind', 7);
+	await setRange(page, SPECTRUM, 'fetch', 0);
+	const figure = page.locator(`#step-${SPECTRUM} figure.chart`);
 	await expect(figure.locator('.chart-peak-label')).toContainText('studs long');
 	await expect.poll(() => figure.locator('svg').getAttribute('aria-label')).toContain('peak');
-	await expect(page.locator('#step-7 [data-slider="fetch"] output')).toContainText('5,000');
-	expect(await textOutsideViewBox(page, 7)).toEqual([]);
+	await expect(page.locator(`#step-${SPECTRUM} [data-slider="fetch"] output`)).toContainText('5,000');
+	expect(await textOutsideViewBox(page, SPECTRUM)).toEqual([]);
 	expect(errors).toEqual([]);
 });
 
@@ -235,45 +243,45 @@ for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 
 		await oceanRunning(page);
 		// Speedups far past the operation ratio, every time.
 		await stubTransforms(page, { 2: { naive: 1, fft: 1 }, 32: { naive: 50, fft: 0.001 } });
-		await scrollToStep(page, 9, 0.2);
-		const figure = page.locator('#step-9 figure.chart');
+		await scrollToId(page, 'fft', 0.2);
+		const figure = page.locator(`#step-${TIMING} figure.chart`);
 		await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 		await expect(figure).toContainText('disturbed by other work on this device');
 		await expect(figure).toContainText('1.0 M steps');
 		expect(await page.evaluate(() => window.__chartCalls.filter((n) => n === 32).length)).toBe(2);
-		expect(await textOutsideViewBox(page, 9)).toEqual([]);
+		expect(await textOutsideViewBox(page, TIMING)).toEqual([]);
 		// A disturbed timing judges nothing: 64 × 64 stays on offer, with no "too slow" note.
-		await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]')).toBeEnabled();
-		await expect(page.locator('#step-9 [data-slider="transformN"]')).not.toContainText('too slow');
+		await expect(page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`)).toBeEnabled();
+		await expect(page.locator(`#step-${TIMING} [data-slider="transformN"]`)).not.toContainText('too slow');
 	});
 }
 
 // Fix round 1: on a slow device the n = 64 naive sum (one run, 16 times n = 32's) blocks the page
 // for over 100 ms, so the 64 option is switched off, with a note, instead of run.
-test('step 9 switches off 64 × 64 where the n = 32 timing says it would freeze the page', async ({ page }) => {
+test('the fft step switches off 64 × 64 where the n = 32 timing says it would freeze the page', async ({ page }) => {
 	await oceanRunning(page);
 	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 16: { naive: 0.46, fft: 0.0125 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	const option = page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`);
 	await expect(option).toBeDisabled();
-	await expect(page.locator('#step-9 [data-slider="transformN"]')).toContainText('too slow to time here without freezing the page');
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"]`)).toContainText('too slow to time here without freezing the page');
 	// A refresh of the controls (another option chosen) keeps it off.
-	await page.locator('#step-9 [data-slider="transformN"] button[data-option="16"]').click({ force: true });
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="16"]`).click({ force: true });
 	await expect(option).toBeDisabled();
 	expect(await page.evaluate(() => window.__chartCalls)).not.toContain(64);
 });
 
-test('step 9 checks a device with n = 32 before timing 64 × 64 chosen first', async ({ page }) => {
+test('the fft step checks a device with n = 32 before timing 64 × 64 chosen first', async ({ page }) => {
 	await oceanRunning(page);
 	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
-	await page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]').click({ force: true });
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`).click({ force: true });
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
 	await expect(figure).toContainText('32 × 32');
-	const back = page.locator('#step-9 [data-slider="transformN"] button[data-option="32"]');
+	const back = page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="32"]`);
 	await expect(back).toHaveAttribute('aria-checked', 'true');
 	// The pressed option was switched off under the visitor's focus; focus moves with the choice.
 	await expect(back).toBeFocused();
@@ -286,20 +294,20 @@ test('step 9 checks a device with n = 32 before timing 64 × 64 chosen first', a
 test('a load-spiked first timing switches 64 × 64 off only until a faster timing', async ({ page }) => {
 	await oceanRunning(page);
 	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 16: { naive: 0.11, fft: 0.003 }, 32: { naive: 3.0, fft: 0.02 }, 64: { naive: 28, fft: 0.066 } });
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	const option = page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`);
 	await expect(option).toBeDisabled();
 	// Before switching 64 off it took a second reading: one spike alone never decides.
 	expect(await page.evaluate(() => window.__chartCalls.filter((n) => n === 32).length)).toBe(2);
 	await page.evaluate(() => {
 		window.__stubTimes[32] = { naive: 1.8, fft: 0.015 };
 	});
-	await page.locator('#step-9 [data-slider="transformN"] button[data-option="16"]').click();
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="16"]`).click();
 	await expect(figure).toContainText('16 × 16 grid', { timeout: 60_000 });
 	await expect(option).toBeEnabled();
-	await expect(page.locator('#step-9 [data-slider="transformN"]')).not.toContainText('too slow');
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"]`)).not.toContainText('too slow');
 	await option.click();
 	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
 });
@@ -312,10 +320,10 @@ test('a spike that the second reading does not repeat never switches 64 × 64 of
 		let calls = 0;
 		Object.defineProperty(stub, 32, { get: () => (calls++ === 0 ? { naive: 3.0, fft: 0.02 } : { naive: 1.8, fft: 0.015 }) });
 	});
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-	await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]')).toBeEnabled();
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`)).toBeEnabled();
 	await expect(figure).toContainText('1.80 ms');
 });
 
@@ -324,22 +332,22 @@ test('a spike that the second reading does not repeat never switches 64 × 64 of
 test('a disturbed judging timing leaves 64 × 64 to the normal timing', async ({ page }) => {
 	await oceanRunning(page);
 	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 50, fft: 0.001 }, 64: { naive: 28, fft: 0.066 } });
-	await page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]').click({ force: true });
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`).click({ force: true });
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
 	await expect(figure).toHaveAttribute('data-state', 'done');
-	await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]')).toBeEnabled();
-	await expect(page.locator('#step-9 [data-slider="transformN"]')).not.toContainText('too slow');
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`)).toBeEnabled();
+	await expect(page.locator(`#step-${TIMING} [data-slider="transformN"]`)).not.toContainText('too slow');
 });
 
 test('a fast device still times 64 × 64', async ({ page }) => {
 	await oceanRunning(page);
 	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 1.85, fft: 0.015 }, 64: { naive: 28, fft: 0.066 } });
-	await scrollToStep(page, 9, 0.2);
-	const figure = page.locator('#step-9 figure.chart');
+	await scrollToId(page, 'fft', 0.2);
+	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	const option = page.locator(`#step-${TIMING} [data-slider="transformN"] button[data-option="64"]`);
 	await expect(option).toBeEnabled();
 	await option.click();
 	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
@@ -349,7 +357,7 @@ test('a fast device still times 64 × 64', async ({ page }) => {
 test('the charts read at 12 px on a phone', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await oceanRunning(page);
-	for (const step of [7, 8, 9]) {
+	for (const step of [SPECTRUM, PHASE, TIMING]) {
 		await scrollToStep(page, step, 0.2);
 		const sizes = await page.evaluate((n) => {
 			const svg = document.querySelector(`#step-${n} figure.chart svg`);
@@ -366,13 +374,13 @@ for (const scheme of ['dark', 'light']) {
 	test(`the charts read when the system prefers ${scheme} (the page is always dark)`, async ({ page }) => {
 		await page.emulateMedia({ colorScheme: scheme });
 		await oceanRunning(page);
-		await scrollToStep(page, 7, 0.2);
-		await expect(page.locator('#step-7 figure.chart path.chart-line')).toHaveCount(1);
-		const colours = await page.evaluate(() => ({
-			bg: getComputedStyle(document.querySelector('#step-7 figure.chart')).backgroundColor,
-			line: getComputedStyle(document.querySelector('#step-7 figure.chart .chart-line')).stroke,
-			text: getComputedStyle(document.querySelector('#step-7 figure.chart .chart-text')).fill,
-		}));
+		await scrollToId(page, 'jonswap', 0.2);
+		await expect(page.locator(`#step-${SPECTRUM} figure.chart path.chart-line`)).toHaveCount(1);
+		const colours = await page.evaluate((step) => ({
+			bg: getComputedStyle(document.querySelector(`#step-${step} figure.chart`)).backgroundColor,
+			line: getComputedStyle(document.querySelector(`#step-${step} figure.chart .chart-line`)).stroke,
+			text: getComputedStyle(document.querySelector(`#step-${step} figure.chart .chart-text`)).fill,
+		}), SPECTRUM);
 		expect(contrast(rgb(colours.line), rgb(colours.bg))).toBeGreaterThanOrEqual(3);
 		expect(contrast(rgb(colours.text), rgb(colours.bg))).toBeGreaterThanOrEqual(4.5);
 	});

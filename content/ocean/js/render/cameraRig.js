@@ -14,7 +14,7 @@ export const SHOTS = Object.freeze({
 
 // Piece C: how far the visitor may orbit from the target in the story, in studs, which keeps the
 // sky dome, the fog and the horizon in the range they were tuned for. The farthest story shot,
-// step 10's high view, stands about 398 studs from its target (page/orbitLimits.js).
+// the layers step's high view, stands about 398 studs from its target (page/orbitLimits.js).
 export { STORY_MAX_DISTANCE };
 
 export function createCameraRig(camera, dom, config) {
@@ -31,6 +31,10 @@ export function createCameraRig(camera, dom, config) {
 	const placed = [0, 0, 0];
 	// True while applyShot moves the camera, so its 'change' is not read as the visitor's.
 	let applying = false;
+	// C2: whether the story gives the visitor an orbit at all (not on a touch-first screen), and
+	// whether the flat graph holds it now (holdOrbit).
+	let storyOrbit = true;
+	let orbitHeld = false;
 	return {
 		update: () => controls.update(),
 		focus(out) {
@@ -100,11 +104,21 @@ export function createCameraRig(camera, dom, config) {
 			controls.enablePan = false;
 			controls.maxDistance = STORY_MAX_DISTANCE;
 			if (coarsePointer) {
+				storyOrbit = false;
 				controls.enabled = false;
 			}
 			if (coarsePointer || anyCoarsePointer) {
 				dom.style.touchAction = 'pan-y';
 			}
+		},
+		// C2: while the flat graph shows, the visitor's orbit is held (the story calls this every
+		// frame; only a change does anything). A touch-first screen never had the orbit.
+		holdOrbit(held) {
+			if (held === orbitHeld) {
+				return;
+			}
+			orbitHeld = held;
+			controls.enabled = storyOrbit && !held;
 		},
 		// Piece C: whether the visitor may orbit at all (limitForStory turns it off on touch-first
 		// screens).

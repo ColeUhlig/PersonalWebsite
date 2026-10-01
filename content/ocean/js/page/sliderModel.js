@@ -2,13 +2,14 @@
 // <input type=range> gets (fetch runs on a log scale over LOG_STEPS positions, so each decade of
 // fetch gets the same length of track), the value text beside it, and the term colour that
 // matches the slider to its symbol in "The math" (style.css .t-* classes). A slider whose step's
-// math has no symbol for it (step 4's Shading switches the lighting off, it is not a term) maps to
-// null and gets no swatch. tests/ocean/page/sliderModel.test.js checks every class against the
+// math has no symbol for it (the Wireframe switch shows the triangles, it is not a term in any
+// formula) maps to null and gets no swatch. tests/ocean/page/sliderModel.test.js checks every class against the
 // step's formula in index.html.
 export const LOG_STEPS = 1000;
 
 export const TERM_BY_SLIDER = Object.freeze({
-	wireframe: 't-grid',
+	// C2: the wireframe switch is not a term in any formula.
+	wireframe: null,
 	amplitude: 't-amp',
 	wavelength: 't-len',
 	speed: 't-speed',
@@ -27,6 +28,14 @@ export const TERM_BY_SLIDER = Object.freeze({
 	fade: 't-fade',
 	sunHeight: 't-sun',
 	glow: 't-glow',
+	// C2 (spec 10.3): the new steps' sliders.
+	fan: 't-dir',
+	spacing: 't-h',
+	specular: 't-spec',
+	fresnel: 't-fresnel',
+	note1: 't-note',
+	note2: 't-note',
+	note3: 't-note',
 });
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);

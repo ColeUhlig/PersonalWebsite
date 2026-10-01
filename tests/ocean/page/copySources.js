@@ -13,7 +13,6 @@
 // stale source cannot linger here.
 const FACTS = 'site:tests/ocean/page/facts.test.js';
 const SPEC = 'site:docs/superpowers/specs/2026-09-27-ocean-showcase-design.md';
-const RECIPES = 'site:content/ocean/js/stages/recipes.js';
 const RUNTIME = 'site:content/ocean/js/proof/runtime.js';
 const B_PLAN = 'site:docs/superpowers/plans/2026-09-30-ocean-b-luau-panel.md';
 const BENCH = 'roblox:docs/research/bench.md';
@@ -45,11 +44,8 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'one wave cascade, 64 × 64 cells at seed 7', source: FACTS, quote: 'the proof panel runs one wave cascade, 64 × 64 cells at seed 7' },
 	{ phrase: 'γ = 3.3 sharpens the peak', source: 'site:content/ocean/js/core/spectrum.js', quote: 'gamma: 3.3' },
 	{ phrase: 'This live ocean needs WebGL 2', source: 'site:content/ocean/js/webgl.js', quote: 'asks for WebGL 2 only' },
-	// The teaching recipes (recipes.js's header; facts.test.js checks the counts in its data).
-	{ phrase: 'Steps 4 and 5 sum the 16 tallest', source: RECIPES, quote: 'Steps 4 and 5 sum the 16 tallest bank waves' },
-	{ phrase: 'In step 6 the camera flies up', source: RECIPES, quote: 'The two high shots (steps 6 and 10) look steeply down' },
-	{ phrase: 'where the small waves would blur, so the page keeps only the 4 tallest', source: RECIPES, quote: "Step 6 also sums only the bank's 4 tallest waves" },
-	{ phrase: 'The page keeps only the 4 tallest (the small ones would blur at this distance)', source: RECIPES, quote: "Step 6 also sums only the bank's 4 tallest waves" },
+	// The teaching recipes (facts.test.js checks the count in the recipe's data).
+	{ phrase: 'The page keeps only the 4 tallest (the small ones would blur at this distance)', source: FACTS, quote: "the tiling step sums the bank's 4 tallest waves" },
 	// The proof panel's runtime (proofPanel.js fills its note from runtime.js; copy.test.js checks it).
 	{ phrase: 'a fork of Luau 0.711', source: RUNTIME, quote: "LUAU_RELEASE = '0.711'" },
 	{ phrase: 'packaged as luau-web 1.4.0', source: RUNTIME, quote: "LUAU_WEB_VERSION = '1.4.0'" },

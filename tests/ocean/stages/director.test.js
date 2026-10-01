@@ -8,6 +8,17 @@ import * as Ocean from '../../../content/ocean/js/engine/ocean.js';
 import { probeSurface } from '../../../content/ocean/js/engine/surfaceProbe.js';
 import { createDirector } from '../../../content/ocean/js/stages/director.js';
 import { STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+
+// Steps by id (piece C2, Task 0).
+const SINE = stepOf('sine');
+const SUM = stepOf('sum-of-sines');
+const UNLIT = stepOf('unlit');
+const GERSTNER = stepOf('gerstner');
+const FOURIER = stepOf('fourier');
+const JONSWAP = stepOf('jonswap');
+const RANDOM = stepOf('random-sea');
+const LAYERS = stepOf('layers');
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const SUN = [-0.9526530504226685, 0.2821884751319885, 0.11323313415050507];
@@ -36,9 +47,9 @@ function build(query = '?tier=Low', options) {
 
 const finite = (ocean) => ocean.surface.patches.every((p) => p.positions.every(Number.isFinite) && p.normals.every(Number.isFinite));
 
-test('step 2 puts one sine wave on the surface: along z only, nothing sideways', async () => {
+test('the sine step puts one sine wave on the surface: along z only, nothing sideways', async () => {
 	const { ocean, director, advance } = build();
-	director.setStep(2);
+	director.setStep(SINE);
 	await advance(3);
 	const probe = probeSurface(ocean.surface);
 	expect.equal(probe.xSpread, 0, 'no change along x');
@@ -60,20 +71,20 @@ test('every step configures without error and draws a finite surface', async () 
 
 test('a slider value is clamped, kept per step, and survives a visit elsewhere', async () => {
 	const { ocean, director, advance } = build();
-	director.setStep(2);
+	director.setStep(SINE);
 	expect.equal(director.setSlider('amplitude', 9), 4, 'clamped to the slider');
-	director.setStep(3);
+	director.setStep(SUM);
 	await advance(2);
-	director.setStep(2);
+	director.setStep(SINE);
 	await advance(2);
 	expect.equal(director.sliders().find((s) => s.id === 'amplitude').value, 4, 'kept');
 	expect.truthy(probeSurface(ocean.surface).maxAbsY > 3, 'and drawn');
-	expect.equal(director.state().values[2].amplitude, 4, 'in the state');
+	expect.equal(director.state().values[SINE].amplitude, 4, 'in the state');
 });
 
 test('setSlider refuses an id the step does not have and a value of the wrong kind (Review Focus 3)', () => {
 	const { director } = build();
-	director.setStep(1);
+	director.setStep(UNLIT);
 	const attempt = (fn) => {
 		try {
 			fn();
@@ -82,16 +93,16 @@ test('setSlider refuses an id the step does not have and a value of the wrong ki
 			return error instanceof RangeError ? error.message : `not a RangeError: ${error}`;
 		}
 	};
-	expect.truthy(attempt(() => director.setSlider('wind', 12)).includes('wind'), 'not a slider of step 1');
+	expect.truthy(attempt(() => director.setSlider('wind', 12)).includes('wind'), 'not a slider of the unlit step');
 	expect.truthy(attempt(() => director.setSlider('wireframe', 'yes')).includes('wireframe'), 'not a boolean');
 	expect.truthy(attempt(() => director.press('wireframe')).includes('counter'), 'press needs a counter');
-	expect.truthy(attempt(() => director.setStep(14)).includes('step'), 'step 14');
+	expect.truthy(attempt(() => director.setStep(STEP_COUNT + 1)).includes('step'), 'one past the last step');
 	expect.truthy(attempt(() => director.setStep(3, Number.NaN)).includes('progress'), 'a NaN progress');
 });
 
-test('press on step 8 draws a new random sea', async () => {
+test('press on the random-sea step draws a new random sea', async () => {
 	const { ocean, director, advance } = build();
-	director.setStep(8);
+	director.setStep(RANDOM);
 	await advance(2);
 	expect.equal(director.press('seed'), 8, 'seed 7 becomes 8');
 	await advance(1);
@@ -107,33 +118,33 @@ test('the engine is configured only when something changed', async () => {
 			Ocean.configureStage(ocean, settings);
 		},
 	});
-	director.setStep(5);
+	director.setStep(GERSTNER);
 	await advance(5);
 	expect.equal(calls, 1, 'once for the step');
 	director.setSlider('chop', 0.2);
 	await advance(3);
 	expect.equal(calls, 2, 'once for the slider');
-	director.setStep(5, 0.4);
+	director.setStep(GERSTNER, 0.4);
 	await advance(3);
 	expect.equal(calls, 3, 'once for the progress');
-	director.setStep(5, 0.4);
+	director.setStep(GERSTNER, 0.4);
 	await advance(2);
 	expect.equal(calls, 3, 'the same step and progress again: nothing');
 });
 
 test('frame() returns the look, the shot and the charts of the blended recipe', () => {
 	const { director } = build();
-	director.setStep(5, 0.5);
+	director.setStep(GERSTNER, 0.5);
 	const out = director.frame();
 	expect.equal(out.shot.position.join(','), '-20,157,35', 'halfway between the crest [-40, 14, -20] and the look-down [0, 300, 90]');
-	expect.equal(out.look.material, 'sea', 'the sea look');
-	expect.equal(out.recipe.from, 5, 'from');
+	expect.equal(out.look.material, 'terms', 'the terms look');
+	expect.equal(out.recipe.from, GERSTNER, 'from');
 	expect.equal(out.charts, out.recipe.charts, 'charts');
 });
 
 test('on Medium the third layer toggle is unavailable (Review Focus 5)', () => {
 	const { ocean, director } = build('?tier=Medium');
-	director.setStep(10);
+	director.setStep(LAYERS);
 	const available = director.sliders().map((s) => `${s.id}:${s.available}`).join(',');
 	expect.equal(available, 'layer1:true,layer2:true,layer3:false', 'two layers to toggle');
 	const out = director.frame();
@@ -143,28 +154,28 @@ test('on Medium the third layer toggle is unavailable (Review Focus 5)', () => {
 
 test('on Low only the first layer toggle is available, on High all three', () => {
 	const low = build('?tier=Low').director;
-	low.setStep(10);
+	low.setStep(LAYERS);
 	expect.equal(low.sliders().map((s) => `${s.id}:${s.available}`).join(','), 'layer1:true,layer2:false,layer3:false', 'one layer on Low');
-	low.setStep(3);
-	expect.equal(low.slidersFor(10).map((s) => s.available).join(','), 'true,false,false', 'the same read from another step');
-	expect.equal(low.state().step, 3, 'without moving the story');
+	low.setStep(SUM);
+	expect.equal(low.slidersFor(LAYERS).map((s) => s.available).join(','), 'true,false,false', 'the same read from another step');
+	expect.equal(low.state().step, SUM, 'without moving the story');
 	const high = build('?tier=High').director;
-	high.setStep(10);
+	high.setStep(LAYERS);
 	expect.equal(high.sliders().map((s) => s.available).join(','), 'true,true,true', 'three on High');
 });
 
-test('progress jittering across 0.5 between steps 6 and 7 flips the parts cleanly and keeps the FFT warm (Review Focus 2)', async () => {
+test('progress jittering across 0.5 between the fourier and jonswap steps flips the parts cleanly and keeps the FFT warm (Review Focus 2)', async () => {
 	const { ocean, director, advance } = build('?tier=High');
 	await advance(30, (i) => {
-		director.setStep(6, i % 2 === 0 ? 0.49 : 0.51);
+		director.setStep(FOURIER, i % 2 === 0 ? 0.49 : 0.51);
 	});
 	expect.truthy(finite(ocean), 'finite throughout');
 	expect.equal(ocean.parts.cascades, true, 'the cascades kept running both sides of halfway');
 	expect.equal(ocean.parts.painter, true, 'the painter too');
 	expect.truthy(ocean.store.current[0].filled, 'layer 1 has fields, ready to show');
-	director.setStep(7);
+	director.setStep(JONSWAP);
 	await advance(2);
-	expect.equal(Ocean.status(ocean).source, 'fft', 'step 7 shows the FFT');
+	expect.equal(Ocean.status(ocean).source, 'fft', 'the jonswap step shows the FFT');
 	expect.equal(Ocean.status(ocean).layers.join(','), 'true,false,false', 'one layer');
 });
 
@@ -182,41 +193,41 @@ function counted(query = '?tier=Low', extra = {}) {
 
 test('reading other steps, by accessor or by a save/flip/restore round trip, never reconfigures', async () => {
 	const { director, advance, count } = counted();
-	director.setStep(7, 0.3);
+	director.setStep(JONSWAP, 0.3);
 	await advance(2);
 	const before = count.calls;
 	await advance(10, () => {
 		const saved = director.state();
-		director.setStep(8, 0);
+		director.setStep(RANDOM, 0);
 		director.sliders();
 		director.setStep(saved.step, saved.progress);
 	});
 	expect.equal(count.calls, before, 'ten round trips over ten frames: no configure');
 	await advance(3, () => {
-		director.slidersFor(8);
-		director.valueOf(2, 'amplitude');
+		director.slidersFor(RANDOM);
+		director.valueOf(SINE, 'amplitude');
 	});
 	expect.equal(count.calls, before, 'the accessors: no configure either');
-	expect.equal(director.state().step, 7, 'still on step 7');
+	expect.equal(director.state().step, JONSWAP, 'still on the jonswap step');
 	expect.equal(director.state().progress, 0.3, 'at the same progress');
 });
 
 test('slidersFor and valueOf read any step without moving the story', () => {
 	const { director } = build();
-	director.setStep(2);
+	director.setStep(SINE);
 	director.setSlider('amplitude', 3);
-	director.setStep(8);
-	expect.equal(director.valueOf(2, 'amplitude'), 3, 'a stored value');
-	expect.equal(director.valueOf(2, 'wavelength'), 40, 'a default');
-	const two = director.slidersFor(2);
-	expect.equal(two.map((s) => s.id).join(','), 'amplitude,wavelength,speed', 'step 2 sliders');
+	director.setStep(RANDOM);
+	expect.equal(director.valueOf(SINE, 'amplitude'), 3, 'a stored value');
+	expect.equal(director.valueOf(SINE, 'wavelength'), 40, 'a default');
+	const two = director.slidersFor(SINE);
+	expect.equal(two.map((s) => s.id).join(','), 'amplitude,wavelength', 'the sine step sliders');
 	expect.equal(two[0].value, 3, 'with values');
 	expect.truthy(Object.isFrozen(two) && Object.isFrozen(two[0]), 'frozen');
-	expect.equal(director.state().step, 8, 'the story stays on step 8');
-	expect.equal(director.sliders()[0].id, 'seed', 'and sliders() is still step 8');
+	expect.equal(director.state().step, RANDOM, 'the story stays on the random-sea step');
+	expect.equal(director.sliders()[0].id, 'seed', 'and sliders() is still that step');
 	let message = '';
 	try {
-		director.valueOf(2, 'wind');
+		director.valueOf(SINE, 'wind');
 	} catch (error) {
 		message = error.message;
 	}
@@ -225,21 +236,21 @@ test('slidersFor and valueOf read any step without moving the story', () => {
 
 test('a slider set to the value it already has, or a press at the cap, does not reconfigure', async () => {
 	const { director, advance, count } = counted();
-	director.setStep(5);
+	director.setStep(GERSTNER);
 	await advance(2);
 	const before = count.calls;
 	expect.equal(director.setSlider('chop', 1.3), 1.3, 'the default');
 	expect.equal(director.setSlider('chop', 1.304), 1.3, 'snaps back to the default');
 	await advance(2);
 	expect.equal(count.calls, before, 'no configure for the default');
-	expect.equal(director.state().values[5], undefined, 'and nothing stored');
+	expect.equal(director.state().values[GERSTNER], undefined, 'and nothing stored');
 	director.setSlider('chop', 0.2);
 	await advance(1);
 	expect.equal(count.calls, before + 1, 'a real change configures once');
 	director.setSlider('chop', 0.2);
 	await advance(2);
 	expect.equal(count.calls, before + 1, 'the same value again: nothing');
-	director.setStep(8);
+	director.setStep(RANDOM);
 	await advance(1);
 	director.setSlider('seed', 9999);
 	await advance(1);
@@ -251,10 +262,10 @@ test('a slider set to the value it already has, or a press at the cap, does not 
 
 test('on the last step progress means nothing, so it is kept as 0 and does not reconfigure', async () => {
 	const { director, advance, count } = counted();
-	director.setStep(13);
+	director.setStep(STEP_COUNT);
 	await advance(2);
 	const before = count.calls;
-	director.setStep(13, 0.7);
+	director.setStep(STEP_COUNT, 0.7);
 	expect.equal(director.state().progress, 0, 'progress kept as 0');
 	await advance(2);
 	expect.equal(count.calls, before, 'no configure');
@@ -268,7 +279,7 @@ test('a configure that throws rethrows once, goes back to the last good values, 
 			Ocean.configureStage(ocean, settings);
 		},
 	});
-	director.setStep(2);
+	director.setStep(SINE);
 	await advance(1);
 	const shown = director.frame();
 	boom = true;
@@ -284,15 +295,15 @@ test('a configure that throws rethrows once, goes back to the last good values, 
 	}
 	expect.equal(throws, 1, 'thrown once, not every frame');
 	expect.equal(last, shown, 'the frame keeps what it showed');
-	expect.equal(director.valueOf(2, 'amplitude'), 2.5, 'the value went back');
-	expect.equal(director.state().values[2], undefined, 'nothing kept');
+	expect.equal(director.valueOf(SINE, 'amplitude'), 2.5, 'the value went back');
+	expect.equal(director.state().values[SINE], undefined, 'nothing kept');
 	boom = false;
-	director.setStep(2, 0.5);
+	director.setStep(SINE, 0.5);
 	const moved = director.frame();
 	expect.equal(moved.recipe.progress, 0.5, 'a later change configures again');
 	expect.truthy(moved.shot !== shown.shot, 'and the camera moves on');
 	expect.equal(director.setSlider('amplitude', 2), 2, 'the slider works again');
-	director.setStep(2);
+	director.setStep(SINE);
 	expect.equal(director.frame().recipe.engine.sine.amplitude, 2, 'and is shown');
 	await advance(2);
 });
@@ -307,21 +318,21 @@ test('a configure refused later keeps a value set on another step while the cach
 			Ocean.configureStage(ocean, settings);
 		},
 	});
-	director.setStep(3);
+	director.setStep(SUM);
 	await advance(1);
-	director.setStep(7);
+	director.setStep(JONSWAP);
 	director.setSlider('wind', 20);
-	director.setStep(3); // back before any frame: the cache serves step 3's frame unchanged
+	director.setStep(SUM); // back before any frame: the cache serves the sum step's frame unchanged
 	director.frame();
 	boom = true;
-	director.setSlider('waveCount', 12);
+	director.setSlider('waveCount', 6);
 	try {
 		director.frame();
 	} catch {
 		// refused, and rolled back
 	}
-	expect.equal(director.valueOf(3, 'waveCount'), 8, "step 3's refused value went back");
-	expect.equal(director.valueOf(7, 'wind'), 20, "step 7's value, taken earlier, is kept");
+	expect.equal(director.valueOf(SUM, 'waveCount'), 3, "the sum step's refused value went back");
+	expect.equal(director.valueOf(JONSWAP, 'wind'), 20, "the jonswap step's value, taken earlier, is kept");
 });
 
 test('a slider value the engine would refuse throws at the call site, names the slider, and stores nothing', () => {
@@ -338,7 +349,7 @@ test('a slider value the engine would refuse throws at the call site, names the 
 			return settings;
 		},
 	});
-	director.setStep(2);
+	director.setStep(SINE);
 	director.frame();
 	let error = null;
 	try {
@@ -348,17 +359,17 @@ test('a slider value the engine would refuse throws at the call site, names the 
 	}
 	expect.truthy(error instanceof RangeError, 'a RangeError');
 	expect.truthy(error.message.includes('slider amplitude') && error.message.includes('too tall'), error.message);
-	expect.equal(director.valueOf(2, 'amplitude'), 2.5, 'nothing stored');
+	expect.equal(director.valueOf(SINE, 'amplitude'), 2.5, 'nothing stored');
 	director.frame();
 	expect.equal(calls, 1, 'and nothing configured');
 });
 
 test('state() is frozen all the way to the values', () => {
 	const { director } = build();
-	director.setStep(2);
+	director.setStep(SINE);
 	director.setSlider('amplitude', 2);
 	const s = director.state();
 	expect.truthy(Object.isFrozen(s), 'the state');
 	expect.truthy(Object.isFrozen(s.values), 'its values');
-	expect.truthy(Object.isFrozen(s.values[2]), 'each step');
+	expect.truthy(Object.isFrozen(s.values[SINE]), 'each step');
 });

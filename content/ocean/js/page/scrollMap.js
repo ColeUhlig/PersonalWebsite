@@ -3,9 +3,11 @@
 // stage smooths before handing it to A3's director. A position that would move more than one step
 // in one go is taken at once rather than eased, so a fling never sweeps the engine through every
 // recipe in between.
+import { STEP_COUNT } from '../stages/steps.js';
+
 export const NARROW_QUERY = '(max-width: 899.98px)';
-// The recipes' STEP_COUNT (stages/recipes.js); scrollMap.test.js checks they agree.
-export const LAST_STEP = 13;
+// The story's last step (stages/steps.js); scrollMap.test.js checks it is STEP_COUNT.
+export const LAST_STEP = STEP_COUNT;
 export const SMOOTH_SECONDS = 0.25;
 // Cole's ruling: a step holds its own recipe (shot and sea) until this far through its section,
 // while its panel is read, and eases into the next step's over the rest.

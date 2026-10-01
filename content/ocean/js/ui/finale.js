@@ -1,4 +1,4 @@
-// The finale's working parts (piece C; spec 3, step 13, and the 2026-09-30 decisions): the live
+// The finale's working parts (piece C; spec 3, the finale, and the 2026-09-30 decisions): the live
 // numbers, measured in this browser at most twice a second while they are on screen, saying they
 // are measuring until the first report so the block is never empty; the footage, shown only when
 // media/footage.json lists a valid clip (engine/showcase.js decides what is valid), fetched from a

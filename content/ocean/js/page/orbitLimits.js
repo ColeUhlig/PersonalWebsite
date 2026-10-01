@@ -1,9 +1,9 @@
 // How far the visitor may orbit the camera in the story (piece C; browser-free). A3 placed every
-// shot so the frame never shows the world's edge, and kept the two high shots (steps 6 and 10)
+// shot so the frame never shows the world's edge, and kept the two high shots (`tiling` and `layers`)
 // looking steeply down so their frames stay on moving water, short of the flat horizon plane
 // (stages/recipes.js, "the two high shots"). Free orbit must not undo that. So:
 //   * the reach (the camera's distance from what it looks at) is capped a little past the farthest
-//     shot, step 10's, about 398 studs out. With zoom off in the story the visitor cannot change the
+//     shot, the layers step's, about 398 studs out. With zoom off in the story the visitor cannot change the
 //     distance anyway; the cap is the backstop;
 //   * the tilt (the polar angle, 0 looking straight down) is limited per shot. A camera no higher
 //     than HORIZON_HEIGHT above the ground may tilt freely: the page's own low shots look at the
@@ -16,10 +16,10 @@
 // range) never moves it.
 import * as SurfaceSampler from '../core/surfaceSampler.js';
 
-// Studs from the target. The farthest shot, step 10's, is about 398 studs out.
+// Studs from the target. The farthest shot, the layers step's, is about 398 studs out.
 export const STORY_MAX_DISTANCE = 450;
 // Studs above the ground. The highest a page shot sees the horizon from is A2's high view and
-// step 9's shot, 110 studs up.
+// the FFT step's shot, 110 studs up.
 export const HORIZON_HEIGHT = 120;
 // Studs above the ground: the deck shot's height, the view matched against Studio, which clears
 // the finished sea's crests.

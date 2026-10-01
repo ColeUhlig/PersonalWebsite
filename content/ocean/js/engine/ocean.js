@@ -300,6 +300,8 @@ export function create(config, { spawnCascade, spawnPainter, now, probeMs, devic
 		waves: null, // the teaching bank drawn while the source is 'waves'
 		sine: null, // the last sine (waveBanks.nextSine), kept for its phase
 		teachingBank: null, // the teaching bank, built the first time a step asks for it
+		fanned: null, // the teaching bank at the spread last asked for (stageControl.js, C2)
+		fannedAt: null,
 		layerOn: preset.sizes.map(() => true), // which cascades evolve and blend
 		sampled: preset.sizes.map(() => true), // which cascades the rings sample
 		shown: preset.sizes.map(() => true), // which layers the stage asks to show

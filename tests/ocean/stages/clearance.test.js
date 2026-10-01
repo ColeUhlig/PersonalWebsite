@@ -9,8 +9,11 @@
 // The sea is read at the finest ring's vertices (2 studs apart at High) within SEARCH of the camera,
 // each moved by its own displacement; the water "under the lens" is the tallest displaced vertex
 // that lands within LENS of the camera's x and z. The drift's time and the sea's are unrelated (the
-// drift starts when the visitor reaches step 13), so every point of the circle is tried at every
+// drift starts when the visitor reaches the finale), so every point of the circle is tried at every
 // time. It fails if the water ever comes within MARGIN of the camera's height.
+// C2: a lens on the dry side of the flat graph's band (stages/graph.js) is clear by construction and
+// skipped; the FFT lenses are read against the hero sea's waves at their own frame's chop (steps 16
+// to 19 run without chop).
 import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as Cascade from '../../../content/ocean/js/core/cascade.js';
@@ -20,9 +23,10 @@ import * as WaveField from '../../../content/ocean/js/core/waveField.js';
 import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import { LOOP_PERIOD, readConfig, SEED, SWELL_SPECS } from '../../../content/ocean/js/engine/config.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
-import { blendRecipes } from '../../../content/ocean/js/stages/blend.js';
 import { DRIFT_PERIOD, shotPosition } from '../../../content/ocean/js/stages/drift.js';
-import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { everyFrame, lensIsDry } from './frames.js';
 
 const PROGRESS_STEP = 0.1;
 const TIME_STEP = 0.5; // seconds between samples of the sea
@@ -43,9 +47,8 @@ function heroSea() {
 }
 
 // The hero sea's height and sideways move at (x, z) into out[0..2], at the time the cascades were
-// last synthesised (the swells at `t`).
-function heroSample(field, t, x, z, out) {
-	const chop = field.config.chop;
+// last synthesised (the swells at `t`), pushed sideways by the frame's own `chop`.
+function heroSample(field, t, x, z, out, chop) {
 	let height = 0;
 	let dx = 0;
 	let dz = 0;
@@ -87,21 +90,6 @@ function underLens(cx, cz, sample, out, widest) {
 	return tallest;
 }
 
-// Every recipe's own shot and every neighbour blend.
-function everyFrame() {
-	const frames = [];
-	for (let n = 1; n <= STEP_COUNT; n++) {
-		frames.push({ name: `step ${n}`, blended: blendRecipes(recipeFor(n), recipeFor(n), 0) });
-		if (n < STEP_COUNT) {
-			for (let i = 1; i * PROGRESS_STEP < 1 - 1e-9; i++) {
-				const p = i * PROGRESS_STEP;
-				frames.push({ name: `${n}->${n + 1} at ${p.toFixed(1)}`, blended: blendRecipes(recipeFor(n), recipeFor(n + 1), p) });
-			}
-		}
-	}
-	return frames;
-}
-
 // The camera positions a frame puts the lens at: one for a still shot, the whole circle for a drift.
 function lensPositions({ name, blended }) {
 	const shot = blended.shot;
@@ -139,13 +127,16 @@ function tallestAnywhere(field) {
 }
 
 test('the FFT frames keep their lens clear of the hero sea over the whole loop and the drift circle', () => {
-	const frames = everyFrame().filter(({ blended }) => blended.engine.source === 'fft');
-	const lenses = frames.flatMap((frame) => lensPositions(frame).map((lens) => ({ ...lens, engine: frame.blended.engine, water: -Infinity, t: 0, read: false })));
+	const frames = everyFrame(PROGRESS_STEP).filter(({ blended }) => blended.engine.source === 'fft');
+	const lenses = frames.flatMap((frame) => lensPositions(frame)
+		.filter((lens) => !lensIsDry(frame.blended, lens.position, LENS))
+		.map((lens) => ({ ...lens, engine: frame.blended.engine, water: -Infinity, t: 0, read: false })));
 	const field = heroSea();
 	const out = new Float64Array(3);
 	const widest = { value: 0 };
 	let t = 0;
-	const sample = (x, z, into) => heroSample(field, t, x, z, into);
+	let chop = 0;
+	const sample = (x, z, into) => heroSample(field, t, x, z, into, chop);
 	for (let i = 0; i * TIME_STEP < LOOP_PERIOD; i++) {
 		t = i * TIME_STEP;
 		for (let index = 1; index <= PRESET.sizes.length; index++) {
@@ -157,6 +148,7 @@ test('the FFT frames keep their lens clear of the hero sea over the whole loop a
 				continue;
 			}
 			lens.read = true;
+			chop = lens.engine.chop;
 			const water = underLens(lens.position[0], lens.position[2], sample, out, widest);
 			if (water > lens.water) {
 				lens.water = water;
@@ -164,11 +156,11 @@ test('the FFT frames keep their lens clear of the hero sea over the whole loop a
 			}
 		}
 	}
-	// A frame read closely must be running the hero sea (steps 7 to 13 differ only in their layers);
-	// the blend out of step 6 still lerps the chop, but its camera is far above any crest.
+	// A frame read closely must be running the hero sea's waves (the FFT steps differ only in their
+	// layers and their chop, which each lens is read at).
 	for (const lens of lenses.filter((l) => l.read)) {
 		const e = lens.engine;
-		const hero = e.sea.windSpeed === config.params.windSpeed && e.sea.fetch === config.params.fetch && e.seed === SEED && e.chop === config.chop;
+		const hero = e.sea.windSpeed === config.params.windSpeed && e.sea.fetch === config.params.fetch && e.seed === SEED;
 		expect.truthy(hero, `${lens.name} is read against the hero sea but runs another`);
 	}
 	expect.truthy(lenses.some((l) => l.read), 'some lens is low enough to be read closely');
@@ -178,7 +170,7 @@ test('the FFT frames keep their lens clear of the hero sea over the whole loop a
 
 test('the Gerstner frames keep their lens clear of their own waves at every chop the sliders reach', () => {
 	const bank = WaveBanks.teachingBank();
-	const frames = everyFrame().filter(({ blended }) => blended.engine.source !== 'fft');
+	const frames = everyFrame(PROGRESS_STEP).filter(({ blended }) => blended.engine.source !== 'fft');
 	const out = new Float64Array(7);
 	const widest = { value: 0 };
 	const worst = [];
@@ -186,10 +178,10 @@ test('the Gerstner frames keep their lens clear of their own waves at every chop
 		const e = blended.engine;
 		// The tallest each source can stand: the sine's height slider at its top, every summed wave's
 		// amplitude added up. A lens clear of that is clear at any time.
-		const heightSlider = recipeFor(2).sliders.find((s) => s.id === 'amplitude');
-		const waves = e.source === 'sine' ? WaveBanks.nextSine(null, { ...e.sine, amplitude: heightSlider.max }, 0).bank : WaveBanks.withCount(bank, e.bank.count);
+		const heightSlider = recipeFor(stepOf('sine')).sliders.find((s) => s.id === 'amplitude');
+		const waves = e.source === 'sine' ? WaveBanks.nextSine(null, { ...e.sine, amplitude: heightSlider.max }, 0).bank : WaveBanks.withCount(WaveBanks.withFan(bank, e.bank.fan), e.bank.count);
 		const position = blended.shot.position;
-		if (WaveBanks.bankExtent(waves) <= position[1] - MARGIN) {
+		if (lensIsDry(blended, position, LENS) || WaveBanks.bankExtent(waves) <= position[1] - MARGIN) {
 			continue;
 		}
 		const chopSlider = recipeFor(blended.step).sliders.find((s) => s.id === 'chop');

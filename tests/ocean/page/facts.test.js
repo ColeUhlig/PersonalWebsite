@@ -10,6 +10,7 @@ import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import * as WaveField from '../../../content/ocean/js/core/waveField.js';
 import * as Spectrum from '../../../content/ocean/js/core/spectrum.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { cascadeOptions } from '../../../content/ocean/js/proof/proofConfig.js';
 
 // The structural numbers the page's copy quotes, measured from the code the ocean runs. The copy
@@ -64,12 +65,19 @@ test('the teaching bank sits on the 256-stud tile', () => {
 	expect.equal(WaveBanks.TEACHING_TILE, 256, 'tile');
 });
 
-// copySources.js quotes recipes.js's header for these counts; this keeps that comment honest.
-test('steps 4 and 5 sum the 16 tallest bank waves, and step 6, the fly-up, the 4 tallest', () => {
-	for (const step of [4, 5]) expect.equal(recipeFor(step).engine.bank.count, 16, `step ${step} bank count`);
-	expect.equal(recipeFor(6).engine.bank.count, 4, 'step 6 bank count');
-	for (const step of [4, 5, 6]) expect.equal(recipeFor(step).engine.source, 'bank', `step ${step} source`);
-	expect.truthy(recipeFor(6).shot.position[1] > 10 * recipeFor(5).shot.position[1], "step 6's shot flies up");
+// The teaching steps' bank counts, kept from piece C (renamed to step ids, C2 Task 0): the lit
+// deck and the Gerstner step sum the 16 tallest, and the tiling step, the fly-up, the 4 tallest.
+test('the lit teaching steps sum the 16 tallest bank waves, and the tiling step, the fly-up, the 4 tallest', () => {
+	for (const id of ['diffuse', 'gerstner']) expect.equal(recipeFor(stepOf(id)).engine.bank.count, 16, `${id} bank count`);
+	for (const id of ['diffuse', 'gerstner', 'tiling']) expect.equal(recipeFor(stepOf(id)).engine.source, 'bank', `${id} source`);
+	expect.truthy(recipeFor(stepOf('tiling')).shot.position[1] > 10 * recipeFor(stepOf('gerstner')).shot.position[1], "the tiling step's shot flies up");
+});
+
+// copySources.js quotes this test's name for the tiling step's "4 tallest".
+test("the tiling step sums the bank's 4 tallest waves", async () => {
+	const { recipeFor } = await import('../../../content/ocean/js/stages/recipes.js');
+	const { stepOf } = await import('../../../content/ocean/js/stages/steps.js');
+	expect.equal(recipeFor(stepOf('tiling')).engine.bank.count, 4, 'four waves');
 });
 
 // The arrows are built the way the page builds them (devStage.js: createPhaseArrows with the sea,

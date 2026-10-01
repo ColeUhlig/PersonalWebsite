@@ -16,7 +16,8 @@
 //     retune, which the frame loop sends one cascade at a time, on that cascade's own rotation
 //     frame and no closer than RETUNE_GAP_FRAMES to the last (retuneDue), so a slider dragged
 //     every frame costs at most one spectrum rebuild in seven frames, the cascades in turn;
-//   * the patch bounds, which only grow (bounds.js), and whether the vertex normals are written.
+//   * the patch bounds, which only grow (bounds.js), and whether the vertex normals are written;
+//   * the teaching bank's spread (`bank.fan`, C2), rebuilt only when it changes.
 // Settings are checked whole before anything changes, so a refused set leaves the ocean as it was.
 import * as FieldStore from '../core/fieldStore.js';
 import * as Spectrum from '../core/spectrum.js';
@@ -51,7 +52,7 @@ export const SEED_MAX = 2 ** 31 - 1;
 export const DEFAULT_SETTINGS = Object.freeze({
 	source: 'fft',
 	sine: Object.freeze({ amplitude: 1.5, wavelength: 40, speed: 8 }),
-	bank: Object.freeze({ count: 32 }),
+	bank: Object.freeze({ count: 32, fan: 1 }),
 	chop: LOOK.SEA.chop,
 	sea: Object.freeze({ windSpeed: Spectrum.NORMAL.windSpeed, fetch: Spectrum.NORMAL.fetch }),
 	seed: SEED,
@@ -86,6 +87,9 @@ export function normalise(s) {
 	const most = WaveBanks.TEACHING_RECIPE.count;
 	if (!finite(s.bank?.count) || s.bank.count < 0 || s.bank.count > most) {
 		fail('bank.count', `a number in 0 .. ${most}`, s.bank?.count);
+	}
+	if (!finite(s.bank?.fan) || s.bank.fan < 0 || s.bank.fan > 1) {
+		fail('bank.fan', 'a number in 0 .. 1', s.bank?.fan);
 	}
 	if (!finite(s.chop) || s.chop < 0 || s.chop > 2) {
 		fail('chop', 'a number in 0 .. 2', s.chop);
@@ -154,8 +158,14 @@ function applySource(ocean, s, before) {
 		ocean.waves = ocean.sine.bank;
 	} else if (s.source === 'bank') {
 		ocean.teachingBank ??= WaveBanks.teachingBank();
-		if (before?.source !== 'bank' || before.bank.count !== s.bank.count) {
-			ocean.waves = WaveBanks.withCount(ocean.teachingBank, s.bank.count);
+		if (before?.source !== 'bank' || before.bank.count !== s.bank.count || before.bank.fan !== s.bank.fan) {
+			// The spread rebuilds the bank's headings only when it changes (a blend lerps it every
+			// frame between two spreads; at a step's own spread it is built once).
+			if (ocean.fannedAt !== s.bank.fan) {
+				ocean.fanned = WaveBanks.withFan(ocean.teachingBank, s.bank.fan);
+				ocean.fannedAt = s.bank.fan;
+			}
+			ocean.waves = WaveBanks.withCount(ocean.fanned, s.bank.count);
 		}
 	}
 	ocean.source = s.source === 'fft' ? 'fft' : 'waves';

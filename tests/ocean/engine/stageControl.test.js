@@ -103,11 +103,11 @@ test('the flat plane is written once and then skipped every frame', async () => 
 
 test('the teaching bank draws its waves; chop moves the vertices sideways', async () => {
 	const { ocean, advance } = build('?tier=Low');
-	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32 } }));
+	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32, fan: 1 } }));
 	await advance(2);
 	expect.equal(ocean.waves.count, 32, 'all 32 waves');
 	expect.equal(probeSurface(ocean.surface).maxLateral, 0, 'chop 0: no sideways motion');
-	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32 }, chop: 1 }));
+	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32, fan: 1 }, chop: 1 }));
 	await advance(2);
 	expect.truthy(probeSurface(ocean.surface).maxLateral > 0.1, 'chop 1: pointy crests pull the vertices sideways');
 });
@@ -133,7 +133,7 @@ test('anyLayerSampled says whether the rings sample any cascade, as the status d
 	const { ocean, advance } = build();
 	await advance(6);
 	expect.equal(Ocean.anyLayerSampled(ocean), true, 'the finished sea samples its layers');
-	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32 } }));
+	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32, fan: 1 } }));
 	await advance(2);
 	expect.equal(Ocean.anyLayerSampled(ocean), false, 'a bank sea samples none');
 	expect.equal(Ocean.anyLayerSampled(ocean), Ocean.status(ocean).layers.some(Boolean), 'agrees with the status');
@@ -595,4 +595,21 @@ test('a layer rejoining takes its pending retune first, even inside the retune g
 		expect.truthy(firstEvolve > 0 && sequences[c].slice(0, firstEvolve).includes('retune'), `cascade ${c} retuned before its fresh evolve: ${sequences[c].slice(0, 4).join(',')}`);
 	}
 	expect.equal(ocean.sampled.join(','), 'true,true,true', 'both rejoined');
+});
+
+// C2: bank.fan reaches the surface and is checked like every other field.
+test('bank.fan must be a number in 0..1, and a new spread rebuilds the waves the surface draws', async () => {
+	const { ocean } = build();
+	const settings = (fan) => ({ ...StageControl.DEFAULT_SETTINGS, source: 'bank', bank: { count: 4, fan }, layers: [true, false, false] });
+	for (const bad of [-0.5, 2, Number.NaN, undefined]) {
+		let message = '';
+		try { StageControl.configure(ocean, settings(bad)); } catch (error) { message = error.message; }
+		expect.truthy(message.includes('bank.fan'), `refused ${bad}`);
+	}
+	StageControl.configure(ocean, settings(0));
+	const line = ocean.waves;
+	expect.equal(line.packed[4], 0, 'spread 0: the first wave along +z');
+	StageControl.configure(ocean, settings(1));
+	expect.truthy(ocean.waves.packed !== line.packed, 'a new spread, new waves');
+	expect.equal(ocean.waves.packed, ocean.teachingBank.packed, 'spread 1 draws the bank itself');
 });

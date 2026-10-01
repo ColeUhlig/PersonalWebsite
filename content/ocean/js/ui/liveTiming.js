@@ -1,17 +1,18 @@
-// The live timing beside step 3's wave-count slider (piece C, Task 6): how long the engine's
-// Gerstner sampler takes to sum the slider's waves at every point of this tier, measured in the
-// visitor's browser just now (page/bankTiming.js). It runs off the frame: once when the panel's
+// The live timing beside step 6's wave-count slider (`many-waves`; piece C, Task 6): how long the
+// engine's Gerstner sampler takes to sum the slider's waves at every point of this tier, measured in
+// the visitor's browser just now (page/bankTiming.js). It runs off the frame: once when the panel's
 // controls are built and again a moment after the slider stops moving, sliced so no stretch of it
 // holds the thread for long, and a newer measurement drops an older one. It is a live number, so
 // its element is marked data-copy-skip="live" and is empty in the served page. It compares itself
 // with nothing: not with Roblox, not with a frame budget. It becomes a polite live region only once
-// the reading has reached step 3, so the first measurement is not announced while the visitor is
+// the reading has reached its step, so the first measurement is not announced while the visitor is
 // still at the opening.
 import * as WaveBanks from '../engine/waveBanks.js';
 import { recipeFor } from '../stages/recipes.js';
+import { stepOf } from '../stages/steps.js';
 import { latticePoints, measureBankSum } from '../page/bankTiming.js';
 
-export const TIMING_STEP = 3;
+export const TIMING_STEP = stepOf('many-waves');
 export const TIMING_SLIDER = 'waveCount';
 // Live numbers change at most twice a second (the page's performance rule): a measurement starts only
 // once the slider has rested this long.
@@ -30,7 +31,7 @@ export function timingText(count, points, ms) {
  * @param {{ control: HTMLElement, story: { sliders: (step: number) => object[] }, ocean: { layout: object },
  *   watchReading?: (listener: (reading: { phase: string, step: number }) => void) => () => void }} options
  *   the wave-count control's element, the story stage, the running ocean (for its layout), and the
- *   scroll story's onChange (ui/story.js), which tells when step 3 is reached
+ *   scroll story's onChange (ui/story.js), which tells when its step is reached
  */
 export function mountLiveTiming({ control, story, ocean, watchReading = () => () => {} }) {
 	const output = document.createElement('p');

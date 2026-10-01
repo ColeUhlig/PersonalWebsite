@@ -16,6 +16,7 @@
 //     lattice. A sum of waves whose wavevectors sit on a 2 pi / 256 lattice repeats exactly every
 //     256 studs, which is the repetition step 6 shows and the one an FFT patch has too. It rolls
 //     along +z like the sine, so its crests also cross the view in steps 3 to 5.
+//   * the spread (C2): `withFan` lays the bank along one axis for the flat graph, or fans it back out.
 import * as Jonswap from '../core/jonswap.js';
 import * as WaveSampler from '../core/waveSampler.js';
 import { clamp, mod, round } from '../core/luau.js';
@@ -151,6 +152,46 @@ export function withCount(full, count) {
 		weights[wave] = clamp(clamped - wave, 0, 1);
 	}
 	return bank(full.packed, summed, weights);
+}
+
+/**
+ * The bank with its headings spread by `fan` (piece C2; spec 10.4). At 1 it is the bank as built
+ * (the same object). At 0 every wave lies along +z with its wavenumber rounded to the tile's lattice
+ * (n = max(1, round(k / unit))), so the sum varies along z only and repeats every tile exactly: the
+ * flat graph's curve and its frequency spikes. Between, each wavevector moves in a straight line
+ * from (0, n0 unit) to its own lattice point (m unit, n unit). Heights, phases and weights are kept;
+ * omega follows deep-water dispersion for the new k, as teachingBank's does.
+ */
+export function withFan(full, fan, tile = TEACHING_TILE) {
+	if (!(Number.isFinite(fan) && fan >= 0 && fan <= 1)) {
+		fail('wave bank fan', 'a number in 0 .. 1', fan);
+	}
+	if (fan === 1) {
+		return full;
+	}
+	const unit = TAU / tile;
+	const total = full.packed.length / STRIDE;
+	const packed = new Float64Array(full.packed.length);
+	for (let wave = 0; wave < total; wave++) {
+		const o = wave * STRIDE;
+		const k = full.packed[o];
+		const m = round((k * full.packed[o + 4]) / unit);
+		const n = round((k * full.packed[o + 5]) / unit);
+		const along = Math.max(1, round(k / unit));
+		let kx = fan * m * unit;
+		let kz = ((1 - fan) * along + fan * n) * unit;
+		if (kx === 0 && kz === 0) {
+			kz = unit;
+		}
+		const length = Math.hypot(kx, kz);
+		packed[o] = length;
+		packed[o + 1] = Math.sqrt(Jonswap.GRAVITY * length);
+		packed[o + 2] = full.packed[o + 2];
+		packed[o + 3] = full.packed[o + 3];
+		packed[o + 4] = kx / length;
+		packed[o + 5] = kz / length;
+	}
+	return bank(packed, full.count, full.weights);
 }
 
 export function bankExtent(waves) {

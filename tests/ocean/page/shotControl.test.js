@@ -5,6 +5,11 @@ import * as expect from '../expect.js';
 import { createShotControl, DRIFT_PERIOD_SECONDS, MAX_RETURN_SECONDS, resolveShot, RETURN_SECONDS, RETURN_STUDS_PER_SECOND } from '../../../content/ocean/js/page/shotControl.js';
 import { DRIFT_PERIOD, shotPosition } from '../../../content/ocean/js/stages/drift.js';
 import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+
+// The finale and the step before it, by id (piece C2, Task 0); other keys here are any two neighbours.
+const FINALE = stepOf('finale');
+const GLOW = stepOf('glow');
 
 const SHOT = { position: [0, 14, 40], target: [0, 2, -120] };
 const AWAY = { position: [90, 30, 10], target: [0, 2, -120] };
@@ -83,22 +88,22 @@ test("the story's drift is A3's drift, to the last bit", () => {
 // drifted pose to the still shot: it eases there from where the camera is instead.
 test('returnToShot eases from where the camera is, unless the visitor has the camera', () => {
 	const shots = createShotControl();
-	close(shots.frame(12, SHOT, SHOT, 0.016).position, SHOT.position, 'on the shot');
+	close(shots.frame(GLOW, SHOT, SHOT, 0.016).position, SHOT.position, 'on the shot');
 	shots.returnToShot();
 	expect.equal(shots.mode(), 'returning', 'returning');
-	const first = shots.frame(12, AWAY, SHOT, 0);
+	const first = shots.frame(GLOW, AWAY, SHOT, 0);
 	close(first.position, AWAY.position, 'starts where the camera is');
 	let pose = first;
 	for (let t = 0; t < MAX_RETURN_SECONDS + 1; t += 0.05) {
-		pose = shots.frame(12, pose, SHOT, 0.05);
+		pose = shots.frame(GLOW, pose, SHOT, 0.05);
 	}
 	close(pose.position, SHOT.position, 'arrives');
 	expect.equal(shots.mode(), 'shot', 'back on the shot');
 	// A visitor holding the camera on this step keeps it.
-	shots.orbited(12);
+	shots.orbited(GLOW);
 	shots.returnToShot();
 	expect.equal(shots.mode(), 'free', 'still free');
-	expect.equal(shots.frame(12, AWAY, SHOT, 0.016), null, 'left alone');
+	expect.equal(shots.frame(GLOW, AWAY, SHOT, 0.016), null, 'left alone');
 });
 
 // Returning from a long way round (the finale drifted half a turn) takes longer, so no frame's
@@ -110,11 +115,11 @@ test('the return orbits round the target and takes longer the further it has to 
 	const radius = length(sub(shot.position, target));
 	const shots = createShotControl();
 	shots.returnToShot();
-	let pose = shots.frame(13, far, shot, 0);
+	let pose = shots.frame(FINALE, far, shot, 0);
 	let seconds = 0;
 	let largest = 0;
 	while (shots.mode() === 'returning' && seconds < 10) {
-		const next = shots.frame(13, pose, shot, 1 / 60);
+		const next = shots.frame(FINALE, pose, shot, 1 / 60);
 		largest = Math.max(largest, length(sub(next.position, pose.position)));
 		// Spherical: the camera stays its distance from the target all the way round.
 		expect.near(length(sub(next.position, target)), radius, 1e-6, `radius at ${seconds.toFixed(2)} s`);
@@ -152,13 +157,13 @@ test("a target whose heading sweeps past half a turn from the start never flips 
 	shots.returnToShot();
 	// The camera starts at heading 0; the target starts at 150 degrees and sweeps on to 230 while
 	// the ease runs, crossing 180 (from + 180) part-way.
-	let pose = shots.frame(13, at(0), at(150), 0);
+	let pose = shots.frame(FINALE, at(0), at(150), 0);
 	let largest = 0;
 	let elapsed = 0;
 	while (shots.mode() === 'returning' && elapsed < 10) {
 		elapsed += 1 / 60;
 		const heading = 150 + Math.min(1, elapsed / 1.0) * 80;
-		const next = shots.frame(13, pose, at(heading), 1 / 60);
+		const next = shots.frame(FINALE, pose, at(heading), 1 / 60);
 		largest = Math.max(largest, length(sub(next.position, pose.position)));
 		pose = next;
 	}

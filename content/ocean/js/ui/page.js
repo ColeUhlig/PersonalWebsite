@@ -12,6 +12,10 @@ import { mountCharts } from './charts.js';
 import { mountFootage, mountLiveNumbers, mountMotionButton, mountPlayButton, mountRenderToggle, showLiveStarting, showLiveUnavailable } from './finale.js';
 import { mountProofPanelWhenNear } from './proofLazy.js';
 import { mountTilt } from './tilt.js';
+import { mountMathBox } from './mathBox.js';
+import { mountOverlayReadout } from './overlayReadout.js';
+import { mountFrequencyCharts } from './frequencyCharts.js';
+import { mountInsets } from './insets.js';
 // Feature imports end.
 
 export function startPage({ route, reducedMotion, clock }) {
@@ -31,7 +35,7 @@ export function startPage({ route, reducedMotion, clock }) {
 		},
 	});
 	// Task 6: the panels' controls, once the ocean runs in story mode. Each sets its own panel's step;
-	// step 3's wave count also shows a live timing of its sum (ui/liveTiming.js).
+	// the many-waves step's wave count also shows a live timing of its sum (ui/liveTiming.js).
 	features.push({
 		attachOcean(handle) {
 			if (!handle.story) {
@@ -59,7 +63,7 @@ export function startPage({ route, reducedMotion, clock }) {
 	} catch (error) {
 		console.error('[ocean] the math lines could not start', error);
 	}
-	// Task 8: the charts for steps 7 to 9, once the ocean runs in story mode. A chart that changes
+	// Task 8: the charts for steps 16 to 19, once the ocean runs in story mode. A chart that changes
 	// height (its first drawing, a new timing) re-measures the story's panels.
 	features.push({
 		attachOcean(handle) {
@@ -100,6 +104,35 @@ export function startPage({ route, reducedMotion, clock }) {
 		attachOcean(handle) {
 			if (handle.story) {
 				window.__tilt = mountTilt({ button: document.getElementById('tilt'), story: handle.story });
+			}
+		},
+	});
+	// C2 (spec 10.3): the math box, which needs no ocean: it follows the scroll story from the start.
+	try {
+		window.__mathbox = mountMathBox({ root: document.getElementById('mathbox'), watchReading: (listener) => story.onChange(listener), reducedMotion }).hooks;
+	} catch (error) {
+		console.error('[ocean] the math box could not start', error);
+	}
+	// C2 (spec 10.7): step 9's readout, steps 14 and 15's charts and the texture insets, once the
+	// ocean runs in story mode. Each is its own feature, so one that throws never stops the others.
+	features.push({
+		attachOcean(handle) {
+			if (handle.story) {
+				window.__overlayReadout = mountOverlayReadout({ handle, watchReading: (listener) => story.onChange(listener) }).hooks;
+			}
+		},
+	});
+	features.push({
+		attachOcean(handle) {
+			if (handle.story) {
+				window.__frequency = mountFrequencyCharts({ story: handle.story, ocean: handle.ocean, onLayout: () => story.relayout() }).hooks;
+			}
+		},
+	});
+	features.push({
+		attachOcean(handle) {
+			if (handle.story) {
+				window.__insets = mountInsets({ handle, watchReading: (listener) => story.onChange(listener), onLayout: () => story.relayout() }).hooks;
 			}
 		},
 	});

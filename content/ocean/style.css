@@ -28,6 +28,9 @@
 	--warn: #ffb4a8;
 	--panel-width: clamp(300px, 30vw, 440px);
 	--gutter: 16px;
+	/* C2: the math box's pinned bar on a narrow screen (lane A's css/mathbox.css draws it); the story's
+	   lower half starts below it. */
+	--mathbar-height: 44px;
 	/* The pills (the motion and tilt buttons) wrap their text inside this width; on a wide screen the
 	   full-width parts of the page keep clear of a column this wide plus the gutters (.pills). */
 	--pill-width: 11rem;
@@ -253,6 +256,26 @@ footer.site {
 	color: var(--accent);
 }
 
+/* C2: a chapter's first panel names the chapter, in words (the copy check reads digits). */
+.chapter {
+	margin: 0 0 6px;
+	font-size: 0.75rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--ink-dim);
+}
+
+/* C2: a live line under a panel's picture (step 9's readout). */
+.readout {
+	margin: 10px 0 0;
+	font-size: 0.9rem;
+	color: var(--ink-dim);
+}
+
+.readout:empty {
+	display: none;
+}
+
 .panel p {
 	margin: 0 0 12px;
 }
@@ -414,15 +437,15 @@ details.math summary {
 	color: var(--ink-dim);
 }
 
-.t-amp, .t-count, .t-sun, .t-chop, .t-tile, .t-wind, .t-whitecap, .t-seed, .t-n, .t-layer, .t-grid {
+.t-amp, .t-count, .t-sun, .t-chop, .t-tile, .t-wind, .t-whitecap, .t-seed, .t-n, .t-layer, .t-grid, .t-h, .t-note {
 	color: var(--term-a);
 }
 
-.t-len, .t-fetch, .t-fade, .t-glow {
+.t-len, .t-fetch, .t-fade, .t-glow, .t-spec {
 	color: var(--term-b);
 }
 
-.t-speed {
+.t-speed, .t-dir, .t-fresnel {
 	color: var(--term-c);
 }
 
@@ -698,8 +721,8 @@ footer.site a {
 	/* The ocean pinned to the top half, above the story, so the panels scroll beneath it. A jump to
 	   a step (a link, find-in-page, scrollIntoView) lands below the ocean, not behind it. */
 	html {
-		scroll-padding-top: 50vh;
-		scroll-padding-top: 50svh;
+		scroll-padding-top: calc(50vh + var(--mathbar-height));
+		scroll-padding-top: calc(50svh + var(--mathbar-height));
 	}
 
 	#ocean {
@@ -710,8 +733,8 @@ footer.site a {
 	}
 
 	main#story {
-		padding-top: 50vh;
-		padding-top: 50svh;
+		padding-top: calc(50vh + var(--mathbar-height));
+		padding-top: calc(50svh + var(--mathbar-height));
 	}
 
 	.opening {

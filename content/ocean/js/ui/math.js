@@ -1,8 +1,9 @@
 // "The math" lines (piece C; spec 2: "a collapsed 'The math' line with the real equation (KaTeX),
 // terms coloured to match what they control"). The HTML carries each formula as TeX source, which
 // is what shows if KaTeX never arrives. The first time any line is opened, KaTeX's stylesheet and
-// module are fetched from jsDelivr (never before, so a visitor who never opens one downloads
-// none of it) and every line is typeset at once. Nothing is typeset until the stylesheet has
+// module are fetched from jsDelivr and every line is typeset at once. Never at the opening; in C2
+// the always-on math box (ui/mathBox.js, spec 10.3) also fetches them through loadKatex once the
+// story reaches step 1, so from then on they may already be here when a line is opened. Nothing is typeset until the stylesheet has
 // loaded too: KaTeX's markup without it shows every formula twice, worse than the source.
 import { KATEX_CSS, KATEX_OPTIONS, stackEquations } from '../page/mathTrust.js';
 

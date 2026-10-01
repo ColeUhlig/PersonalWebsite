@@ -4,7 +4,8 @@
 // "needs WebGL 2" notice may appear for a feature's fault, and the features after the throwing one
 // must still be told. The same goes for the scroll story's listeners.
 import { test, expect } from '@playwright/test';
-import { scrollToStep, waitFrames } from './helpers/story.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { scrollToId, waitFrames } from './helpers/story.js';
 
 const THROWING = `features.push({
 		attachOcean() { throw new Error('injected feature fault (attach)'); },
@@ -86,10 +87,10 @@ test('a scroll story listener that throws is logged once, and the others still h
 	});
 	await page.goto('/ocean/');
 	await page.waitForFunction(() => window.__page.scrollEngine() === 'gsap', null, { timeout: 30_000 });
-	await scrollToStep(page, 5, 0.5);
-	await page.waitForFunction(() => window.__heard?.step === 5, null, { timeout: 30_000 });
-	await scrollToStep(page, 8, 0.5);
-	await page.waitForFunction(() => window.__heard?.step === 8, null, { timeout: 30_000 });
+	await scrollToId(page, 'directions', 0.5);
+	await page.waitForFunction((step) => window.__heard?.step === step, stepOf('directions'), { timeout: 30_000 });
+	await scrollToId(page, 'normals', 0.5);
+	await page.waitForFunction((step) => window.__heard?.step === step, stepOf('normals'), { timeout: 30_000 });
 	expect(await page.evaluate(() => window.__page.scrollEngine())).toBe('gsap');
 	expect(consoleErrors.filter((text) => text.includes('scroll story listener failed')).length).toBe(1);
 	expect(pageErrors).toEqual([]);
@@ -134,7 +135,7 @@ test('without ResizeObserver the story and the ocean still start, and a resize r
 	expect(await page.evaluate(() => window.__page.scrollEngine())).not.toBe('failed');
 	await page.setViewportSize({ width: 1000, height: 700 });
 	await page.waitForTimeout(500);
-	await scrollToStep(page, 5, 0.4);
+	await scrollToId(page, 'directions', 0.4);
 	await expect.poll(() => page.evaluate(() => window.__page.reading().progress), { timeout: 5_000 }).toBeCloseTo(0.4, 2);
 	expect(pageErrors).toEqual([]);
 });

@@ -10,6 +10,9 @@
 	<script src="/js/canonical-host.js"></script>
 	<link rel="stylesheet" href="/ocean/style.css">
 	<link rel="stylesheet" href="/ocean/proof.css">
+	<link rel="stylesheet" href="/ocean/css/mathbox.css">
+	<link rel="stylesheet" href="/ocean/css/frequency.css">
+	<link rel="stylesheet" href="/ocean/css/insets.css">
 	<script type="importmap">
 	{
 		"imports": {
@@ -27,6 +30,7 @@
 	<canvas id="ocean" aria-label="Live ocean simulation"></canvas>
 	<div id="notice" role="status" hidden></div>
 	<pre id="stats" hidden></pre>
+	<aside id="mathbox" class="mathbox" data-mathbox aria-label="The math so far" hidden></aside>
 	<div class="pills">
 		<button id="tilt" class="tilt" type="button" hidden>Tilt to look around</button>
 		<button id="motion" class="motion" type="button" hidden>Pause the ocean</button>
@@ -42,41 +46,55 @@
 			</div>
 		</section>
 
-		<section class="step" id="step-1" data-step="1" aria-labelledby="step-1-title">
+		<section class="step" id="step-1" data-step="1" data-step-id="sine" aria-labelledby="step-1-title">
 			<article class="panel">
-				<h2 id="step-1-title">A flat white plane</h2>
-				<p>Every game ocean starts out boring: a flat sheet of points joined into triangles. Everything after this is about moving those points.</p>
+				<p class="chapter">Chapter one · One wave</p>
+				<h2 id="step-1-title">One sine wave</h2>
+				<p>Placeholder: one still sine curve on a dark graph; change its height and length.</p>
 				<div class="controls" data-controls="1" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\htmlClass{t-grid}{(x_i,\ z_j)} = (i\,\Delta,\ j\,\Delta), \qquad y_{ij} = 0</code></div>
-					<p class="math-note">A grid of points Δ apart, every height zero. The wireframe shows the triangles between them.</p>
+					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin\!\big(\htmlClass{t-len}{k}\,x - \htmlClass{t-speed}{\omega}\,t\big), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
+					<p class="math-note">A is the height, λ the length from crest to crest, and the wave travels at ω/k.</p>
 				</details>
-				<aside class="card">
-					<h3>Roblox says no</h3>
-					<dl>
-						<dt>Normally</dt>
-						<dd>You hand the graphics card a mesh once, and it takes it from there.</dd>
-						<dt>In Roblox</dt>
-						<dd>There's no way to give the GPU your own moving mesh. The surface has to be built by a script while the game runs, with EditableMesh.</dd>
-						<dt>What I did</dt>
-						<dd>Built the sea out of mesh patches in rings around the camera, plus a horizon that reaches the edge of the world.</dd>
-						<dt>The number</dt>
-						<dd>224 patches in 5 rings on the top tier.</dd>
-					</dl>
-				</aside>
 			</article>
 		</section>
 
-		<section class="step" id="step-2" data-step="2" aria-labelledby="step-2-title">
+		<section class="step" id="step-2" data-step="2" data-step-id="moving-sine" aria-labelledby="step-2-title">
 			<article class="panel">
-				<h2 id="step-2-title">One sine wave</h2>
-				<p>Lift the points with a sine wave and the floor starts to roll. Three knobs make a wave: how tall, how long, how fast.</p>
+				<h2 id="step-2-title">Make it move</h2>
+				<p>Placeholder: the curve slides along; set its speed.</p>
 				<div class="controls" data-controls="2" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin\!\big(\htmlClass{t-len}{k}\,x - \htmlClass{t-speed}{\omega}\,t\big), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
 					<p class="math-note">A is the height, λ the length from crest to crest, and the wave travels at ω/k.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-3" data-step="3" data-step-id="sum-of-sines" aria-labelledby="step-3-title">
+			<article class="panel">
+				<h2 id="step-3-title">Adding waves together</h2>
+				<p>Placeholder: waves laid along one line, each faint, their sum bold.</p>
+				<div class="controls" data-controls="3" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(\mathbf{k}_i\cdot\mathbf{x} - \omega_i t + \varphi_i)</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-4" data-step="4" data-step-id="into-3d" aria-labelledby="step-4-title">
+			<article class="panel">
+				<h2 id="step-4-title">From a line to a surface</h2>
+				<p>Placeholder: the camera swings round and the curve is the edge of a surface.</p>
+				<div class="controls" data-controls="4" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>y(x, z, t) = \sum_{i=1}^{N} A_i \sin(k_i x - \omega_i t + \varphi_i)</code></div>
+					<p class="math-note">Placeholder.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
@@ -94,11 +112,24 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-3" data-step="3" aria-labelledby="step-3-title">
+		<section class="step" id="step-5" data-step="5" data-step-id="directions" aria-labelledby="step-5-title">
 			<article class="panel">
-				<h2 id="step-3-title">Many sine waves</h2>
+				<h2 id="step-5-title">Waves going somewhere</h2>
+				<p>Placeholder: each wave gets its own heading; arrows show them.</p>
+				<div class="controls" data-controls="5" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_i A_i \sin\big(k_i\,(\htmlClass{t-dir}{\hat{\mathbf{d}}_i}\cdot\mathbf{x}) - \omega_i t + \varphi_i\big)</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-6" data-step="6" data-step-id="many-waves" aria-labelledby="step-6-title">
+			<article class="panel">
+				<h2 id="step-6-title">Lots of waves, lots of directions</h2>
 				<p>One wave looks like a machine. Stack up waves with their own directions, lengths and speeds, and it starts to look like water. The waves come from the Roblox ocean I started from, and the slider adds them tallest first.</p>
-				<div class="controls" data-controls="3" data-copy-skip="live"></div>
+				<div class="controls" data-controls="6" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(\mathbf{k}_i\cdot\mathbf{x} - \omega_i t + \varphi_i)</code></div>
@@ -112,7 +143,7 @@
 						<dt>In Roblox</dt>
 						<dd>Each extra wave is another trip of a Luau loop over every point, on the CPU, inside the frame.</dd>
 						<dt>What I did</dt>
-						<dd>Kept the count down. Steps 4 and 5 sum the 16 tallest. In step 6 the camera flies up, where the small waves would blur, so the page keeps only the 4 tallest.</dd>
+						<dd>Kept the count down, and the page keeps fewer still where the small ones wouldn't show.</dd>
 						<dt>The number</dt>
 						<dd>Measured live above, in your browser. In Roblox the same loop runs in Luau, on the CPU, in the same frame as everything else.</dd>
 					</dl>
@@ -120,37 +151,90 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-4" data-step="4" aria-labelledby="step-4-title">
+		<section class="step" id="step-7" data-step="7" data-step-id="unlit" aria-labelledby="step-7-title">
 			<article class="panel">
-				<h2 id="step-4-title">Light</h2>
-				<p>Shape alone reads as grey mush; light makes it water. The sun brightens whatever faces it, and a highlight and a reflection of the sky do the rest.</p>
-				<div class="controls" data-controls="4" data-copy-skip="live"></div>
+				<p class="chapter">Chapter two · Light</p>
+				<h2 id="step-7-title">Shape isn't enough</h2>
+				<p>Placeholder: the wireframe off, a white blob with no form.</p>
+				<div class="controls" data-controls="7" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\mathbf{n} = \frac{(-\partial_x y,\ 1,\ -\partial_z y)}{\lVert(-\partial_x y,\ 1,\ -\partial_z y)\rVert}, \quad L = \max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}}), \quad F = F_0 + (1 - F_0)(1 - \mathbf{n}\cdot\mathbf{v})^5</code></div>
+					<div class="tex" data-copy-skip="math"><code>c = c_{\text{white}}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-8" data-step="8" data-step-id="normals" aria-labelledby="step-8-title">
+			<article class="panel">
+				<h2 id="step-8-title">Which way the surface faces</h2>
+				<p>Placeholder: arrows out of the surface show which way it faces.</p>
+				<div class="controls" data-controls="8" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>\mathbf{n} = \frac{(-\partial_x y,\ 1,\ -\partial_z y)}{\lVert(-\partial_x y,\ 1,\ -\partial_z y)\rVert}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-9" data-step="9" data-step-id="slopes" aria-labelledby="step-9-title">
+			<article class="panel">
+				<h2 id="step-9-title">Getting the slope</h2>
+				<p>Placeholder: two arrows per point, measured from neighbours and taken exactly.</p>
+				<div class="controls" data-controls="9" data-copy-skip="live"></div>
+				<p class="readout" data-readout="slopes" data-copy-skip="live"></p>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>\partial_x y \approx \frac{y(x + \htmlClass{t-h}{h}) - y(x - \htmlClass{t-h}{h})}{2\htmlClass{t-h}{h}}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-10" data-step="10" data-step-id="diffuse" aria-labelledby="step-10-title">
+			<article class="panel">
+				<h2 id="step-10-title">Sunlight</h2>
+				<p>Placeholder: the sea lit by the sun alone.</p>
+				<div class="controls" data-controls="10" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>L = \max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}})</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-11" data-step="11" data-step-id="highlights" aria-labelledby="step-11-title">
+			<article class="panel">
+				<h2 id="step-11-title">Highlights, Fresnel and the sky</h2>
+				<p>Shape alone reads as grey mush; light makes it water. The sun brightens whatever faces it, and a highlight and a reflection of the sky do the rest.</p>
+				<div class="controls" data-controls="11" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>L = \max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}}), \quad \htmlClass{t-spec}{S} = (\mathbf{n}\cdot\mathbf{h})^{p}, \quad \htmlClass{t-fresnel}{F} = F_0 + (1 - F_0)(1 - \mathbf{n}\cdot\mathbf{v})^5</code></div>
 					<p class="math-note">n is the way the surface faces, s points at the sun and v at your eye. L is the plain sunlight, and F (Schlick's Fresnel term) is why water turns into a mirror when you look across it.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
-						<dd>A pixel shader works out the colour of every pixel on screen, every frame.</dd>
+						<dd>Placeholder.</dd>
 						<dt>In Roblox</dt>
-						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh, and ripples come from a normal map. On a mesh built by code, the normal map only worked when I passed it in as the material was created. Setting it afterwards, the obvious way, broke the shine.</dd>
+						<dd>Placeholder.</dd>
 						<dt>What I did</dt>
-						<dd>Paint the colour, glow mask and ripple maps on two worker threads and each frame hand Roblox part of them: one band of the colour map, and the glow mask or the ripple map in turn.</dd>
-						<dt>The number</dt>
-						<dd>Measured before I added foam, handing over one image a frame cost 0.037 ms of script time in Studio.</dd>
+						<dd>Placeholder.</dd>
 					</dl>
 				</aside>
 			</article>
 		</section>
 
-		<section class="step" id="step-5" data-step="5" aria-labelledby="step-5-title">
+		<section class="step" id="step-12" data-step="12" data-step-id="gerstner" aria-labelledby="step-12-title">
 			<article class="panel">
-				<h2 id="step-5-title">Pointy crests</h2>
+				<p class="chapter">Chapter three · Better waves</p>
+				<h2 id="step-12-title">Sharper peaks</h2>
 				<p>Real waves have sharp tops and wide troughs, because the water moves in circles. Slide each point toward the nearest crest as well as up (a Gerstner wave) and the tops pinch into points; push too far and they fold over themselves.</p>
-				<div class="controls" data-controls="5" data-copy-skip="live"></div>
+				<div class="controls" data-controls="12" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>\mathbf{x}' = \mathbf{x} + \htmlClass{t-chop}{c}\sum_i \hat{\mathbf{k}}_i\,A_i\cos\theta_i, \qquad y = \sum_i A_i \sin\theta_i, \qquad \theta_i = \mathbf{k}_i\cdot\mathbf{x} - \omega_i t + \varphi_i</code></div>
@@ -159,37 +243,59 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-6" data-step="6" aria-labelledby="step-6-title">
+		<section class="step" id="step-13" data-step="13" data-step-id="tiling" aria-labelledby="step-13-title">
 			<article class="panel">
-				<h2 id="step-6-title">The repetition problem</h2>
+				<h2 id="step-13-title">The tiling problem</h2>
 				<p>Fly up and the trick falls apart. The page keeps only the 4 tallest (the small ones would blur at this distance), and like every wave on this page they fit a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here.</p>
-				<div class="controls" data-controls="6" data-copy-skip="live"></div>
+				<div class="controls" data-controls="13" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_x) = y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_z) = y(\mathbf{x}) \quad\text{when every}\quad {\mathbf{k}_i = \frac{2\pi}{\htmlClass{t-tile}{L}}\,(m_i,\ n_i)}</code></div>
 					<p class="math-note">Waves whose wavevectors sit on that grid all line up again after L studs. Here L is the 256-stud tile.</p>
 				</details>
-				<aside class="card">
-					<h3>Roblox says no</h3>
-					<dl>
-						<dt>Normally</dt>
-						<dd>Tessellation hardware adds triangles near the camera and drops them far away, on the fly.</dd>
-						<dt>In Roblox</dt>
-						<dd>No tessellation. Whatever detail the sea has must already be in the mesh.</dd>
-						<dt>What I did</dt>
-						<dd>Rings of patches around the camera, each ring twice as coarse as the one inside it, snapping to a fixed world grid as the camera moves so nothing swims.</dd>
-						<dt>The number</dt>
-						<dd>Points 2, 4, 8, 16 and 32 studs apart, ring by ring.</dd>
-					</dl>
-				</aside>
 			</article>
 		</section>
 
-		<section class="step" id="step-7" data-step="7" aria-labelledby="step-7-title">
+		<section class="step" id="step-14" data-step="14" data-step-id="frequency" aria-labelledby="step-14-title">
 			<article class="panel">
-				<h2 id="step-7-title">Real ocean data</h2>
+				<p class="chapter">Chapter four · The real ocean</p>
+				<h2 id="step-14-title">Time and frequency</h2>
+				<p>Placeholder: back to the flat graph, and the same waves as spikes.</p>
+				<div class="controls" data-controls="14" data-copy-skip="live"></div>
+				<figure class="chart" data-chart="frequency">
+					<div class="chart-body" data-copy-skip="live"></div>
+					<figcaption>Placeholder caption.</figcaption>
+				</figure>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>y(x) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(k_i x + \varphi_i)</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-15" data-step="15" data-step-id="fourier" aria-labelledby="step-15-title">
+			<article class="panel">
+				<h2 id="step-15-title">Taking a chord apart</h2>
+				<p>Placeholder: a chord split into its tones and put back together.</p>
+				<div class="controls" data-controls="15" data-copy-skip="live"></div>
+				<figure class="chart" data-chart="fourier">
+					<div class="chart-body" data-copy-skip="live"></div>
+					<figcaption>Placeholder caption.</figcaption>
+				</figure>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>y(t) = \sum_{j} \htmlClass{t-note}{a_j} \sin(2\pi f_j t), \qquad \hat{y} = \mathcal{F}\{y\}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-16" data-step="16" data-step-id="jonswap" aria-labelledby="step-16-title">
+			<article class="panel">
+				<h2 id="step-16-title">Real ocean data</h2>
 				<p>Instead of picking waves by hand, ask oceanographers. The JONSWAP spectrum, fitted to North Sea measurements, gives the energy at each wave frequency for a wind speed and a fetch (how far the wind has blown over open water).</p>
-				<div class="controls" data-controls="7" data-copy-skip="live"></div>
+				<div class="controls" data-controls="16" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="spectrum">
 					<div class="chart-body" data-copy-skip="live"></div>
 					<figcaption>The JONSWAP energy at each wave frequency for the wind and fetch of the sea on screen, and which layer of waves carries it.</figcaption>
@@ -202,12 +308,29 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-8" data-step="8" aria-labelledby="step-8-title">
+		<section class="step" id="step-17" data-step="17" data-step-id="random-sea" aria-labelledby="step-17-title">
 			<article class="panel">
-				<h2 id="step-8-title">A random ocean, moving</h2>
+				<h2 id="step-17-title">A random ocean</h2>
+				<p>Placeholder: each wave's random height and starting angle, as arrows held still.</p>
+				<div class="controls" data-controls="17" data-copy-skip="live"></div>
+				<figure class="chart" data-chart="phase" data-motion="still">
+					<div class="chart-body" data-copy-skip="live"></div>
+					<figcaption>Placeholder caption.</figcaption>
+				</figure>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,\htmlClass{t-seed}{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-18" data-step="18" data-step-id="time" aria-labelledby="step-18-title">
+			<article class="panel">
+				<h2 id="step-18-title">Setting it moving</h2>
 				<p>A real sea isn't a neat set of chosen waves, so each wave from the spectrum gets a random height from a bell curve and a random starting angle. The arrows are real waves from this sea, turning at the speeds the dispersion gives them (short waves turn fastest, though long waves travel fastest), looping every 120 s.</p>
-				<div class="controls" data-controls="8" data-copy-skip="live"></div>
-				<figure class="chart" data-chart="phase">
+				<div class="controls" data-controls="18" data-copy-skip="live"></div>
+				<figure class="chart" data-chart="phase" data-motion="turning">
 					<div class="chart-body" data-copy-skip="live"></div>
 					<figcaption>The tallest waves in the 256-stud layer as arrows, turning at the speeds the dispersion gives them, looping every 120 s.</figcaption>
 				</figure>
@@ -219,11 +342,11 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-9" data-step="9" aria-labelledby="step-9-title">
+		<section class="step" id="step-19" data-step="19" data-step-id="fft" aria-labelledby="step-19-title">
 			<article class="panel">
-				<h2 id="step-9-title">The FFT</h2>
+				<h2 id="step-19-title">The FFT</h2>
 				<p>Adding up thousands of waves at every point, one by one, is hopeless. The fast Fourier transform does the same sum for a whole grid at once by reusing work; set the waves per side and this page times both ways, right now, in your browser.</p>
-				<div class="controls" data-controls="9" data-copy-skip="live"></div>
+				<div class="controls" data-controls="19" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="transforms">
 					<div class="chart-body" data-copy-skip="live"></div>
 					<figcaption>The same sum done wave by wave and by the FFT, timed in your browser.</figcaption>
@@ -249,11 +372,24 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-10" data-step="10" aria-labelledby="step-10-title">
+		<section class="step" id="step-20" data-step="20" data-step-id="choppiness" aria-labelledby="step-20-title">
 			<article class="panel">
-				<h2 id="step-10-title">Three layers of waves</h2>
+				<h2 id="step-20-title">Choppiness</h2>
+				<p>Placeholder: the sea from the side; a second set of transforms pushes points sideways.</p>
+				<div class="controls" data-controls="20" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>\mathbf{x}' = \mathbf{x} + \htmlClass{t-chop}{c}\,\mathbf{D}(\mathbf{x}, t)</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-21" data-step="21" data-step-id="layers" aria-labelledby="step-21-title">
+			<article class="panel">
+				<h2 id="step-21-title">Three layers of waves</h2>
 				<p>One 64 × 64 grid can't hold both the long swells and the small ripples, so there are three, tiling patches of 256, 64 and 16 studs. The two smaller layers pile detail on top of the big one, so the 256-stud pattern gets harder to spot: it's still there if you look for it. That's how 12,288 wave components pass for far more.</p>
-				<div class="controls" data-controls="10" data-copy-skip="live"></div>
+				<div class="controls" data-controls="21" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>h(\mathbf{x}, t) = \sum_{j=1}^{3} h_j(\mathbf{x}, t), \qquad h_j \text{ keeps only } k_j^{\min} \le \lvert\mathbf{k}\rvert &lt; k_j^{\max}, \qquad \htmlClass{t-layer}{L_j} = 256,\ 64,\ 16</code></div>
@@ -275,11 +411,114 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-11" data-step="11" aria-labelledby="step-11-title">
+		<section class="step" id="step-22" data-step="22" data-step-id="fields" aria-labelledby="step-22-title">
 			<article class="panel">
-				<h2 id="step-11-title">Foam</h2>
+				<p class="chapter">Chapter five · Textures</p>
+				<h2 id="step-22-title">The answer is a grid of numbers</h2>
+				<p>Placeholder: the transform's answer as images of numbers.</p>
+				<div class="controls" data-controls="22" data-copy-skip="live"></div>
+				<figure class="inset" data-inset="fields">
+					<div class="inset-body" data-copy-skip="live"></div>
+					<figcaption>Placeholder caption.</figcaption>
+				</figure>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>h_{ij},\ \ \partial_x h_{ij},\ \ D_{x,ij}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+			</article>
+		</section>
+
+		<section class="step" id="step-23" data-step="23" data-step-id="sampling" aria-labelledby="step-23-title">
+			<article class="panel">
+				<h2 id="step-23-title">Reading between the grid points</h2>
+				<p>Placeholder: one point among its four neighbours, and the wrap at the edge.</p>
+				<div class="controls" data-controls="23" data-copy-skip="live"></div>
+				<figure class="inset" data-inset="sampling">
+					<div class="inset-body" data-copy-skip="live"></div>
+					<figcaption>Placeholder caption.</figcaption>
+				</figure>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>h = (1-f_u)(1-f_v)\,h_{00} + f_u(1-f_v)\,h_{10} + (1-f_u)f_v\,h_{01} + f_u f_v\,h_{11}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+				<aside class="card">
+					<h3>Roblox says no</h3>
+					<dl>
+						<dt>Normally</dt>
+						<dd>Placeholder.</dd>
+						<dt>In Roblox</dt>
+						<dd>Placeholder.</dd>
+						<dt>What I did</dt>
+						<dd>Placeholder.</dd>
+					</dl>
+				</aside>
+			</article>
+		</section>
+
+		<section class="step" id="step-24" data-step="24" data-step-id="mesh" aria-labelledby="step-24-title">
+			<article class="panel">
+				<h2 id="step-24-title">The mesh</h2>
+				<p>Placeholder: the rings of the mesh under a wireframe.</p>
+				<div class="controls" data-controls="24" data-copy-skip="live"></div>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>\Delta_r = 2^r, \qquad \mathbf{c}_r = \Delta_r \operatorname{round}(\mathbf{p} / \Delta_r)</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+				<aside class="card">
+					<h3>Roblox says no</h3>
+					<dl>
+						<dt>Normally</dt>
+						<dd>You hand the graphics card a mesh once, and tessellation hardware adds triangles near the camera and drops them far away, on the fly.</dd>
+						<dt>In Roblox</dt>
+						<dd>There's no way to give the GPU your own moving mesh, and no tessellation. The surface has to be built by a script while the game runs, with EditableMesh, and whatever detail it has must already be in the mesh.</dd>
+						<dt>What I did</dt>
+						<dd>Rings of patches around the camera, each ring twice as coarse as the one inside it, snapping to a fixed world grid as the camera moves so nothing swims, plus a horizon that reaches the edge of the world.</dd>
+						<dt>The number</dt>
+						<dd>224 patches in 5 rings on the top tier. Points 2, 4, 8, 16 and 32 studs apart, ring by ring.</dd>
+					</dl>
+				</aside>
+			</article>
+		</section>
+
+		<section class="step" id="step-25" data-step="25" data-step-id="painted" aria-labelledby="step-25-title">
+			<article class="panel">
+				<h2 id="step-25-title">Painted maps</h2>
+				<p>Placeholder: the painted colour, glow and ripple maps, live.</p>
+				<div class="controls" data-controls="25" data-copy-skip="live"></div>
+				<figure class="inset" data-inset="painted">
+					<div class="inset-body" data-copy-skip="live"></div>
+					<figcaption>Placeholder caption.</figcaption>
+				</figure>
+				<details class="math">
+					<summary>The math</summary>
+					<div class="tex" data-copy-skip="math"><code>\text{rgb} = \tfrac{1}{2}(n_x,\ n_z,\ n_y) + \tfrac{1}{2}</code></div>
+					<p class="math-note">Placeholder.</p>
+				</details>
+				<aside class="card">
+					<h3>Roblox says no</h3>
+					<dl>
+						<dt>Normally</dt>
+						<dd>A pixel shader works out the colour of every pixel on screen, every frame.</dd>
+						<dt>In Roblox</dt>
+						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh, and ripples come from a normal map. On a mesh built by code, the normal map only worked when I passed it in as the material was created. Setting it afterwards, the obvious way, broke the shine.</dd>
+						<dt>What I did</dt>
+						<dd>Paint the colour, glow mask and ripple maps on two worker threads and each frame hand Roblox part of them: one band of the colour map, and the glow mask or the ripple map in turn.</dd>
+						<dt>The number</dt>
+						<dd>Measured before I added foam, handing over one image a frame cost 0.037 ms of script time in Studio.</dd>
+					</dl>
+				</aside>
+			</article>
+		</section>
+
+		<section class="step" id="step-26" data-step="26" data-step-id="foam" aria-labelledby="step-26-title">
+			<article class="panel">
+				<p class="chapter">Chapter six · The look</p>
+				<h2 id="step-26-title">Foam</h2>
 				<p>Where a wave gets steep enough to fold, it breaks, and breaking water turns white. The math can spot exactly where the surface squeezes together; each frame adds foam there and old foam fades a little, so it trails off in streaks.</p>
-				<div class="controls" data-controls="11" data-copy-skip="live"></div>
+				<div class="controls" data-controls="26" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>J = (1 + \partial_x D_x)(1 + \partial_z D_z) - \partial_x D_z\,\partial_z D_x, \qquad f \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \beta\,{\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)</code></div>
@@ -301,11 +540,11 @@
 			</article>
 		</section>
 
-		<section class="step" id="step-12" data-step="12" aria-labelledby="step-12-title">
+		<section class="step" id="step-27" data-step="27" data-step-id="glow" aria-labelledby="step-27-title">
 			<article class="panel">
-				<h2 id="step-12-title">Glow</h2>
+				<h2 id="step-27-title">Glow</h2>
 				<p>The last touch is the one Sea of Thieves is famous for: wave tops glow blue-green when the sun shines through them. It's light scattering inside the water, strongest near the crests when you look toward the sun.</p>
-				<div class="controls" data-controls="12" data-copy-skip="live"></div>
+				<div class="controls" data-controls="27" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>E = \htmlClass{t-glow}{\kappa}\,\max(0,\ -\mathbf{s}\cdot\mathbf{v})^{3}\,\big(\tfrac{1}{2} - \tfrac{1}{2}\,\htmlClass{t-sun}{s_y}\big), \qquad \text{glow} = E \cdot M(h)</code></div>
@@ -327,11 +566,11 @@
 			</article>
 		</section>
 
-		<section class="step step-finale" id="step-13" data-step="13" aria-labelledby="step-13-title">
+		<section class="step step-finale" id="step-28" data-step="28" data-step-id="finale" aria-labelledby="step-28-title">
 			<article class="panel">
-				<h2 id="step-13-title">The whole thing</h2>
+				<h2 id="step-28-title">The whole thing</h2>
 				<p>That's all of it at once: layers of FFT waves on the CPU, foam, glow and painted maps, with a script moving every point. On the top tier that's three layers, 232 materials and 18,144 points. Scroll back up any time; every step still works.</p>
-				<div class="controls" data-controls="13" data-copy-skip="live"></div>
+				<div class="controls" data-controls="28" data-copy-skip="live"></div>
 				<div class="render-mode" data-render-mode hidden>
 					<p class="render-mode-label">Rendering</p>
 					<div class="segmented" role="radiogroup" aria-label="Rendering">

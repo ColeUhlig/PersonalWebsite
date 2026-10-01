@@ -1,5 +1,5 @@
 // The spectrum chart's layout (piece C, Task 8 fix round 1): the peak's label has a clear spot at
-// every wind and fetch the step 7 sliders allow, on a phone-wide and a laptop-wide chart. Before the
+// every wind and fetch the jonswap step's sliders allow, on a phone-wide and a laptop-wide chart. Before the
 // fix, nine settings with the peak near 3 rad/s (wind 7 m/s at 5,000 m, for one) had no spot and
 // the chart threw.
 import { test } from 'node:test';
@@ -8,12 +8,13 @@ import * as Charts from '../../../content/ocean/js/engine/charts.js';
 import * as Tier from '../../../content/ocean/js/core/tier.js';
 import { readConfig } from '../../../content/ocean/js/engine/config.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { fromInput, LOG_STEPS } from '../../../content/ocean/js/page/sliderModel.js';
 import { peakLabelSpot, spectrumPlot, spectrumScales } from '../../../content/ocean/js/page/spectrumLayout.js';
 
 const params = readConfig('').params;
 const tier = { sizes: Tier.presets.High.sizes, n: Tier.presets.High.n };
-const slider = (id) => recipeFor(7).sliders.find((s) => s.id === id);
+const slider = (id) => recipeFor(stepOf('jonswap')).sliders.find((s) => s.id === id);
 const wind = slider('wind');
 const fetch = slider('fetch');
 const ceiling = Math.max(...Charts.spectrumCurve({ ...params, windSpeed: wind.max, fetch: fetch.max }, tier).physical);

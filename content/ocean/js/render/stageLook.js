@@ -8,6 +8,8 @@
 // it is asked for and hidden, not removed, when it is switched off; it fades out with view depth
 // (WIRE_FADE) so the far grid does not crowd into moire. The horizon quads get the
 // material but no wireframe: two triangles 2,048 studs wide would draw one huge diagonal.
+// C2: the `terms` material (a stand-in until lane D's) and `setClip`, which clips every surface
+// material to the flat graph's band.
 import * as THREE from 'three';
 import { sunDirection } from '../stages/sun.js';
 
@@ -21,7 +23,7 @@ const WIRE_FADE = Object.freeze([120, 360]);
 // The lit sea's roughness: shiny enough for the sun's highlight and the sky's Fresnel to read on
 // the Gerstner waves of steps 4 to 6.
 const SEA_ROUGHNESS = 0.3;
-const MODES = Object.freeze(['white', 'sea-lit', 'sea-flat', 'painted']);
+const MODES = Object.freeze(['white', 'sea-lit', 'sea-flat', 'painted', 'terms']);
 
 const srgb = (rgb) => new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
 
@@ -33,6 +35,7 @@ function seaColour(config) {
 }
 
 function modeOf(look) {
+	if (look.material === 'terms') return 'terms';
 	const mode = look.material === 'sea' ? (look.shading ? 'sea-lit' : 'sea-flat') : look.material;
 	if (!MODES.includes(mode)) {
 		throw new Error(`stage look: unknown material ${look.material}`);
@@ -47,6 +50,8 @@ export function createStageLook({ view, meshes, materials, config }) {
 		white: new THREE.MeshBasicMaterial({ color: srgb(WHITE), toneMapped: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
 		'sea-lit': new THREE.MeshStandardMaterial({ color: sea, roughness: SEA_ROUGHNESS, metalness: 0 }),
 		'sea-flat': new THREE.MeshBasicMaterial({ color: sea }),
+		// C2: lane D replaces this stand-in with the term-by-term material (render/termsMaterial.js).
+		terms: new THREE.MeshStandardMaterial({ color: sea, roughness: SEA_ROUGHNESS, metalness: 0 }),
 	};
 	const wireMaterial = new THREE.MeshBasicMaterial({ color: srgb(WIRE), wireframe: true, transparent: true, opacity: WIRE_OPACITY, toneMapped: false });
 	wireMaterial.onBeforeCompile = (shader) => {
@@ -64,6 +69,20 @@ export function createStageLook({ view, meshes, materials, config }) {
 	// The sun last handed to the view, compared as numbers so the per-frame check allocates nothing.
 	let sunAzimuth = Number.NaN;
 	let sunElevation = Number.NaN;
+	// C2: the planes every surface material is clipped to (stages/graph.js), or null.
+	let clip = null;
+	const surfaceMaterials = () => [...new Set([...Object.values(shared), wireMaterial, ...materials.patchMaterials, ...materials.quadMaterials])];
+	function setClip(planes) {
+		const next = planes && planes.length > 0 ? planes : null;
+		if (next === clip) {
+			return;
+		}
+		view.renderer.localClippingEnabled = true;
+		for (const material of surfaceMaterials()) {
+			material.clippingPlanes = next;
+		}
+		clip = next;
+	}
 
 	function setMode(next) {
 		if (next === mode) {
@@ -136,8 +155,10 @@ export function createStageLook({ view, meshes, materials, config }) {
 			fog: view.scene.fog.density,
 			sun: [...view.sunDirection],
 			environment: view.environmentState(),
+			clipped: clip !== null,
+			terms: null,
 		};
 	}
 
-	return { apply, probe };
+	return { apply, probe, setClip };
 }

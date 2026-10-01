@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import { readConfig } from '../../../content/ocean/js/engine/config.js';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { idOf } from '../../../content/ocean/js/stages/steps.js';
 import { clampKnobsToSliders, SLIDER_KNOBS } from '../../../content/ocean/js/page/knobs.js';
 
 test('the shipped defaults sit inside every slider: nothing changes', () => {
@@ -29,7 +30,8 @@ test('knobs past a slider are clamped into it, each with a warning naming the kn
 });
 
 test('every knob names a slider its step really has', () => {
+	expect.equal(SLIDER_KNOBS.map((k) => `${k.knob}:${idOf(k.step)}`).join(','), 'wind:jonswap,fetch:jonswap,chop:choppiness,whitecap:foam,foamDecay:foam,scatter:glow', 'the steps by id');
 	for (const { step, slider } of SLIDER_KNOBS) {
-		expect.truthy(recipeFor(step).sliders.some((s) => s.id === slider && s.kind === 'range'), `step ${step} has range slider ${slider}`);
+		expect.truthy(recipeFor(step).sliders.some((s) => s.id === slider && s.kind === 'range'), `step ${step} (${recipeFor(step).id}) has range slider ${slider}`);
 	}
 });

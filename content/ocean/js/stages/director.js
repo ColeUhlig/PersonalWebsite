@@ -44,7 +44,7 @@ export function createDirector(ocean, { configure = Ocean.configureStage, valida
 	const blendIn = (map, n, p) => (n === STEP_COUNT ? blendRecipes(boundIn(map, n), boundIn(map, n), 0) : blendRecipes(boundIn(map, n), boundIn(map, n + 1), p));
 
 	function setStep(n, p = 0) {
-		recipeFor(n); // throws for a step outside 1..13
+		recipeFor(n); // throws for a step outside 1..STEP_COUNT
 		if (typeof p !== 'number' || !Number.isFinite(p)) {
 			throw new RangeError(`progress must be a finite number, got ${p}`);
 		}

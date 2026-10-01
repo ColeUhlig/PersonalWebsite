@@ -4,6 +4,7 @@
 // motion button over the play clock, paused from the start under reduced motion.
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { oceanRunning, waitFrames, watchErrors } from './helpers/story.js';
 
 const INDEX_HTML = readFileSync(new URL('../../../content/ocean/index.html', import.meta.url));
@@ -72,15 +73,16 @@ test('the live numbers change at most twice a second', async ({ page }) => {
 // The finale grows while the visitor reads above it (the live rows filling in, the proof panel
 // mounting, footage appearing), and the story re-measures. ScrollTrigger scrolls the page to the top
 // while it refreshes; a reading taken then would say "opening" and cut the camera mid-ease.
-test('the finale growing while step 12 is read never reads as the opening or cuts the camera', async ({ page }) => {
+test('the finale growing while the glow step is read never reads as the opening or cuts the camera', async ({ page }) => {
+	const GLOW = stepOf('glow');
 	await oceanRunning(page);
 	await page.waitForFunction(() => window.__page.scrollEngine() === 'gsap', null, { timeout: 30_000 });
-	await page.evaluate(() => {
-		const section = document.getElementById('step-12');
+	await page.evaluate((step) => {
+		const section = document.getElementById(`step-${step}`);
 		const rect = section.getBoundingClientRect();
 		window.scrollTo(0, rect.top + window.scrollY + 0.6 * rect.height - window.innerHeight * 0.5);
-	});
-	await page.waitForFunction(() => window.__page.reading().step === 12, null, { timeout: 30_000 });
+	}, GLOW);
+	await page.waitForFunction((step) => window.__page.reading().step === step, GLOW, { timeout: 30_000 });
 	await waitFrames(page, 30);
 	const applied = await page.evaluate(() => window.__ocean.story.applied());
 	await page.evaluate(() => {
@@ -92,8 +94,8 @@ test('the finale growing while step 12 is read never reads as the opening or cut
 	});
 	await waitFrames(page, 30);
 	expect(await page.evaluate(() => window.__phases)).toEqual([]);
-	expect(await page.evaluate(() => window.__page.reading().step)).toBe(12);
-	// The camera was already where step 12 holds it; a cut would have placed it again.
+	expect(await page.evaluate(() => window.__page.reading().step)).toBe(GLOW);
+	// The camera was already where the glow step holds it; a cut would have placed it again.
 	expect(await page.evaluate(() => window.__ocean.story.applied())).toBe(applied);
 });
 
@@ -114,11 +116,11 @@ test('a ScrollTrigger refresh that throws leaves the story reading the scroll', 
 		}
 	});
 	expect(thrown).toBe('a refresh that fails');
-	await page.evaluate(() => {
-		const rect = document.getElementById('step-4').getBoundingClientRect();
+	await page.evaluate((step) => {
+		const rect = document.getElementById(`step-${step}`).getBoundingClientRect();
 		window.scrollTo(0, rect.top + window.scrollY + 0.3 * rect.height - window.innerHeight * 0.5);
-	});
-	await page.waitForFunction(() => window.__page.reading().step === 4, null, { timeout: 10_000 });
+	}, stepOf('into-3d'));
+	await page.waitForFunction((step) => window.__page.reading().step === step, stepOf('into-3d'), { timeout: 10_000 });
 });
 
 test('footage stays hidden while the manifest lists no clips, and the manifest does not 404', async ({ page }) => {

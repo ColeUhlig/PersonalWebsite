@@ -4,9 +4,10 @@
 // orientation is faked with DeviceOrientationEvent; shot numbers come from the recipes themselves.
 import { test, expect } from '@playwright/test';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { STEP_COUNT, stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { CAMERA_FLOOR } from '../../../content/ocean/js/page/orbitLimits.js';
 import { DEAD_BAND_DEG, RETURN_SECONDS, TILT_LIMITS } from '../../../content/ocean/js/page/tiltLook.js';
-import { oceanRunning, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
+import { oceanRunning, scrollToId, waitFrames, watchErrors } from './helpers/story.js';
 
 const DEG = Math.PI / 180;
 const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
@@ -34,9 +35,10 @@ function turnFrom(shot, pose) {
 	return { yaw, pitch: a.polar - b.polar, radius: b.radius - a.radius };
 }
 
-// Waits until the camera stands on step `n`'s own shot (the panel being read holds its shot).
-async function settleOn(page, n) {
-	await scrollToStep(page, n, 0.2);
+// Waits until the camera stands on the step `id`'s own shot (the panel being read holds its shot).
+async function settleOn(page, id) {
+	const n = stepOf(id);
+	await scrollToId(page, id, 0.2);
 	const shot = recipeFor(n).shot;
 	await page.waitForFunction((target) => {
 		const s = window.__ocean.story.state();
@@ -81,7 +83,7 @@ test.describe('on a desktop (a fine pointer)', () => {
 		const errors = watchErrors(page);
 		await page.addInitScript(askingPhone, 'granted');
 		await oceanRunning(page);
-		const shot = await settleOn(page, 3);
+		const shot = await settleOn(page, 'many-waves');
 		expect(await page.locator('#tilt').isHidden()).toBe(true);
 		expect(await tiltState(page)).toBe('off');
 		const applied = await story(page, 'applied');
@@ -106,8 +108,8 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await oceanRunning(page);
 		await startTilting(page);
 		expect(await page.locator('#tilt').isHidden()).toBe(true);
-		const shot = await settleOn(page, 3);
-		// The scroll into step 3 was a step change: the tilt eases back and takes a new baseline.
+		const shot = await settleOn(page, 'many-waves');
+		// The scroll into the step was a step change: the tilt eases back and takes a new baseline.
 		await waitClock(page, RETURN_SECONDS + 0.3);
 		// Five degrees to the right: the view turns right, the camera clockwise from above.
 		await tilt(page, 45, 5);
@@ -129,8 +131,8 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 			expect(trail.length).toBeGreaterThan(10);
 			for (const frame of trail) expect(frame.position[1]).toBeGreaterThanOrEqual(CAMERA_FLOOR - 1e-6);
 		}
-		// Standing the phone up asks for 8 degrees down; step 3's shot is 18 studs up and 77 out, so
-		// the floor stops it first.
+		// Standing the phone up asks for 8 degrees down; the many-waves shot is 18 studs up and 77 out,
+		// so the floor stops it first.
 		await tilt(page, 45, 0);
 		await waitClock(page, 2);
 		await tilt(page, 75, 0);
@@ -165,12 +167,12 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await page.addInitScript(openPhone);
 		await oceanRunning(page);
 		await startTilting(page);
-		await settleOn(page, 3);
+		await settleOn(page, 'many-waves');
 		await waitClock(page, RETURN_SECONDS + 0.3);
 		await tilt(page, 45, 40);
 		await waitClock(page, 2);
 		expect((await page.evaluate(() => window.__tilt.offset())).yaw).toBeCloseTo(-TILT_LIMITS.yawDeg * DEG, 3);
-		// The phone stays tilted while the story moves on.
+		// The phone stays tilted while the story moves on to the next step (C2: many-waves -> unlit).
 		await page.evaluate(() => {
 			window.__offsets = [];
 			const record = () => {
@@ -180,10 +182,10 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 			requestAnimationFrame(record);
 		});
 		await waitFrames(page, 5);
-		const shot = await settleOn(page, 4);
+		const shot = await settleOn(page, 'unlit');
 		await waitClock(page, 2);
 		const offsets = await page.evaluate(() => window.__offsets);
-		const changed = offsets.findIndex((o) => o.step === 4);
+		const changed = offsets.findIndex((o) => o.step === stepOf('unlit'));
 		expect(changed).toBeGreaterThan(0);
 		const after = offsets.slice(changed);
 		// It eased: part-way values on the way back, never a cut.
@@ -200,23 +202,23 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 
 	// The finale's drift lets go as the visitor scrolls back up, and the camera eases from where it
 	// stands to the shot. Where it stands includes the tilt; that ease must start from the shot's own
-	// pose, or the tilt is added twice and the camera jumps by it (about 34 studs at step 13).
+	// pose, or the tilt is added twice and the camera jumps by it (about 34 studs at the finale).
 	test('scrolling back out of the finale with the phone tilted never jumps the camera', async ({ page }) => {
 		const errors = watchErrors(page);
 		await page.addInitScript(openPhone);
 		await oceanRunning(page);
 		await startTilting(page);
-		await scrollToStep(page, 13, 0.1);
-		await page.waitForFunction(() => window.__ocean.story.state().step === 13, null, { timeout: 60_000 });
+		await scrollToId(page, 'finale', 0.1);
+		await page.waitForFunction((last) => window.__ocean.story.state().step === last, STEP_COUNT, { timeout: 60_000 });
 		await waitClock(page, RETURN_SECONDS + 0.3);
 		await tilt(page, 45, 40);
 		await waitClock(page, 2);
 		await story(page, 'watchCamera', 180);
 		await page.waitForFunction(() => window.__ocean.story.cameraTrail().length >= 5, null, { timeout: 30_000 });
-		await scrollToStep(page, 12, 0.6);
+		await scrollToId(page, 'glow', 0.6);
 		await page.waitForFunction(() => window.__ocean.story.cameraTrail().length >= 180, null, { timeout: 60_000 });
 		const trail = await story(page, 'cameraTrail');
-		expect(trail[0].step).toBe(13);
+		expect(trail[0].step).toBe(STEP_COUNT);
 		expect(trail.some((frame) => frame.mode === 'returning')).toBe(true);
 		let largest = 0;
 		for (let i = 1; i < trail.length; i++) {
@@ -233,7 +235,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await page.addInitScript(openPhone);
 		await oceanRunning(page);
 		await startTilting(page);
-		const shot = await settleOn(page, 3);
+		const shot = await settleOn(page, 'many-waves');
 		await waitClock(page, RETURN_SECONDS + 0.3);
 		const noise = [[45.04, 0.03], [44.97, -0.05], [45.02, 0.06], [44.95, -0.02], [45.05, 0.04]];
 		await page.evaluate((readings) => {
@@ -261,7 +263,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		expect(await tiltState(page)).toBe('off');
 		await page.waitForFunction(() => window.__tilt.state() === 'unsupported', null, { timeout: 10_000 });
 		expect(await page.locator('#tilt').isHidden()).toBe(true);
-		const shot = await settleOn(page, 3);
+		const shot = await settleOn(page, 'many-waves');
 		await tilt(page, 45, 0);
 		await tilt(page, 45, 9);
 		await waitClock(page, 1);
@@ -283,7 +285,7 @@ test.describe('on a phone that asks for motion access (iOS)', () => {
 		await expect(button).toBeVisible();
 		await expect(button).toHaveText('Tilt to look around');
 		expect(await tiltState(page)).toBe('needs-permission');
-		const shot = await settleOn(page, 3);
+		const shot = await settleOn(page, 'many-waves');
 		await tilt(page, 45, 0);
 		await tilt(page, 45, 6);
 		await waitClock(page, 1);
@@ -307,7 +309,7 @@ test.describe('on a phone that asks for motion access (iOS)', () => {
 		const errors = watchErrors(page);
 		await page.addInitScript(askingPhone, 'denied');
 		await oceanRunning(page);
-		const shot = await settleOn(page, 3);
+		const shot = await settleOn(page, 'many-waves');
 		const button = page.locator('#tilt');
 		await button.tap();
 		await expect(button).toHaveText('Motion access was denied');
@@ -433,7 +435,7 @@ test.describe('under reduced motion', () => {
 		const errors = watchErrors(page);
 		await page.addInitScript(openPhone);
 		await oceanRunning(page);
-		const shot = await settleOn(page, 3);
+		const shot = await settleOn(page, 'many-waves');
 		await page.locator('#motion').tap();
 		await expect(page.locator('#motion')).toHaveText('Pause the ocean');
 		await tilt(page, 45, 0);

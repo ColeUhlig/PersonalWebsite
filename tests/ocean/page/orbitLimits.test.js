@@ -6,25 +6,18 @@ import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as Tier from '../../../content/ocean/js/core/tier.js';
 import { FIELD_OF_VIEW } from '../../../content/ocean/js/render/lighting.js';
-import { blendRecipes } from '../../../content/ocean/js/stages/blend.js';
 import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { everyFrame } from '../stages/frames.js';
 import { CAMERA_FLOOR, frameReach, HORIZON_HEIGHT, MAX_POLAR, movingReach, polarOf, polarRange, STORY_MAX_DISTANCE } from '../../../content/ocean/js/page/orbitLimits.js';
 
 const ASPECTS = Object.freeze([0.9, 16 / 9, 2.4]);
 const REACH = movingReach(Tier.presets.High.rings);
 const view = (aspect) => ({ aspect, fovDegrees: FIELD_OF_VIEW, reach: REACH });
 
+// Every recipe's own shot and every neighbour blend at 0.05 (tests/ocean/stages/frames.js).
 function everyShot() {
-	const shots = [];
-	for (let n = 1; n <= STEP_COUNT; n++) {
-		shots.push({ name: `step ${n}`, shot: recipeFor(n).shot });
-		if (n < STEP_COUNT) {
-			for (let p = 0.05; p < 1 - 1e-9; p += 0.05) {
-				shots.push({ name: `${n}->${n + 1} at ${p.toFixed(2)}`, shot: blendRecipes(recipeFor(n), recipeFor(n + 1), p).shot });
-			}
-		}
-	}
-	return shots;
+	return everyFrame(0.05).map(({ name, blended }) => ({ name, shot: blended.shot }));
 }
 
 test("the moving water's reach is A3's: the last ring starts to flatten 896 studs out", () => {
@@ -52,12 +45,12 @@ test("the tilt range always holds the shot's own angle, so applying a shot never
 
 test('a low shot may tilt up over the whole range, but never sink below the floor: the crests are near', () => {
 	// Shots at or below CAMERA_FLOOR may not sink at all.
-	for (const step of [4, 5]) {
-		const shot = recipeFor(step).shot;
-		expect.truthy(shot.position[1] <= CAMERA_FLOOR, `step ${step} stands at or below the floor`);
+	for (const id of ['diffuse', 'gerstner']) {
+		const shot = recipeFor(stepOf(id)).shot;
+		expect.truthy(shot.position[1] <= CAMERA_FLOOR, `${id} stands at or below the floor`);
 		const range = polarRange(shot, view(16 / 9));
-		expect.equal(range.min, 0, `step ${step} min`);
-		expect.near(range.max, polarOf(shot).polar, 1e-9, `step ${step} max`);
+		expect.equal(range.min, 0, `${id} min`);
+		expect.near(range.max, polarOf(shot).polar, 1e-9, `${id} max`);
 	}
 	// The finale drifts above the floor (A3's FINALE_HEIGHT): it may come down to the floor, no further.
 	const finale = recipeFor(STEP_COUNT).shot;
@@ -75,19 +68,19 @@ test('a low shot may tilt up over the whole range, but never sink below the floo
 });
 
 test('from a high shot the frame can tip no further than the moving water, never to the horizon', () => {
-	for (const step of [6, 10]) {
-		const shot = recipeFor(step).shot;
+	for (const id of ['tiling', 'layers']) {
+		const shot = recipeFor(stepOf(id)).shot;
 		for (const aspect of ASPECTS) {
 			const range = polarRange(shot, view(aspect));
 			const { distance, polar } = polarOf(shot);
 			const top = (Math.PI / 2) - (FIELD_OF_VIEW / 2) * (Math.PI / 180);
-			expect.truthy(range.max < top, `step ${step} at ${aspect.toFixed(2)}: the frame's top reaches the horizon at ${range.max}`);
+			expect.truthy(range.max < top, `${id} at ${aspect.toFixed(2)}: the frame's top reaches the horizon at ${range.max}`);
 			const reach = frameReach({ distance, polar: range.max, targetY: shot.target[1], aspect, fovDegrees: FIELD_OF_VIEW });
 			// At the cap the frame reaches the moving water's edge, or stays at the shot's own view
 			// when that view already reaches further (an ultrawide frame).
 			const own = frameReach({ distance, polar, targetY: shot.target[1], aspect, fovDegrees: FIELD_OF_VIEW });
-			expect.truthy(reach <= Math.max(REACH, own) + 1e-6, `step ${step} at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs`);
-			expect.equal(range.min, 0, `step ${step} may look straight down`);
+			expect.truthy(reach <= Math.max(REACH, own) + 1e-6, `${id} at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs`);
+			expect.equal(range.min, 0, `${id} may look straight down`);
 		}
 	}
 });

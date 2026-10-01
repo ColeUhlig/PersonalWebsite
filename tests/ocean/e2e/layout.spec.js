@@ -1,24 +1,16 @@
-// The ocean page's layout (piece C, Task 2): the title, the thirteen steps and their math, cards and
-// charts, the finale's blocks, the desktop and phone layouts, contrast, and a story that reads with
-// three blocked.
+// The ocean page's layout (piece C, Task 2; the step list from the C2 contract, Task 0): the title,
+// the story's steps and their math, cards and slots, the finale's blocks, the desktop and phone
+// layouts, contrast, and a story that reads with three blocked.
 import { test, expect } from '@playwright/test';
+import { RECIPES } from '../../../content/ocean/js/stages/recipes.js';
+import { STEP_COUNT, stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { CARD_STEP_IDS, SLOTS } from '../page/structure.js';
 
-const TITLES = [
-	'A flat white plane',
-	'One sine wave',
-	'Many sine waves',
-	'Light',
-	'Pointy crests',
-	'The repetition problem',
-	'Real ocean data',
-	'A random ocean, moving',
-	'The FFT',
-	'Three layers of waves',
-	'Foam',
-	'Glow',
-	'The whole thing',
-];
-const CARD_STEPS = [1, 2, 3, 4, 6, 9, 10, 11, 12];
+const TITLES = RECIPES.map((r) => r.title);
+const CARD_STEPS = CARD_STEP_IDS.map(stepOf);
+const at = (id) => `#step-${stepOf(id)}`;
+// The math box's pinned bar on a phone (style.css --mathbar-height): the story starts below it.
+const MATHBAR_HEIGHT = 44;
 
 function watch(page) {
 	const errors = [];
@@ -45,24 +37,24 @@ const over = (rgba, backdrop) => {
 	return [0, 1, 2].map((i) => rgba[i] * alpha + backdrop[i] * (1 - alpha));
 };
 
-test('the title, the opening and thirteen steps in order', async ({ page }) => {
+test("the title, the opening and the story's steps in order", async ({ page }) => {
 	await page.goto('/ocean/');
 	await expect(page).toHaveTitle('Building an Ocean in Roblox');
 	await expect(page.locator('#opening h1')).toHaveText('Building an Ocean in Roblox');
 	await expect(page.locator('#opening .cue')).toContainText('Scroll to build it from nothing');
 	await expect(page.locator('#opening .lede')).toContainText('Roblox fought me the whole way');
 	const steps = page.locator('section.step[data-step]');
-	await expect(steps).toHaveCount(13);
-	for (let n = 1; n <= 13; n++) {
+	await expect(steps).toHaveCount(STEP_COUNT);
+	for (let n = 1; n <= STEP_COUNT; n++) {
 		await expect(page.locator(`#step-${n}`)).toHaveAttribute('data-step', String(n));
 		await expect(page.locator(`#step-${n}-title`)).toHaveText(TITLES[n - 1]);
 		await expect(page.locator(`#step-${n} [data-controls="${n}"]`)).toHaveCount(1);
 	}
 });
 
-test('every step to 12 has a collapsed math line, and the cards sit where the spec puts them', async ({ page }) => {
+test('every step but the finale has a collapsed math line, and the cards sit where the spec puts them', async ({ page }) => {
 	await page.goto('/ocean/');
-	for (let n = 1; n <= 12; n++) {
+	for (let n = 1; n < STEP_COUNT; n++) {
 		const math = page.locator(`#step-${n} details.math`);
 		await expect(math).toHaveCount(1);
 		expect(await math.evaluate((d) => d.open)).toBe(false);
@@ -72,19 +64,24 @@ test('every step to 12 has a collapsed math line, and the cards sit where the sp
 		await expect(cards).toHaveCount(CARD_STEPS.includes(n) ? 1 : 0);
 		if (CARD_STEPS.includes(n)) {
 			await expect(cards.locator('h3')).toHaveText('Roblox says no');
-			await expect(cards.locator('dt')).toHaveText(['Normally', 'In Roblox', 'What I did', 'The number']);
+			// A placeholder card (lane G writes it) has no number yet.
+			const terms = await cards.locator('dt').allTextContents();
+			expect(terms.slice(0, 3)).toEqual(['Normally', 'In Roblox', 'What I did']);
+			expect(terms.length === 3 || terms[3] === 'The number').toBe(true);
 		}
 	}
-	await expect(page.locator('#step-13 aside.card')).toHaveCount(0);
-	for (const [step, kind] of [[7, 'spectrum'], [8, 'phase'], [9, 'transforms']]) {
-		await expect(page.locator(`#step-${step} figure.chart[data-chart="${kind}"]`)).toHaveCount(1);
+	await expect(page.locator(`${at('finale')} aside.card`)).toHaveCount(0);
+	for (const [id, slots] of Object.entries(SLOTS)) {
+		for (const slot of slots) {
+			await expect(page.locator(`${at(id)} [${slot.replaceAll('" ', '"][')}]`)).toHaveCount(1);
+		}
 	}
 });
 
 test('the finale holds its blocks, with footage, Play and the render toggle hidden', async ({ page }) => {
 	await page.goto('/ocean/');
 	for (const id of ['live', 'proof-block', 'recap', 'believed', 'credits']) {
-		await expect(page.locator(`#step-13 #${id}`)).toHaveCount(1);
+		await expect(page.locator(`${at('finale')} #${id}`)).toHaveCount(1);
 	}
 	await expect(page.locator('#footage')).toBeHidden();
 	await expect(page.locator('#play')).toBeHidden();
@@ -107,8 +104,8 @@ test('on desktop the panels sit in the left third over the full-screen ocean', a
 	const canvas = await page.locator('#ocean').boundingBox();
 	expect(canvas.width).toBe(1366);
 	expect(canvas.height).toBe(767);
-	await page.locator('#step-3').scrollIntoViewIfNeeded();
-	const panel = await page.locator('#step-3 .panel').boundingBox();
+	await page.locator(at('sum-of-sines')).scrollIntoViewIfNeeded();
+	const panel = await page.locator(`${at('sum-of-sines')} .panel`).boundingBox();
 	expect(panel.x).toBeGreaterThanOrEqual(16);
 	expect(panel.x + panel.width).toBeLessThanOrEqual(1366 / 3);
 });
@@ -146,14 +143,14 @@ for (const scheme of ['dark', 'light']) {
 	test(`panel text keeps 4.5:1 contrast over a black or a white sea when the system prefers ${scheme} (the page is always dark)`, async ({ page }) => {
 		await page.emulateMedia({ colorScheme: scheme });
 		await page.goto('/ocean/');
-		const { ink, glass, cardInk, cardBg, ledeInk, scrim } = await page.evaluate(() => ({
-			ink: getComputedStyle(document.querySelector('#step-2 .panel p')).color,
-			glass: getComputedStyle(document.querySelector('#step-2 .panel')).backgroundColor,
-			cardInk: getComputedStyle(document.querySelector('#step-2 .card dd')).color,
-			cardBg: getComputedStyle(document.querySelector('#step-2 .card')).backgroundColor,
+		const { ink, glass, cardInk, cardBg, ledeInk, scrim } = await page.evaluate((step) => ({
+			ink: getComputedStyle(document.querySelector(`${step} .panel p`)).color,
+			glass: getComputedStyle(document.querySelector(`${step} .panel`)).backgroundColor,
+			cardInk: getComputedStyle(document.querySelector(`${step} .card dd`)).color,
+			cardBg: getComputedStyle(document.querySelector(`${step} .card`)).backgroundColor,
 			ledeInk: getComputedStyle(document.querySelector('#opening .lede')).color,
 			scrim: getComputedStyle(document.querySelector('#opening .opening-inner')).backgroundColor,
-		}));
+		}), at('into-3d'));
 		for (const backdrop of [[0, 0, 0], [255, 255, 255]]) {
 			const panel = over(parse(glass), backdrop);
 			expect(contrast(parse(ink).slice(0, 3), panel)).toBeGreaterThanOrEqual(4.5);
@@ -177,11 +174,14 @@ test.describe('on a phone in portrait', () => {
 			story: Number(getComputedStyle(document.getElementById('story')).zIndex),
 		}));
 		expect(layers.canvas).toBeGreaterThan(layers.story);
-		await page.locator('#step-7').scrollIntoViewIfNeeded();
-		const panel = await page.locator('#step-7 .panel').boundingBox();
+		// C2: the story starts below the top half and the math box's pinned bar.
+		const top = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.getElementById('story')).paddingTop));
+		expect(Math.abs(top - (422 + MATHBAR_HEIGHT))).toBeLessThanOrEqual(1);
+		await page.locator(at('unlit')).scrollIntoViewIfNeeded();
+		const panel = await page.locator(`${at('unlit')} .panel`).boundingBox();
 		expect(panel.x).toBeGreaterThanOrEqual(15);
 		expect(panel.x + panel.width).toBeLessThanOrEqual(375);
-		for (const id of ['opening', 'step-4', 'step-13', 'credits']) {
+		for (const id of ['opening', `step-${stepOf('into-3d')}`, `step-${STEP_COUNT}`, 'credits']) {
 			await page.locator(`#${id}`).scrollIntoViewIfNeeded();
 			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 		}
@@ -193,12 +193,12 @@ test('with three blocked the whole story still reads (Review Focus 3)', async ({
 	await page.route('**/npm/three@0.186.1/**', (route) => route.abort());
 	await page.goto('/ocean/');
 	await expect(page.locator('body')).toHaveAttribute('data-ocean', 'unavailable');
-	for (let n = 1; n <= 13; n++) {
+	for (let n = 1; n <= STEP_COUNT; n++) {
 		await page.locator(`#step-${n}`).scrollIntoViewIfNeeded();
 		await expect(page.locator(`#step-${n}-title`)).toBeVisible();
 	}
-	await expect(page.locator('#step-9 .card')).toContainText('12,288');
-	await expect(page.locator('#step-7 figure.chart')).toBeHidden();
+	await expect(page.locator(`${at('fft')} .card`)).toContainText('12,288');
+	await expect(page.locator(`${at('jonswap')} figure.chart`)).toBeHidden();
 	expect(errors).toEqual([]);
 });
 

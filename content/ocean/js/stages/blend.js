@@ -8,7 +8,11 @@
 //   * `warm`: while the scroll is strictly between the two, every part EITHER recipe runs is kept
 //     running (the FFT, the painter, each layer), so what the next step shows is ready when it
 //     snaps in. At the ends only the recipe's own parts run;
-//   * `sliders` stay the first recipe's: the panel the visitor is reading.
+//   * `sliders` stay the first recipe's: the panel the visitor is reading;
+//   * C2: the spread (`bank.fan`), the graph's opacity and height scale lerp; its band (near, far) lerps
+//     on a log scale, so the sea fills in mostly in the second half of a blend; the overlay's spacing
+//     lerps; the overlay kind, the graph's components, the lighting terms, the phase-arrow motion and
+//     step 15's tones snap with the rest.
 import { mod } from '../core/luau.js';
 import { deepFreeze } from './paths.js';
 
@@ -58,7 +62,7 @@ export function blendRecipes(a, b, progress) {
 				wavelength: lerp(ea.sine.wavelength, eb.sine.wavelength, p),
 				speed: lerp(ea.sine.speed, eb.sine.speed, p),
 			},
-			bank: { count: lerp(ea.bank.count, eb.bank.count, p) },
+			bank: { count: lerp(ea.bank.count, eb.bank.count, p), fan: lerp(ea.bank.fan, eb.bank.fan, p) },
 			chop: lerp(ea.chop, eb.chop, p),
 			sea: { windSpeed: lerp(ea.sea.windSpeed, eb.sea.windSpeed, p), fetch: logLerp(ea.sea.fetch, eb.sea.fetch, p) },
 			seed: en.seed,
@@ -85,6 +89,15 @@ export function blendRecipes(a, b, progress) {
 			wireframe: near.look.wireframe,
 			fog: logLerp(a.look.fog, b.look.fog, p),
 			sun: { azimuth: angleLerp(a.look.sun.azimuth, b.look.sun.azimuth, p), elevation: lerp(a.look.sun.elevation, b.look.sun.elevation, p) },
+			terms: near.look.terms,
+			graph: {
+				opacity: lerp(a.look.graph.opacity, b.look.graph.opacity, p),
+				yScale: lerp(a.look.graph.yScale, b.look.graph.yScale, p),
+				near: logLerp(a.look.graph.near, b.look.graph.near, p),
+				far: logLerp(a.look.graph.far, b.look.graph.far, p),
+				components: near.look.graph.components,
+			},
+			overlay: { kind: near.look.overlay.kind, spacing: lerp(a.look.overlay.spacing, b.look.overlay.spacing, p) },
 		},
 		shot: { position: lerp3(a.shot.position, b.shot.position, p), target: lerp3(a.shot.target, b.shot.target, p), move: near.shot.move },
 		charts: near.charts,
@@ -93,12 +106,13 @@ export function blendRecipes(a, b, progress) {
 }
 
 // What Ocean.configureStage takes: the blended engine part, its warm parts, and whether the look
-// needs vertex normals (lit materials do; white and the unlit sea colour do not).
+// needs vertex normals (lit materials do; white and the unlit sea colour do not; the terms material
+// does).
 export function engineSettings(blended) {
 	const look = blended.look;
 	return Object.freeze({
 		...blended.engine,
 		warm: blended.warm,
-		normals: look.material === 'painted' || (look.material === 'sea' && look.shading),
+		normals: look.material === 'painted' || look.material === 'terms' || (look.material === 'sea' && look.shading),
 	});
 }

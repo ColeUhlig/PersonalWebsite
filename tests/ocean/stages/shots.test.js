@@ -4,6 +4,8 @@
 // flatten band (SurfaceSampler.ringContext) and the ring the teaching bank is resolved on -- and the
 // camera's vertical field of view (render/lighting.js). The ground is taken as the plane y = 0 and
 // the fog as three.js FogExp2 of view depth, 1 - exp(-(density * depth)^2).
+// C2: a frame whose flat-graph backdrop is (nearly) opaque shows no world, and one clipped to the
+// graph's band (stages/graph.js) shows only the edge inside the band (tests/ocean/stages/frames.js).
 import { test } from 'node:test';
 import * as expect from '../expect.js';
 import * as RingLayout from '../../../content/ocean/js/core/ringLayout.js';
@@ -13,8 +15,9 @@ import * as WaveSampler from '../../../content/ocean/js/core/waveSampler.js';
 import * as HorizonState from '../../../content/ocean/js/engine/horizonState.js';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import { FIELD_OF_VIEW, FOG_DENSITY } from '../../../content/ocean/js/render/lighting.js';
-import { blendRecipes } from '../../../content/ocean/js/stages/blend.js';
-import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { edgeBand, everyFrame } from './frames.js';
 
 const ASPECTS = Object.freeze([0.9, 16 / 9, 2.4]);
 const PROGRESS_STEP = 0.05;
@@ -56,8 +59,9 @@ function depthInFrame(shot, frame, aspect, point) {
 }
 
 // The least fog over the part of a square's boundary (on the ground, around the window centre a
-// ring of `spacing` puts at the shot's target) that the frame shows; 1 when none of it shows.
-function edgeFog(shot, fog, aspect, half, spacing) {
+// ring of `spacing` puts at the shot's target) that the frame shows; 1 when none of it shows. With
+// `band` ([xMin, xMax] in world x), only the boundary inside the band counts.
+function edgeFog(shot, fog, aspect, half, spacing, band = null) {
 	const frame = basis(shot);
 	const centre = RingLayout.windowCentre(shot.target[0], shot.target[2], spacing);
 	let least = 1;
@@ -65,6 +69,7 @@ function edgeFog(shot, fog, aspect, half, spacing) {
 		for (let i = 0; i <= EDGE_SAMPLES; i++) {
 			const a = -half + (2 * half * i) / EDGE_SAMPLES;
 			const [x, z] = [[a, -half], [a, half], [-half, a], [half, a]][side];
+			if (band && (centre[0] + x < band[0] || centre[0] + x > band[1])) continue;
 			const depth = depthInFrame(shot, frame, aspect, [centre[0] + x, 0, centre[1] + z]);
 			if (depth !== null) {
 				least = Math.min(least, 1 - Math.exp(-((fog * depth) ** 2)));
@@ -98,20 +103,6 @@ function groundReach(shot, aspect, spacing) {
 	return furthest;
 }
 
-// Every recipe's own shot and every neighbour blend at PROGRESS_STEP.
-function everyFrame() {
-	const frames = [];
-	for (let n = 1; n <= STEP_COUNT; n++) {
-		frames.push({ name: `step ${n}`, blended: blendRecipes(recipeFor(n), recipeFor(n), 0) });
-		if (n < STEP_COUNT) {
-			for (let p = PROGRESS_STEP; p < 1 - 1e-9; p += PROGRESS_STEP) {
-				frames.push({ name: `${n}->${n + 1} at ${p.toFixed(2)}`, blended: blendRecipes(recipeFor(n), recipeFor(n + 1), p) });
-			}
-		}
-	}
-	return frames;
-}
-
 test('the numbers the checks use come from the page, not copies', () => {
 	expect.equal(WORLD_HALF, 3064, 'the horizon reaches 3,064 studs at High');
 	expect.equal(MOVING_HALF, 896, 'the last ring starts to flatten 896 studs out');
@@ -120,17 +111,19 @@ test('the numbers the checks use come from the page, not copies', () => {
 
 test("the world's edge is out of frame or under fog in every shot and blend (fix round 1)", () => {
 	const failures = [];
-	for (const { name, blended } of everyFrame()) {
+	for (const { name, blended } of everyFrame(PROGRESS_STEP)) {
+		const { band, hidden } = edgeBand(blended);
+		if (hidden) continue;
 		for (const aspect of ASPECTS) {
-			const fog = edgeFog(blended.shot, blended.look.fog, aspect, WORLD_HALF, LAST.spacing);
+			const fog = edgeFog(blended.shot, blended.look.fog, aspect, WORLD_HALF, LAST.spacing, band);
 			// The floor is A2's fog density applied to this same frame, not the number A2's own deck
 			// shot gets. At an ultrawide frame the sides see the world's side edge at about 1,830
 			// studs (3,064 / tan 59 degrees); from the deck shot that edge is 93% fogged. Other
-			// frames meet the edge nearer: the 11 -> 12 blends at 2.4 get 0.863 to 0.889 between
+			// frames meet the edge nearer: the foam -> glow blends at 2.4 get 0.863 to 0.889 between
 			// progress 0.1 and 0.5, under HIDDEN and under the deck's 0.93. They pass because they
-			// keep A2's density, so a steps-11-to-12 frame shows as much edge as A2's density would
+			// keep A2's density, so a foam-to-glow frame shows as much edge as A2's density would
 			// show from that camera, and no more.
-			const a2 = edgeFog(blended.shot, FOG_DENSITY, aspect, WORLD_HALF, LAST.spacing);
+			const a2 = edgeFog(blended.shot, FOG_DENSITY, aspect, WORLD_HALF, LAST.spacing, band);
 			if (fog < Math.min(HIDDEN, a2)) {
 				failures.push(`${name} at ${aspect.toFixed(2)}: ${fog.toFixed(3)}`);
 			}
@@ -140,24 +133,24 @@ test("the world's edge is out of frame or under fog in every shot and blend (fix
 });
 
 test('the high teaching shots keep the frame on moving water, never on the flat horizon plane', () => {
-	// Steps 6 and 10 look down from hundreds of studs up with little fog, where the join of the last
-	// ring's flatten band and the flat horizon plane reads as the edge of a pool.
-	for (const step of [6, 10]) {
-		const recipe = recipeFor(step);
+	// The tiling and layers steps look down from hundreds of studs up with little fog, where the join
+	// of the last ring's flatten band and the flat horizon plane reads as the edge of a pool.
+	for (const id of ['tiling', 'layers']) {
+		const recipe = recipeFor(stepOf(id));
 		for (const aspect of ASPECTS) {
 			const reach = groundReach(recipe.shot, aspect, LAST.spacing);
 			const fog = edgeFog(recipe.shot, recipe.look.fog, aspect, MOVING_HALF, LAST.spacing);
-			expect.truthy(reach <= MOVING_HALF || fog >= HIDDEN, `step ${step} at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs`);
+			expect.truthy(reach <= MOVING_HALF || fog >= HIDDEN, `${id} at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs`);
 		}
 	}
 });
 
-test("step 6's frame stays on the rings that resolve every wave it sums", () => {
+test("the tiling step's frame stays on the rings that resolve every wave it sums", () => {
 	// A ring resolves a wave while the wave advances under half a cycle per vertex along each axis;
-	// past that it aliases into slower, blurrier false waves and the ring's square shows. Step 6 sums
-	// the teaching bank's tallest waves; find the coarsest ring that resolves them all.
-	const recipe = recipeFor(6);
-	const bank = WaveBanks.withCount(WaveBanks.teachingBank(), recipe.engine.bank.count);
+	// past that it aliases into slower, blurrier false waves and the ring's square shows. The tiling
+	// step sums the teaching bank's tallest waves; find the coarsest ring that resolves them all.
+	const recipe = recipeFor(stepOf('tiling'));
+	const bank = WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), recipe.engine.bank.fan), recipe.engine.bank.count);
 	const STRIDE = WaveSampler.STRIDE;
 	const cyclesPerVertex = (spacing) => {
 		let most = 0;
@@ -178,15 +171,16 @@ test("step 6's frame stays on the rings that resolve every wave it sums", () => 
 	const ring = RINGS[resolving];
 	for (const aspect of [0.9, 16 / 9]) {
 		const reach = groundReach(recipe.shot, aspect, ring.spacing);
-		expect.truthy(reach <= ring.halfExtent, `step 6 at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs, past ring ${resolving + 1}'s ${ring.halfExtent}`);
+		expect.truthy(reach <= ring.halfExtent, `tiling at ${aspect.toFixed(2)} reaches ${reach.toFixed(0)} studs, past ring ${resolving + 1}'s ${ring.halfExtent}`);
 	}
 });
 
 // Final review I2: a crest runs across the frame when its wave travels towards or away from the
-// camera, so each teaching step's heading must lie along the shot's own line of sight. Step 5 is
-// the exception (piece C Task 6): its lesson is the crests' pinched profile, which only shows from
-// the side, so it looks across the waves instead (tests/ocean/stages/crests.test.js).
-test('the teaching crests run across the view in steps 2 to 4', () => {
+// camera, so each deck-like teaching step's heading must lie along the shot's own line of sight. The
+// Gerstner step is the exception (piece C Task 6): its lesson is the crests' pinched profile, which
+// only shows from the side, so it looks across the waves instead (tests/ocean/stages/crests.test.js).
+// The graph steps look across the waves on purpose (spec 10.4), so they are not checked here.
+test('the teaching crests run across the view in the deck-like 3D teaching steps', () => {
 	const STRIDE = WaveSampler.STRIDE;
 	const heading = (bank) => {
 		let x = 0;
@@ -199,13 +193,13 @@ test('the teaching crests run across the view in steps 2 to 4', () => {
 		const length = Math.hypot(x, z);
 		return [x / length, z / length];
 	};
-	for (let step = 2; step <= 4; step++) {
-		const recipe = recipeFor(step);
+	for (const id of ['many-waves', 'unlit', 'diffuse']) {
+		const recipe = recipeFor(stepOf(id));
 		const e = recipe.engine;
-		const bank = e.source === 'sine' ? WaveBanks.nextSine(null, e.sine, 0).bank : WaveBanks.withCount(WaveBanks.teachingBank(), e.bank.count);
+		const bank = e.source === 'sine' ? WaveBanks.nextSine(null, e.sine, 0).bank : WaveBanks.withCount(WaveBanks.withFan(WaveBanks.teachingBank(), e.bank.fan), e.bank.count);
 		const [hx, hz] = heading(bank);
 		const { forward } = basis(recipe.shot);
 		const along = Math.abs(hx * forward[0] + hz * forward[2]) / Math.hypot(forward[0], forward[2]);
-		expect.truthy(along > 0.9, `step ${step}: the waves travel ${Math.round((Math.acos(Math.min(along, 1)) * 180) / Math.PI)} degrees off the line of sight`);
+		expect.truthy(along > 0.9, `${id}: the waves travel ${Math.round((Math.acos(Math.min(along, 1)) * 180) / Math.PI)} degrees off the line of sight`);
 	}
 });

@@ -1,5 +1,7 @@
 // Shared helpers for the ocean page's story tests (piece C). Not a spec file: Playwright runs only
 // *.spec.js.
+import { stepOf } from '../../../../content/ocean/js/stages/steps.js';
+
 export function watchErrors(page) {
 	const errors = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -38,4 +40,9 @@ export async function scrollToStep(page, step, progress = 0.3) {
 export async function scrollToOpening(page) {
 	await page.evaluate(() => window.scrollTo(0, 0));
 	await page.waitForFunction(() => window.__page?.reading().phase === 'opening', null, { timeout: 30_000 });
+}
+
+// C2: scrollToStep by step id (stages/steps.js), so a test never hard-codes a step number.
+export async function scrollToId(page, id, progress = 0.3) {
+	await scrollToStep(page, stepOf(id), progress);
 }

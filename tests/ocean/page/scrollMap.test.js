@@ -36,12 +36,12 @@ test('bad input reads as the opening instead of throwing', () => {
 
 test('a position is step plus progress, and splits back; the finale has no progress', () => {
 	expect.equal(positionOf({ phase: 'step', step: 4, progress: 0.5 }), 4.5, 'step 4 halfway');
-	expect.equal(positionOf({ phase: 'step', step: 13, progress: 0.7 }), 13, 'the finale');
+	expect.equal(positionOf({ phase: 'step', step: STEP_COUNT, progress: 0.7 }), STEP_COUNT, 'the finale');
 	const split = splitPosition(7.25);
 	expect.equal(split.step, 7, 'step');
 	expect.near(split.progress, 0.25, 1e-12, 'progress');
-	expect.equal(splitPosition(13.4).step, 13, 'clamped to the finale');
-	expect.equal(splitPosition(13.4).progress, 0, 'no progress on the finale');
+	expect.equal(splitPosition(STEP_COUNT + 0.4).step, STEP_COUNT, 'clamped to the finale');
+	expect.equal(splitPosition(STEP_COUNT + 0.4).progress, 0, 'no progress on the finale');
 	expect.equal(splitPosition(0.2).step, 1, 'clamped to step 1');
 });
 

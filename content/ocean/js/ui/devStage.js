@@ -9,6 +9,8 @@ import { createDirector } from '../stages/director.js';
 import { recipeFor } from '../stages/recipes.js';
 import { resolveSliderValues } from '../stages/route.js';
 import { createStageLook } from '../render/stageLook.js';
+import { createGraphStage } from '../render/graphStage.js';
+import { createSurfaceOverlays } from '../render/surfaceOverlays.js';
 
 export function startStageRoute({ route, ocean, view, rig, meshes, materials, config }) {
 	const director = createDirector(ocean);
@@ -27,9 +29,13 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 		}
 	}
 	const look = createStageLook({ view, meshes, materials, config });
+	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
+	const graph = createGraphStage({ view, ocean, look });
+	const overlays = createSurfaceOverlays({ view, ocean });
+	const focusNow = [0, 0];
 
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so
-	// the camera does not jump at the snap into step 13 however long the page has been open. The
+	// the camera does not jump at the snap into the finale however long the page has been open. The
 	// route's `drift` pins it to one point of the circle instead (captures, tests).
 	let driftStart = null;
 	function shotSeconds(shot) {
@@ -70,6 +76,8 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 				return;
 			}
 			look.apply(out.look);
+			graph.apply(out.look.graph);
+			overlays.apply(out.look.overlay);
 			const seconds = shotSeconds(out.shot);
 			if (route.shots) {
 				rig.applyShot(out.shot, seconds);
@@ -77,6 +85,8 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 		},
 		afterStep() {
 			view.settleEnvironment();
+			graph.frame(ocean.teachT);
+			overlays.frame(ocean.teachT, rig.focus(focusNow));
 		},
 		hooks: Object.freeze({
 			set: (step, progress = 0) => director.setStep(step, progress),
@@ -87,6 +97,8 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 			state: () => director.state(),
 			surface: () => probeSurface(ocean.surface),
 			look: () => look.probe(),
+			graph: () => graph.probe(),
+			overlays: () => overlays.probe(),
 			spectrum: () => Charts.spectrumCurve(ocean.live.params, { sizes: ocean.preset.sizes, n: ocean.preset.n }),
 			phaseArrows,
 			transforms: (n) => Charts.measureTransforms(n),

@@ -2,10 +2,10 @@
 // director step and progress, applies each frame's look and camera shot, lets the visitor orbit
 // between shots (page/shotControl.js, within page/orbitLimits.js), and serves the panels' sliders
 // and the charts' data. Until the visitor first scrolls into a step the ocean is left exactly as A2
-// built it. Above step 1 (the opening) it shows step 13's recipe, the finished sea, under the
-// opening camera. The position (step + progress) is smoothed toward the scroll and cut when it jumps
-// more than a step, so a fling never sweeps the engine through the recipes in between
-// (page/scrollMap.js). The director blends by holdThenBlend of the progress (page/scrollMap.js):
+// built it. Above step 1 (the opening) it shows the last step's recipe (the finale), the finished
+// sea, under the opening camera. The position (step + progress) is smoothed toward the scroll and
+// cut when it jumps more than a step, so a fling never sweeps the engine through the recipes in
+// between (page/scrollMap.js). The director blends by holdThenBlend of the progress (page/scrollMap.js):
 // each step holds its own recipe while its panel is read, the first half of its section, and eases
 // into the next over the second half; the smoothing and the jump check work in scroll units. Under
 // reduced motion there is no smoothing, no blending of shots, no drift and no easing back.
@@ -28,12 +28,19 @@
 // offset is applied to the pose the shot asks for, the opening's included, and the tilt range is
 // worked out from the shot itself, so the offset camera is then held inside it: the floor, the tilt
 // range and the reach hold whatever the phone does. With no offset nothing extra runs.
+// C2: each frame also applies the flat graph (render/graphStage.js) and the surface overlays
+// (render/surfaceOverlays.js); while the graph's backdrop is half opaque or more the orbit and the
+// phone's tilt are held.
 import * as Charts from '../engine/charts.js';
 import * as Ocean from '../engine/ocean.js';
 import { probeSurface } from '../engine/surfaceProbe.js';
 import { createDirector } from '../stages/director.js';
 import { recipeFor, STEP_COUNT } from '../stages/recipes.js';
 import { createStageLook } from '../render/stageLook.js';
+import { createGraphStage } from '../render/graphStage.js';
+import { createSurfaceOverlays } from '../render/surfaceOverlays.js';
+import { GRAPH_HOLD } from '../stages/graph.js';
+import { stepOf } from '../stages/steps.js';
 import { SHOTS } from '../render/cameraRig.js';
 import { movingReach, polarRange } from '../page/orbitLimits.js';
 import { holdThenBlend, positionOf, smoothPosition, splitPosition } from '../page/scrollMap.js';
@@ -65,6 +72,13 @@ const samePose = (a, b) =>
 export function createStoryStage({ ocean, view, rig, meshes, materials, config, reducedMotion = false }) {
 	const director = createDirector(ocean);
 	const look = createStageLook({ view, meshes, materials, config });
+	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
+	const graph = createGraphStage({ view, ocean, look, reducedMotion });
+	const overlays = createSurfaceOverlays({ view, ocean });
+	const focusNow = [0, 0];
+	// True while the graph's backdrop is at least GRAPH_HOLD opaque: the visitor's orbit and the
+	// phone's tilt are held then, so nobody drags the camera off the graph.
+	let graphHeld = false;
 	const shots = createShotControl(reducedMotion ? { returnSeconds: 0 } : {});
 	const openingShot = Object.freeze({ ...(SHOTS[config.camera] ?? SHOTS.deck), move: 'still' });
 	const reach = movingReach(ocean.preset.rings);
@@ -78,7 +92,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	let previousKey = 0;
 	let clock = null;
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so
-	// the camera does not jump at the snap into step 13 however long the page has been open.
+	// the camera does not jump at the snap into the finale however long the page has been open.
 	let driftStart = null;
 	// Set when the scroll leaves the finale while the blend still asks for the drift: the drift is
 	// let go (the camera eases back to the still shot) until the shot stops asking or the finale
@@ -174,9 +188,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		return step;
 	}
 
-	// How long the shot's drift has run. Leaving the finale (scrolling back up into step 12, where
-	// the blend still asks for the drift) or the shot no longer asking for it lets the drift go, and
-	// the camera eases from where the drift left it instead of jumping to the still shot.
+	// How long the shot's drift has run. Leaving the finale (scrolling back up into the glow step,
+	// where the blend still asks for the drift) or the shot no longer asking for it lets the drift
+	// go, and the camera eases from where the drift left it instead of jumping to the still shot.
 	function shotSeconds(shot, now) {
 		if (key === STEP_COUNT) {
 			driftLetGo = false;
@@ -227,7 +241,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		const seconds = tiltClock === null ? 0 : Math.min(Math.max(now - tiltClock, 0), MAX_FRAME_SECONDS);
 		tiltClock = now;
 		const offset = tiltSource.frame(key, seconds);
-		return isZeroOffset(offset) ? null : offset;
+		return graphHeld || isZeroOffset(offset) ? null : offset;
 	}
 
 	// Before the first scroll the camera is A2's opening shot; a tilt swings it round that shot, and
@@ -319,6 +333,10 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			return;
 		}
 		look.apply(out.look);
+		graph.apply(out.look.graph);
+		overlays.apply(out.look.overlay);
+		graphHeld = out.look.graph.opacity >= GRAPH_HOLD;
+		rig.holdOrbit(graphHeld);
 		applyCamera(out, seconds, now);
 		if (cameraFrames > 0) {
 			cameraFrames -= 1;
@@ -334,6 +352,8 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			return;
 		}
 		view.settleEnvironment();
+		graph.frame(ocean.teachT);
+		overlays.frame(ocean.teachT, rig.focus(focusNow));
 		const flat = wantsLayers && !Ocean.anyLayerSampled(ocean);
 		holding = flat && held < HOLD_MAX_FRAMES;
 		held = flat ? held + 1 : 0;
@@ -358,31 +378,32 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	const press = (step, id) => onStep(step, () => director.press(id));
 
 	// The phase arrows are built once per sea and seed (a cascade build, 4 to 9 ms) and turned every
-	// call, through the cache the dev route uses too. Step 8's sea is its recipe's own (it has no sea
-	// sliders), so a blend from step 7 does not rebuild them every frame.
+	// call, through the cache the dev route uses too. The random-sea step's sea is its recipe's own (it
+	// has no sea sliders), so a blend from the jonswap step does not rebuild them every frame.
 	const arrowsAt = Charts.createPhaseArrowCache({ sizes: ocean.preset.sizes, n: ocean.preset.n });
 	// The spectrum chart's fixed top: JONSWAP at the wind and fetch sliders' maxima, so a stronger
 	// wind raises the curve on the chart instead of rescaling the axis.
 	let ceiling = null;
 	const charts = Object.freeze({
 		spectrum() {
-			const params = { ...ocean.live.params, windSpeed: director.valueOf(7, 'wind'), fetch: director.valueOf(7, 'fetch') };
+			const params = { ...ocean.live.params, windSpeed: director.valueOf(stepOf('jonswap'), 'wind'), fetch: director.valueOf(stepOf('jonswap'), 'fetch') };
 			return Charts.spectrumCurve(params, { sizes: ocean.preset.sizes, n: ocean.preset.n });
 		},
 		spectrumCeiling() {
 			if (ceiling === null) {
-				const slider = (id) => recipeFor(7).sliders.find((s) => s.id === id);
+				const slider = (id) => recipeFor(stepOf('jonswap')).sliders.find((s) => s.id === id);
 				const storm = { ...ocean.live.params, windSpeed: slider('wind').max, fetch: slider('fetch').max };
 				ceiling = Math.max(...Charts.spectrumCurve(storm, { sizes: ocean.preset.sizes, n: ocean.preset.n }).physical);
 			}
 			return ceiling;
 		},
-		phaseArrows() {
-			const sea = recipeFor(8).engine.sea;
-			return arrowsAt({ ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch }, director.valueOf(8, 'seed'), ocean.t);
+		// C2: an optional time, so the random-sea step's arrows can be drawn still at t = 0 (lane E).
+		phaseArrows(t = ocean.t) {
+			const sea = recipeFor(stepOf('random-sea')).engine.sea;
+			return arrowsAt({ ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch }, director.valueOf(stepOf('random-sea'), 'seed'), t);
 		},
 		transforms: (n) => Charts.measureTransforms(n),
-		seed: () => director.valueOf(8, 'seed'),
+		seed: () => director.valueOf(stepOf('random-sea'), 'seed'),
 	});
 
 	const hooks = Object.freeze({
@@ -391,6 +412,8 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		state: () => director.state(),
 		recipe: () => (started ? director.frame().recipe : null),
 		look: () => look.probe(),
+		graph: () => graph.probe(),
+		overlays: () => overlays.probe(),
 		shotMode: () => shots.mode(),
 		trail: () => [...trail],
 		clearTrail: () => {

@@ -1,22 +1,23 @@
-// The story's three charts (piece C; spec 3, steps 7 to 9), inline SVG in the page's dark chart
-// tokens (style.css), fed by A3's chart data through the story stage's read-only accessors. Every
-// number they show is live, either computed from the sea on screen or measured in this browser, and
-// each chart says which; the numbers sit in .chart-body, which carries data-copy-skip="live" (the
+// The story's three charts (piece C; spec 3; steps `jonswap`, `random-sea` and `time`, and `fft`),
+// inline SVG in the page's dark chart tokens (style.css), fed by A3's chart data through the story
+// stage's read-only accessors. Every number they show is live, either computed from the sea on
+// screen or measured in this browser, and each chart says which; the numbers sit in .chart-body, which carries data-copy-skip="live" (the
 // figcaptions outside it are copy-checked). Each SVG is drawn one unit per CSS pixel of its chart's
 // width (redrawn when that width changes), so its 12 px text is 12 px on a phone as on a laptop.
-//   spectrum (step 7): JONSWAP energy against wave frequency on a log axis whose top is the
+//   spectrum (`jonswap`): JONSWAP energy against wave frequency on a log axis whose top is the
 //     stormiest sea the sliders allow (page/spectrumLayout.js), with each wave layer's band shaded
 //     and the peak marked. Redrawn at most about 10 times a second while a slider drags.
-//   phase (step 8): the tallest waves of the 256-stud layer, each an arrow turning at the speed the
+//   phase (`random-sea` and `time`): the tallest waves of the 256-stud layer, each an arrow turning at the speed the
 //     dispersion gives it (short waves' arrows turn fastest), looping every 120 s; turned every
 //     frame through the story's phase-arrow cache, and only while the chart is on screen.
-//   transforms (step 9): the wave-by-wave sum against the FFT, timed in this browser when the chart
+//   transforms (`fft`): the wave-by-wave sum against the FFT, timed in this browser when the chart
 //     comes on screen and again for each new grid size, read as page/transformTiming.js rules (a
 //     rounded speedup, one re-measure, the operation ratio when the timing was disturbed). A grid
 //     whose single naive run would freeze the page on this device (judged from the fastest smaller
 //     timing seen) is switched off with a note instead of run, until a faster timing says otherwise.
 import { arrowEnd, linePath, niceTicks } from '../page/chartGeometry.js';
 import { SPECTRUM, peakLabelSpot, spectrumPlot, spectrumScales } from '../page/spectrumLayout.js';
+import { stepOf } from '../stages/steps.js';
 import { fasterJudge, formatMs, formatSteps, formatTiny, operationRatio, roundSpeedup, timeTransforms, tooSlowToTime } from '../page/transformTiming.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -32,7 +33,7 @@ const SPECTRUM_REDRAW_MS = 100;
 const WARM_UP_N = 2;
 // The grid timed first to judge whether a bigger one would freeze the page.
 const JUDGING_N = 32;
-const SLOW_NOTE_ID = 'control-9-transformN-slow';
+const SLOW_NOTE_ID = `control-${stepOf('fft')}-transformN-slow`;
 const SLOW_NOTE = (n) => `${n} × ${n} is too slow to time here without freezing the page.`;
 
 function svg(tag, attributes = {}, text = null) {
@@ -260,9 +261,9 @@ function phaseChart(figure, story, onLayout) {
 	return { draw, resize: draw };
 }
 
-// The grid-size option for `n` on step 9's panel, and the panel's control row.
-const optionButton = (n) => document.querySelector(`#step-9 [data-slider="transformN"] button[data-option="${n}"]`);
-const gridControl = () => document.querySelector('#step-9 [data-slider="transformN"]');
+// The grid-size option for `n` on the FFT step's panel, and the panel's control row.
+const optionButton = (n) => document.querySelector(`#step-${stepOf('fft')} [data-slider="transformN"] button[data-option="${n}"]`);
+const gridControl = () => document.querySelector(`#step-${stepOf('fft')} [data-slider="transformN"]`);
 
 function transformChart(figure, story, onLayout) {
 	const HEIGHT = 68;
@@ -276,8 +277,8 @@ function transformChart(figure, story, onLayout) {
 	let shown = () => showWaiting();
 	let judge = null;
 	let measureFn = (n) => story.charts.transforms(n);
-	const gridSize = () => story.sliders(9).find((s) => s.id === 'transformN').value;
-	const options = () => story.sliders(9).find((s) => s.id === 'transformN').options;
+	const gridSize = () => story.sliders(stepOf('fft')).find((s) => s.id === 'transformN').value;
+	const options = () => story.sliders(stepOf('fft')).find((s) => s.id === 'transformN').options;
 
 	// Two bars on the naive one's scale; a value sits inside its bar's end where it fits, else just
 	// past it.
@@ -346,7 +347,7 @@ function transformChart(figure, story, onLayout) {
 	// option points to, and back on once a faster timing says it can. Only a believable timing
 	// judges (page/transformTiming.js fasterJudge): a disturbed one says nothing about speed.
 	function applyBlocks() {
-		const slider = story.sliders(9).find((s) => s.id === 'transformN');
+		const slider = story.sliders(stepOf('fft')).find((s) => s.id === 'transformN');
 		let first = null;
 		for (const option of slider.options) {
 			const button = optionButton(option);
@@ -510,7 +511,7 @@ export function mountCharts(story, { onLayout = () => {} } = {}) {
 	const figures = Object.fromEntries([...document.querySelectorAll('figure.chart[data-chart]')].map((f) => [f.dataset.chart, f]));
 	const MAKERS = { spectrum: spectrumChart, phase: phaseChart, transforms: transformChart };
 	const charts = Object.fromEntries(Object.entries(MAKERS).map(([name, make]) => [name, figures[name] ? safely(name, () => make(figures[name], story, onLayout)) : null]));
-	const BY_STEP = { 7: 'spectrum', 8: 'phase', 9: 'transforms' };
+	const BY_STEP = { [stepOf('jonswap')]: 'spectrum', [stepOf('random-sea')]: 'phase', [stepOf('time')]: 'phase', [stepOf('fft')]: 'transforms' };
 	const drawSpectrum = throttled(() => safely('spectrum', () => charts.spectrum.draw()), SPECTRUM_REDRAW_MS);
 	let queued = new Set();
 	// ocean:slider fires only for a value that really changed. The spectrum redraws at most about
