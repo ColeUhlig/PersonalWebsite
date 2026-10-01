@@ -3,9 +3,9 @@
 // twin, nothing by hand).
 //   frequency (step 14): the flat graph's waves over one tile on top (the same bank the canvas draws:
 //     the teaching bank laid along one axis, as many waves as step 14's slider says, at the ocean's
-//     time when drawn, and a note says it is a snapshot), and underneath the same signal as spikes, one per wave at how many times it
-//     repeats across the tile, from the FFT. Redrawn when the slider moves and when the chart comes on
-//     screen.
+//     time when drawn, and a note says it is a snapshot), and underneath the same signal as spikes,
+//     one per wave at how many times it repeats across the tile, from the FFT. Redrawn when the
+//     slider moves and when the chart comes on screen.
 //   fourier (step 15): the three tones summed into a chord (faint) and the chord rebuilt from what is
 //     left (bold) when a tone is switched off; underneath the three spikes, a switched-off one dashed.
 // The numbers on the axes are computed here, so they sit in .chart-body[data-copy-skip="live"]; the

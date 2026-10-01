@@ -2,6 +2,7 @@
 // still in the random-sea step, turning in the time step: piece C2, lane E) and the fft step's FFT
 // timing, drawn live from the ocean's own numbers.
 import { test, expect } from '@playwright/test';
+import { arrowEnd } from '../../../content/ocean/js/page/chartGeometry.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { oceanRunning, scrollToId, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
 
@@ -396,12 +397,27 @@ for (const scheme of ['dark', 'light']) {
 test("step 17's arrows are held still at their starting angles; step 18's turn", async ({ page }) => {
 	test.setTimeout(180_000);
 	await oceanRunning(page);
+	// Step 18's figure (and its sea's arrow cache) is built on its first show, not at the story's start.
+	await expect(page.locator(`${TURNING_FIGURE} .chart-body svg`)).toHaveCount(0);
 	const ends = (motion) => page.evaluate((m) => [...document.querySelectorAll(`figure[data-chart="phase"][data-motion="${m}"] line.chart-arrow`)].map((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`), motion);
 	await scrollToId(page, 'random-sea', 0.2);
 	await expect.poll(async () => (await ends('still')).length, { timeout: 30_000 }).toBe(8);
 	const held = await ends('still');
 	await waitFrames(page, 45);
 	expect(await ends('still')).toEqual(held);
+	// Held at their starting angles: each arrow is arrowEnd of its wave at t = 0, in its own ring.
+	const drawn = await page.evaluate(([figure, step]) => ({
+		waves: window.__ocean.story.phaseArrows(0, step).map(({ re, im, amplitude }) => ({ re, im, amplitude })),
+		lines: [...document.querySelectorAll(`${figure} line.chart-arrow`)].map((l) => ['x1', 'y1', 'x2', 'y2'].map((a) => Number(l.getAttribute(a)))),
+		radii: [...document.querySelectorAll(`${figure} circle.chart-ring`)].map((c) => Number(c.getAttribute('r'))),
+	}), [STILL_FIGURE, STILL]);
+	const tallest = Math.max(...drawn.waves.map((w) => w.amplitude));
+	drawn.waves.forEach((wave, i) => {
+		const end = arrowEnd(wave.re, wave.im, tallest, drawn.radii[i] - 3);
+		const [x1, y1, x2, y2] = drawn.lines[i];
+		expect(Math.abs(x2 - (x1 + end.x)), `arrow ${i} x`).toBeLessThan(0.01);
+		expect(Math.abs(y2 - (y1 + end.y)), `arrow ${i} y`).toBeLessThan(0.01);
+	});
 	await scrollToId(page, 'time', 0.2);
 	await expect.poll(async () => (await ends('turning')).length, { timeout: 30_000 }).toBe(8);
 	const first = await ends('turning');
@@ -426,15 +442,63 @@ test("a new sea in step 17 changes step 17's arrows and not step 18's", async ({
 			ends: [...root.querySelectorAll('line.chart-arrow')].map((l) => `${l.getAttribute('x2')},${l.getAttribute('y2')}`),
 		};
 	}, figure);
+	await scrollToId(page, 'time', 0.2);
+	await expect.poll(async () => (await read(TURNING_FIGURE)).labels.length, { timeout: 30_000 }).toBe(8);
+	const turning = await read(TURNING_FIGURE);
 	await scrollToId(page, 'random-sea', 0.2);
 	await expect.poll(async () => (await read(STILL_FIGURE)).ends.length, { timeout: 30_000 }).toBe(8);
-	await expect.poll(async () => (await read(TURNING_FIGURE)).labels.length, { timeout: 30_000 }).toBe(8);
 	const still = await read(STILL_FIGURE);
-	const turning = await read(TURNING_FIGURE);
 	await page.locator(`#step-${STILL} [data-slider="seed"] button.control-press`).click();
 	await expect.poll(async () => (await read(STILL_FIGURE)).ends, { timeout: 30_000 }).not.toEqual(still.ends);
 	expect((await read(STILL_FIGURE)).labels, 'a new sea deals different tallest waves').not.toEqual(still.labels);
 	await scrollToId(page, 'time', 0.2);
 	await waitFrames(page, 10);
 	expect((await read(TURNING_FIGURE)).labels).toEqual(turning.labels);
+});
+
+// A still figure that throws when it comes on screen takes the same logged path as the turning loop
+// ("the phase arrows stopped"), never an uncaught error. The fault: its body refuses new children,
+// and a redraw (here, step 17's slider event) has cleared its arrows, so the show must rebuild them.
+test("a still arrow figure that throws on show is logged, not thrown", async ({ page }) => {
+	test.setTimeout(180_000);
+	const uncaught = [];
+	const logged = [];
+	page.on('pageerror', (error) => uncaught.push(error.message));
+	page.on('console', (message) => message.type() === 'error' && logged.push(message.text()));
+	await oceanRunning(page);
+	await page.evaluate((step) => {
+		const original = Element.prototype.replaceChildren;
+		Element.prototype.replaceChildren = function (...nodes) {
+			if (this.closest('figure[data-motion="still"]')) throw new Error('test: the still figure refuses');
+			return original.apply(this, nodes);
+		};
+		document.dispatchEvent(new CustomEvent('ocean:slider', { detail: { step, id: 'seed', value: 2 } }));
+	}, STILL);
+	await waitFrames(page, 5);
+	await scrollToId(page, 'random-sea', 0.2);
+	await waitFrames(page, 10);
+	expect(uncaught).toEqual([]);
+	expect(logged.some((text) => text.includes('the phase arrows stopped'))).toBe(true);
+});
+
+// On a 320 px phone four rings share a row: a wavelength label, even the widest one the 256-stud
+// layer can have (256), fits its own column, so neighbours never run into each other.
+test('the arrows\' wavelength labels fit their columns on a 320 px phone', async ({ page }) => {
+	test.setTimeout(180_000);
+	await page.setViewportSize({ width: 320, height: 700 });
+	await oceanRunning(page);
+	await scrollToId(page, 'random-sea', 0.2);
+	await expect(page.locator(`${STILL_FIGURE} text.chart-wavelength`)).toHaveCount(8, { timeout: 30_000 });
+	const fit = await page.evaluate((figure) => {
+		const svg = document.querySelector(`${figure} svg`);
+		const column = svg.viewBox.baseVal.width / 4;
+		const labels = [...svg.querySelectorAll('text.chart-wavelength')];
+		const widest = labels[0].cloneNode(true);
+		widest.textContent = labels[0].textContent.replace(/^\d+/, '256');
+		svg.append(widest);
+		const widths = [...labels, widest].map((t) => t.getComputedTextLength());
+		widest.remove();
+		return { column, widths };
+	}, STILL_FIGURE);
+	for (const width of fit.widths) expect(width).toBeLessThanOrEqual(fit.column - 4);
 });
