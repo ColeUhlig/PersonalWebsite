@@ -3,7 +3,7 @@
 // operation ratio instead when both readings are out.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { formatMs, formatTiny, isPlausible, operationRatio, PLAUSIBLE, roundSpeedup, timeTransforms } from '../../../content/ocean/js/page/transformTiming.js';
+import { formatMs, formatSteps, formatTiny, isPlausible, MAX_NAIVE_BLOCK_MS, operationRatio, PLAUSIBLE, predictNaiveMs, roundSpeedup, timeTransforms, tooSlowToTime } from '../../../content/ocean/js/page/transformTiming.js';
 
 // A measureTransforms result at grid size n with the given speedup.
 function reading(n, speedup) {
@@ -96,7 +96,30 @@ test('times and tiny differences read as plain numbers', () => {
 	expect.equal(formatMs(1.234), '1.23 ms', 'ones');
 	expect.equal(formatMs(0.0614), '0.061 ms', 'fractions');
 	expect.equal(formatMs(0.00213), '0.0021 ms', 'small fractions');
-	expect.equal(formatTiny(3.4e-14), '3\u00a0×\u00a010⁻¹⁴', 'a rounding difference, kept on one line');
-	expect.equal(formatTiny(1.2e-15), '1\u00a0×\u00a010⁻¹⁵', 'smaller');
+	// Rounded up, so "agree to within" never understates the difference.
+	expect.equal(formatTiny(3.4e-14), '4\u00a0×\u00a010⁻¹⁴', 'a rounding difference, rounded up, kept on one line');
+	expect.equal(formatTiny(1.2e-15), '2\u00a0×\u00a010⁻¹⁵', 'smaller');
+	expect.equal(formatTiny(3e-14), '3\u00a0×\u00a010⁻¹⁴', 'exactly three');
+	expect.equal(formatTiny(9.5e-14), '1\u00a0×\u00a010⁻¹³', 'up into the next power');
 	expect.equal(formatTiny(0), '0', 'exactly the same');
+});
+
+test('step counts read short enough to sit beside a bar', () => {
+	expect.equal(formatSteps(16777216), '16.8 M steps', 'millions');
+	expect.equal(formatSteps(24576), '24,576 steps', 'thousands');
+	expect.equal(formatSteps(192), '192 steps', 'hundreds');
+});
+
+// A device too slow for n = 64 is found from a smaller timing: the naive sum is n^4, so 64 costs
+// 16 times 32's. Its single run would block the page for longer than MAX_NAIVE_BLOCK_MS.
+test("a grid size is too slow to time when the naive sum's predicted run would freeze the page", () => {
+	expect.equal(MAX_NAIVE_BLOCK_MS, 40, 'the limit');
+	const timed = (n, naiveMs) => ({ n, naiveMs });
+	expect.near(predictNaiveMs(timed(32, 1.85), 64), 29.6, 1e-9, 'an M4: 1.85 ms at 32');
+	expect.equal(tooSlowToTime(64, timed(32, 1.85)), false, 'an M4 times 64');
+	expect.equal(tooSlowToTime(64, timed(32, 7.4)), true, 'a CPU four times slower does not');
+	expect.equal(tooSlowToTime(64, timed(16, 0.5)), true, 'judged from 16 as well (0.5 x 256 = 128 ms)');
+	expect.equal(tooSlowToTime(32, timed(32, 7.4)), false, 'the size already timed is never too slow');
+	expect.equal(tooSlowToTime(64, timed(8, 0.05)), null, 'too small a grid to judge from');
+	expect.equal(tooSlowToTime(64, null), null, 'nothing timed yet');
 });

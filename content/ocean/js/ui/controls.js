@@ -10,7 +10,9 @@
 // end is far less than a step (fetch: about 18 m against 100), so the thumb keeps its own position
 // while it still snaps to the stored value, and an arrow key on a log track always moves the value
 // by at least one step. The grid-size choice is a radio group: one tab stop (the checked option),
-// arrows and Home/End move the choice.
+// arrows and Home/End move the choice, past any option switched off. An option whose button carries
+// data-blocked (the FFT timing chart sets it on a grid this device cannot time without freezing the
+// page, ui/charts.js) stays disabled through every refresh.
 import { TERM_BY_SLIDER, formatValue, fromInput, inputRange, toInput } from '../page/sliderModel.js';
 import { clampSlider } from '../stages/sliders.js';
 
@@ -149,13 +151,16 @@ export function mountControls({ root, step, story, onChange = () => {} }) {
 		group.addEventListener('keydown', (event) => {
 			const at = buttons.indexOf(document.activeElement);
 			if (at === -1) return;
-			const last = buttons.length - 1;
-			const next = UP_KEYS.has(event.key) ? (at === last ? 0 : at + 1)
-				: DOWN_KEYS.has(event.key) ? (at === 0 ? last : at - 1)
+			const open = buttons.filter((button) => !button.disabled);
+			const place = open.indexOf(buttons[at]);
+			const last = open.length - 1;
+			const step = UP_KEYS.has(event.key) ? (place === last ? 0 : place + 1)
+				: DOWN_KEYS.has(event.key) ? (place <= 0 ? last : place - 1)
 					: event.key === 'Home' ? 0
 						: event.key === 'End' ? last
 							: null;
-			if (next === null) return;
+			if (step === null || last < 0) return;
+			const next = buttons.indexOf(open[step]);
 			event.preventDefault();
 			set(slider.id, slider.options[next]);
 			buttons[next].focus();
@@ -169,7 +174,7 @@ export function mountControls({ root, step, story, onChange = () => {} }) {
 					const checked = Number(button.dataset.option) === s.value;
 					button.setAttribute('aria-checked', String(checked));
 					button.tabIndex = checked ? 0 : -1;
-					button.disabled = !s.available;
+					button.disabled = !s.available || button.dataset.blocked !== undefined;
 				}
 				describe(group, s, noteId);
 			},

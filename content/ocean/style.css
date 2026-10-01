@@ -496,6 +496,10 @@ details.math summary {
 	fill: var(--chart-b);
 }
 
+.chart-label-bg {
+	fill: var(--chart-bg);
+}
+
 .chart-arrow {
 	stroke: var(--chart-a);
 	stroke-width: 2.5;
@@ -509,11 +513,12 @@ details.math summary {
 
 .chart-text {
 	fill: var(--chart-ink);
-	font: 11px system-ui, sans-serif;
+	font: 12px system-ui, sans-serif;
 }
 
-.chart-band-label {
-	font-size: 10px;
+/* A bar's value written inside the bar's end. */
+.chart-bar-value {
+	fill: var(--chart-bg);
 }
 
 .chart-bar-naive {
@@ -626,6 +631,12 @@ body[data-ocean='unavailable'] .chart {
 	color: var(--ink);
 	font: inherit;
 	cursor: pointer;
+}
+
+.segmented button:disabled {
+	color: var(--ink-dim);
+	text-decoration: line-through;
+	cursor: not-allowed;
 }
 
 .segmented button[aria-checked='true'] {

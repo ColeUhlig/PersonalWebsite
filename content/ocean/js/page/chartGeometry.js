@@ -64,3 +64,33 @@ export function firstClearBox(points, boxes) {
 		return true;
 	});
 }
+
+const SLIDE_STEP = 2;
+
+/**
+ * Where a label `width` wide goes beside a vertical mark at x = `anchor`, on one of `rows`
+ * (baselines, in order of preference; the text spans base - ascent .. base + descent), clear of the
+ * polyline `points` and inside `plot`. Tried in turn: right of the mark, then left of it, on each
+ * row; then slid along each row without covering the mark, nearest first; then covering it. When
+ * no spot is clear, it sits on the last row centred on the mark (clamped to the plot), with
+ * `clear: false`, so there is always a spot. Returns { x0, base, clear } (x0 = the label's left).
+ */
+export function placeLabel({ anchor, width, rows, ascent, descent, plot, points, gap = 4 }) {
+	const fits = (x0) => x0 >= plot.left && x0 + width <= plot.right;
+	const covers = (x0) => x0 < anchor + gap && x0 + width > anchor - gap;
+	const beside = [anchor + gap, anchor - gap - width].filter(fits);
+	const slid = [];
+	for (let x0 = plot.left; x0 + width <= plot.right; x0 += SLIDE_STEP) slid.push(x0);
+	const distance = (x0) => Math.abs(x0 + width / 2 - anchor);
+	const near = (list) => [...list].sort((a, b) => distance(a) - distance(b));
+	const order = [beside, near(slid.filter((x0) => !covers(x0))), near(slid.filter(covers))];
+	for (const xs of order) {
+		const spots = rows.flatMap((base) => xs.map((x0) => ({ x0, base, x1: x0 + width, y0: base - ascent, y1: base + descent })));
+		const found = firstClearBox(points, spots);
+		if (found !== -1) {
+			return Object.freeze({ x0: spots[found].x0, base: spots[found].base, clear: true });
+		}
+	}
+	const x0 = Math.max(plot.left, Math.min(anchor - width / 2, plot.right - width));
+	return Object.freeze({ x0, base: rows[rows.length - 1], clear: false });
+}

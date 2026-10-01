@@ -168,6 +168,122 @@ test('step 9 does not re-time for the grid size it already shows', async ({ page
 	expect(await recordedStates(page)).toEqual([]);
 });
 
+// Fix round 1: with the peak near 3 rad/s neither side of the peak line had room for its label,
+// and the chart threw (nine reachable settings; wind 7 m/s at 5,000 m is one).
+test('step 7 labels the peak at wind 7 m/s and 5,000 m without an error', async ({ page }) => {
+	const errors = watchErrors(page);
+	await oceanRunning(page);
+	await scrollToStep(page, 7, 0.2);
+	await setRange(page, 7, 'wind', 7);
+	await setRange(page, 7, 'fetch', 0);
+	const figure = page.locator('#step-7 figure.chart');
+	await expect(figure.locator('.chart-peak-label')).toContainText('studs long');
+	await expect.poll(() => figure.locator('svg').getAttribute('aria-label')).toContain('peak');
+	await expect(page.locator('#step-7 [data-slider="fetch"] output')).toContainText('5,000');
+	expect(await textOutsideViewBox(page, 7)).toEqual([]);
+	expect(errors).toEqual([]);
+});
+
+// Every text in a chart's SVG sits inside its viewBox.
+function textOutsideViewBox(page, step) {
+	return page.evaluate((n) => {
+		const svg = document.querySelector(`#step-${n} figure.chart svg`);
+		const box = svg.viewBox.baseVal;
+		return [...svg.querySelectorAll('text:not([transform])')]
+			.map((t) => ({ text: t.textContent, b: t.getBBox() }))
+			.filter(({ b }) => b.x < box.x - 0.5 || b.y < box.y - 0.5 || b.x + b.width > box.x + box.width + 0.5 || b.y + b.height > box.y + box.height + 0.5)
+			.map(({ text, b }) => `${text} at ${b.x.toFixed(1)}..${(b.x + b.width).toFixed(1)} of ${box.width}`);
+	}, step);
+}
+
+// A stand-in for engine/charts.js measureTransforms (through the charts' test hook): `naive` and
+// `fft` milliseconds per grid size.
+function stubTransforms(page, times) {
+	return page.evaluate((table) => {
+		window.__chartCalls = [];
+		window.__charts.useTransforms((n) => {
+			window.__chartCalls.push(n);
+			const cells = n * n;
+			const { naive, fft } = table[n];
+			return { n, waves: cells, naiveMs: naive, fftMs: fft, speedup: naive / fft, operations: { naive: cells * cells, fft: cells * Math.log2(n) }, maxDifference: 3e-14, batches: { naive: 3, fft: 5 } };
+		});
+	}, times);
+}
+
+for (const viewport of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) {
+	test(`a timing disturbed twice shows step counts that fit the chart (${viewport.width} px)`, async ({ page }) => {
+		await page.setViewportSize(viewport);
+		await oceanRunning(page);
+		// Speedups far past the operation ratio, every time.
+		await stubTransforms(page, { 2: { naive: 1, fft: 1 }, 32: { naive: 50, fft: 0.001 } });
+		await scrollToStep(page, 9, 0.2);
+		const figure = page.locator('#step-9 figure.chart');
+		await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+		await expect(figure).toContainText('disturbed by other work on this device');
+		await expect(figure).toContainText('1.0 M steps');
+		expect(await page.evaluate(() => window.__chartCalls.filter((n) => n === 32).length)).toBe(2);
+		expect(await textOutsideViewBox(page, 9)).toEqual([]);
+	});
+}
+
+// Fix round 1: on a slow device the n = 64 naive sum (one run, 16 times n = 32's) blocks the page
+// for over 100 ms, so the 64 option is switched off, with a note, instead of run.
+test('step 9 switches off 64 × 64 where the n = 32 timing says it would freeze the page', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
+	await scrollToStep(page, 9, 0.2);
+	const figure = page.locator('#step-9 figure.chart');
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	await expect(option).toBeDisabled();
+	await expect(page.locator('#step-9 [data-slider="transformN"]')).toContainText('too slow to time here without freezing the page');
+	// A refresh of the controls (another option chosen) keeps it off.
+	await page.locator('#step-9 [data-slider="transformN"] button[data-option="16"]').click({ force: true });
+	await expect(option).toBeDisabled();
+	expect(await page.evaluate(() => window.__chartCalls)).not.toContain(64);
+});
+
+test('step 9 checks a device with n = 32 before timing 64 × 64 chosen first', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 7.4, fft: 0.05 }, 64: { naive: 118, fft: 0.2 } });
+	await page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]').click({ force: true });
+	await scrollToStep(page, 9, 0.2);
+	const figure = page.locator('#step-9 figure.chart');
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	await expect(figure).toContainText('32 × 32');
+	await expect(page.locator('#step-9 [data-slider="transformN"] button[data-option="32"]')).toHaveAttribute('aria-checked', 'true');
+	expect(await page.evaluate(() => window.__chartCalls)).not.toContain(64);
+});
+
+test('a fast device still times 64 × 64', async ({ page }) => {
+	await oceanRunning(page);
+	await stubTransforms(page, { 2: { naive: 0.01, fft: 0.001 }, 32: { naive: 1.85, fft: 0.015 }, 64: { naive: 28, fft: 0.066 } });
+	await scrollToStep(page, 9, 0.2);
+	const figure = page.locator('#step-9 figure.chart');
+	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
+	const option = page.locator('#step-9 [data-slider="transformN"] button[data-option="64"]');
+	await expect(option).toBeEnabled();
+	await option.click();
+	await expect(figure).toContainText('64 × 64 grid: the FFT was about 420× faster', { timeout: 60_000 });
+});
+
+// Fix round 1: on a 390 px phone the charts' SVG text renders at 12 px or more.
+test('the charts read at 12 px on a phone', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await oceanRunning(page);
+	for (const step of [7, 8, 9]) {
+		await scrollToStep(page, step, 0.2);
+		const sizes = await page.evaluate((n) => {
+			const svg = document.querySelector(`#step-${n} figure.chart svg`);
+			const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+			return [...svg.querySelectorAll('text')].map((t) => parseFloat(getComputedStyle(t).fontSize) * scale);
+		}, step);
+		expect(sizes.length).toBeGreaterThan(0);
+		expect(Math.min(...sizes), `step ${step}`).toBeGreaterThanOrEqual(11.9);
+		expect(await textOutsideViewBox(page, step)).toEqual([]);
+	}
+});
+
 for (const scheme of ['dark', 'light']) {
 	test(`the charts read when the system prefers ${scheme} (the page is always dark)`, async ({ page }) => {
 		await page.emulateMedia({ colorScheme: scheme });

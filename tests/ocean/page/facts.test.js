@@ -111,11 +111,14 @@ test("every wave's ω is rounded down to a whole number of turns per 120 s, so t
 });
 
 // Step 8's math note: d in tanh(kd) is the water depth the engine's sea is built for, the depth
-// core/spectrum.js ships and the page's sea keeps (config.js takes Spectrum.NORMAL's), and the
-// dispersion the cascades turn their waves by uses it. At 60 m, tanh(kd) is within 1% of 1 for
-// every wave up to 128 studs long; only the 256-stud layer's longest few fall short (0.90 for one
-// wave across the tile).
-test('the water depth the engine uses is 60 m, deep enough that tanh(kd) is close to 1 for all but the longest waves', () => {
+// core/spectrum.js ships ("depth metres") and the page's sea keeps (config.js takes
+// Spectrum.NORMAL's). The engine treats a stud as a metre: a cascade's patch length is in studs
+// (roblox-ocean src/shared/Ocean/Cascade.luau: "patch length in studs (metres)"), and its
+// wavenumbers, in radians per stud, go straight into the dispersion with g in m/s² and d in metres,
+// with no conversion. So the depth is 60 studs on screen. At that depth tanh(kd) is within 1% of 1
+// for every wave up to 128 studs long; only the 256-stud layer's longest few fall short (0.90 for
+// one wave across the tile).
+test('the water depth the engine uses is 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves', () => {
 	const params = readConfig('').params;
 	expect.equal(Spectrum.NORMAL.depth, 60, 'shipped depth');
 	expect.equal(params.depth, 60, "the page's sea");
@@ -124,6 +127,14 @@ test('the water depth the engine uses is 60 m, deep enough that tanh(kd) is clos
 	}
 	const preset = Tier.presets.High;
 	const field = WaveField.create({ params, n: preset.n, sizes: preset.sizes, seed: SEED, loopPeriod: LOOP_PERIOD, chop: 0, swells: SWELL_SPECS });
+	// A stud is a metre: the wave once across the 256-stud tile (k = 2 pi / 256 per stud) turns at
+	// the metre dispersion's omega for that k, rounded down to the loop.
+	const tile = field.cascades[0];
+	const fundamental = (2 * Math.PI) / preset.sizes[0];
+	const cell = [...tile.kx.keys()].find((i) => Math.abs(tile.kx[i] - fundamental) < 1e-12 && tile.kz[i] === 0);
+	expect.truthy(cell !== undefined, 'the tile holds the wave once across it');
+	const metres = Spectrum.omega(fundamental, params);
+	expect.truthy(tile.omega[cell] <= metres + 1e-12 && tile.omega[cell] > metres - (2 * Math.PI) / LOOP_PERIOD, `omega ${tile.omega[cell]} against ${metres}`);
 	let short = 0;
 	for (const cascade of field.cascades) {
 		for (let i = 0; i < cascade.kx.length; i++) {
@@ -138,7 +149,7 @@ test('the water depth the engine uses is 60 m, deep enough that tanh(kd) is clos
 		}
 	}
 	expect.truthy(short > 0, 'some long waves feel the bottom');
-	expect.near(Math.tanh(((2 * Math.PI) / 256) * params.depth), 0.9, 0.01, 'one wave across the 256-stud tile');
+	expect.near(Math.tanh(fundamental * params.depth), 0.9, 0.01, 'one wave across the 256-stud tile');
 });
 
 test('the proof panel runs one wave cascade, 64 × 64 cells at seed 7', () => {

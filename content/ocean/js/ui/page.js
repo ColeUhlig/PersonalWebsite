@@ -63,7 +63,8 @@ export function startPage({ route, reducedMotion, clock }) {
 	features.push({
 		attachOcean(handle) {
 			if (handle.story) {
-				mountCharts(handle.story, { onLayout: () => story.relayout() });
+				// window.__charts: a test hook that swaps the timing for a stand-in (charts.spec.js).
+				window.__charts = mountCharts(handle.story, { onLayout: () => story.relayout() }).hooks;
 			}
 		},
 	});

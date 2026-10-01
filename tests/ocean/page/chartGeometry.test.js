@@ -1,6 +1,8 @@
+// The story charts' geometry (piece C, Task 8): scales, the clipped path, round ticks, the phase
+// arrows' ends and where a label goes clear of the line.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { arrowEnd, firstClearBox, linearScale, linePath, logScale, niceTicks } from '../../../content/ocean/js/page/chartGeometry.js';
+import { arrowEnd, firstClearBox, linearScale, linePath, logScale, niceTicks, placeLabel } from '../../../content/ocean/js/page/chartGeometry.js';
 
 test('scales map their domain onto the plot', () => {
 	const x = linearScale([0, 10], [30, 310]);
@@ -52,4 +54,22 @@ test("a label goes in the first box the line does not cross", () => {
 	const steep = [[0, 100], [1, 0]];
 	expect.equal(firstClearBox(steep, [{ x0: 0.2, x1: 0.4, y0: 65, y1: 70 }, { x0: 2, x1: 3, y0: 0, y1: 100 }]), 1, 'a steep segment crosses a box between its two points');
 	expect.equal(firstClearBox(line, [{ x0: 0, x1: 100, y0: 0, y1: 100 }]), -1, 'no clear box');
+});
+
+test('a label beside a mark goes right of it, else left, else slides along, else sits on top', () => {
+	const plot = { left: 0, right: 200, top: 0, bottom: 100 };
+	const flat = [[0, 100], [200, 100]];
+	const rows = [80, 20];
+	const spot = (anchor, width, points = flat) => placeLabel({ anchor, width, rows, ascent: 10, descent: 3, plot, points });
+	expect.equal(spot(50, 60).x0, 54, 'right of the mark');
+	expect.equal(spot(180, 60).x0, 116, 'left of the mark near the right edge');
+	const middle = spot(100, 120);
+	expect.truthy(middle.clear, 'a wide label in the middle still finds a clear spot');
+	expect.truthy(middle.x0 >= 0 && middle.x0 + 120 <= 200, `inside the plot: ${middle.x0}`);
+	const wall = [[0, 0], [200, 100], [0, 100], [200, 0]];
+	const blocked = spot(100, 120, wall);
+	expect.equal(blocked.clear, false, 'nowhere is clear');
+	expect.equal(blocked.base, 20, 'the fallback sits on the top row');
+	expect.equal(blocked.x0, 40, 'centred on the mark');
+	expect.equal(spot(100, 300).x0, 0, 'wider than the plot: from its left edge');
 });
