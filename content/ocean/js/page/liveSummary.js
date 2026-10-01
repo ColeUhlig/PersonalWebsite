@@ -26,10 +26,11 @@ function timingRows(report, resting) {
 	return [
 		{ label: 'Writing the points', value: ms(report.writeMs) },
 		{ label: 'Handing the maps to the painters', value: ms(report.paintMs) },
-		{ label: 'Painting the colour map, on its worker', value: ms(report.colourMs) },
 		{ label: 'Setting the glow', value: ms(report.strengthMs) },
 		{ label: 'Drawing the frame (CPU side)', value: ms(report.renderMs) },
-		{ label: "One layer's FFT, on its worker", value: resting && fft !== '-' ? `${fft} (last measured)` : fft },
+		// Worker rows last: they run alongside the frame, not inside it.
+		{ label: 'Painting the colour map (worker, alongside the frame)', value: ms(report.colourMs) },
+		{ label: "One layer's FFT (worker, alongside the frame)", value: resting && fft !== '-' ? `${fft} (last measured)` : fft },
 	];
 }
 
