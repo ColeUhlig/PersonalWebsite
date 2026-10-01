@@ -325,3 +325,30 @@ test('turning the screen, or resetting, takes a new baseline', () => {
 	follower.sense(at(30, 10), 90);
 	expect.equal(isZeroOffset(run(follower, 2, 240)), true, 'and the next reading is the baseline');
 });
+
+// C2 (Task 0 fix round 1): the flat graph's hold eases the tilt out and back in, like a step change.
+const runHeld = (follower, key, count, held, seconds = 1 / 60) => {
+	const trail = [];
+	for (let i = 0; i < count; i++) trail.push(follower.frame(key, seconds, held).yaw);
+	return trail;
+};
+
+test("the graph's hold eases the offset out, keeps it at zero while held, and eases back in on release", () => {
+	const follower = createTiltFollower();
+	follower.sense(at(45, 0), 0);
+	run(follower, 3, 1);
+	follower.sense(at(45, 20), 0);
+	const tilted = run(follower, 3, 240).yaw;
+	expect.truthy(tilted < -0.9 * YAW_MAX, `tilted to the limit (${tilted})`);
+	const out = runHeld(follower, 3, 80, true);
+	expect.truthy(out[0] < -0.9 * YAW_MAX, `no cut on the first held frame (${out[0]})`);
+	expect.truthy(out.some((yaw) => yaw < -0.2 * YAW_MAX && yaw > -0.8 * YAW_MAX), 'part-way values on the way out');
+	expect.equal(out[out.length - 1], 0, 'at zero within the return');
+	follower.sense(at(45, 30), 0);
+	expect.equal(runHeld(follower, 3, 120, true).every((yaw) => yaw === 0), true, 'held: the phone moves nothing');
+	const back = runHeld(follower, 3, 240, false);
+	expect.truthy(Math.abs(back[0]) < 1e-12, 'release starts from the shot, no jump');
+	expect.truthy(back.every((yaw) => yaw === 0), 'and takes the phone as held as the new baseline');
+	follower.sense(at(45, 35), 0);
+	expect.near(run(follower, 3, 240).yaw, banded(-5), 1e-9, 'then follows the phone again');
+});
