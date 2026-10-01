@@ -29,8 +29,14 @@ const turn = (a, b) => {
 	return d > Math.PI ? d - 2 * Math.PI : d <= -Math.PI ? d + 2 * Math.PI : d;
 };
 
-export function resolveShot(shot, seconds) {
-	return { position: shotPosition(shot, seconds), target: [shot.target[0], shot.target[1], shot.target[2]] };
+// The pose a shot asks for after `seconds` of its drift, written into `out` (kept by the caller,
+// so a frame allocates nothing) and returned.
+export function resolveShot(shot, seconds, out = { position: [0, 0, 0], target: [0, 0, 0] }) {
+	shotPosition(shot, seconds, out.position);
+	out.target[0] = shot.target[0];
+	out.target[1] = shot.target[1];
+	out.target[2] = shot.target[2];
+	return out;
 }
 
 // A pose as its target and the camera's place round it: distance, tilt from straight up the y axis
@@ -42,14 +48,24 @@ function spherical(pose) {
 	return { radius: Math.hypot(dx, dy, dz), polar: Math.atan2(Math.hypot(dx, dz), dy), azimuth: Math.atan2(dx, dz) };
 }
 
-// Weight w of the way from `from` to `to`: the target moves straight, the camera round it.
-function orbitBetween(from, to, w) {
+// Weight w of the way from `from` to `to`: the target moves straight, the camera round it. `to` is
+// the live shot, and its heading can keep turning during the ease, so the turn from `from` is not
+// picked afresh each frame (once the heading passed from + 180 degrees the shortest way would swap
+// sides and throw the camera across the circle): `unwrap` follows it continuously from the first
+// frame, the shortest turn then plus each frame's change since.
+function orbitBetween(from, to, w, unwrap) {
 	const a = spherical(from);
 	const b = spherical(to);
+	if (unwrap.last === null) {
+		unwrap.total = turn(a.azimuth, b.azimuth);
+	} else {
+		unwrap.total += turn(unwrap.last, b.azimuth);
+	}
+	unwrap.last = b.azimuth;
 	const target = lerp3(from.target, to.target, w);
 	const radius = lerp(a.radius, b.radius, w);
 	const polar = lerp(a.polar, b.polar, w);
-	const azimuth = a.azimuth + turn(a.azimuth, b.azimuth) * w;
+	const azimuth = a.azimuth + unwrap.total * w;
 	const across = radius * Math.sin(polar);
 	return {
 		position: [target[0] + across * Math.sin(azimuth), target[1] + radius * Math.cos(polar), target[2] + across * Math.cos(azimuth)],
@@ -73,6 +89,8 @@ export function createShotControl({ returnSeconds = RETURN_SECONDS } = {}) {
 	let from = null;
 	let elapsed = 0;
 	let duration = returnSeconds;
+	// The return's heading turn, followed across frames (orbitBetween).
+	const unwrap = { last: null, total: 0 };
 	return Object.freeze({
 		orbited(key) {
 			mode = 'free';
@@ -115,15 +133,16 @@ export function createShotControl({ returnSeconds = RETURN_SECONDS } = {}) {
 			}
 			if (from === null) {
 				from = pose;
+				unwrap.last = null;
 				duration = Math.min(MAX_RETURN_SECONDS, Math.max(returnSeconds, orbitLength(from, target) / RETURN_STUDS_PER_SECOND));
-				return orbitBetween(from, target, 0);
+				return orbitBetween(from, target, 0, unwrap);
 			}
 			elapsed += Math.max(0, dt);
 			if (elapsed >= duration) {
 				mode = 'shot';
 				return target;
 			}
-			return orbitBetween(from, target, smoothstep(elapsed / duration));
+			return orbitBetween(from, target, smoothstep(elapsed / duration), unwrap);
 		},
 	});
 }

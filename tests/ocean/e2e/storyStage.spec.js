@@ -288,6 +288,45 @@ test('scrolling back up out of the finale eases the camera off the drift, never 
 	await expectAtShot(page);
 });
 
+// The fastest the camera moves between two of the story's frames, in studs per second of the play
+// clock (the clock the story moves by), so the number does not depend on the frame rate.
+function fastest(trail) {
+	let speed = 0;
+	for (let i = 1; i < trail.length; i++) {
+		const seconds = trail[i].clock - trail[i - 1].clock;
+		if (seconds > 0) {
+			speed = Math.max(speed, length(sub(trail[i].position, trail[i - 1].position)) / seconds);
+		}
+	}
+	return speed;
+}
+
+// The scroll-back ease is aimed at the live blend, whose heading keeps turning: after a long dwell
+// the heading gap crosses half a turn mid-ease, and a return that picked the shortest way afresh
+// every frame threw the camera across the circle (73 studs in one frame after 75 s). The
+// simulation of the story's camera puts the true worst case, over every dwell from 1 to 240 s at
+// 30 to 120 fps, at about 470 studs a second; the flip was thousands.
+const SCROLL_BACK_STUDS_PER_SECOND = 600;
+
+test('after a long dwell in the finale, scrolling back never throws the camera across the circle', async ({ page }) => {
+	test.setTimeout(300_000);
+	await oceanRunning(page);
+	await scrollToStep(page, 13, 0.1);
+	await page.waitForFunction(() => window.__ocean.story.state().step === 13, null, { timeout: 60_000 });
+	const entered = await story(page, 'clock');
+	// 75 s of drift: in the old return's flip window (63 to 90 s for a scroll back to 12 at 0.6).
+	await page.waitForFunction((t0) => window.__ocean.story.clock() > t0 + 75, entered, { timeout: 150_000 });
+	await story(page, 'watchCamera', 300);
+	await page.waitForFunction(() => window.__ocean.story.cameraTrail().length >= 5, null, { timeout: 30_000 });
+	await scrollToStep(page, 12, 0.6);
+	await page.waitForFunction(() => window.__ocean.story.cameraTrail().length >= 300, null, { timeout: 60_000 });
+	const trail = await story(page, 'cameraTrail');
+	expect(trail[0].step).toBe(13);
+	expect(trail.some((frame) => frame.mode === 'returning')).toBe(true);
+	const speed = fastest(trail);
+	expect(speed, `the fastest the camera moved: ${speed.toFixed(0)} studs/s`).toBeLessThan(SCROLL_BACK_STUDS_PER_SECOND);
+});
+
 test("while its panel is read a step stands at its own shot (Cole's hold ruling)", async ({ page }) => {
 	await oceanRunning(page);
 	await scrollToStep(page, 5, 0.4);
@@ -340,6 +379,32 @@ test('a resize limits the tilt again for the new frame', async ({ page }) => {
 	expect(tilt.max).toBeCloseTo(expected.max, 6);
 	expect(tilt.min).toBeCloseTo(expected.min, 6);
 	expect(Math.abs(tilt.max - wide.max)).toBeGreaterThan(1e-3);
+});
+
+// The tilt range is worked out again on a resize even where the story does not place the camera
+// that frame: at the opening (the story not started) and with the visitor holding the camera.
+test('a resize re-limits the tilt at the opening and while the visitor holds the camera', async ({ page }) => {
+	await oceanRunning(page);
+	expect(await story(page, 'started')).toBe(false);
+	await page.setViewportSize({ width: 1600, height: 767 });
+	await page.waitForFunction(() => Math.abs(window.__ocean.story.tilt().aspect - 1600 / 767) < 1e-6, null, { timeout: 10_000 });
+	await scrollToStep(page, 10, 0.02);
+	await expectAtShot(page);
+	await page.mouse.move(1000, 600);
+	await page.mouse.down();
+	await page.mouse.move(1150, 560, { steps: 5 });
+	await page.mouse.up();
+	expect(await story(page, 'shotMode')).toBe('free');
+	await page.setViewportSize({ width: 1840, height: 767 });
+	await page.waitForFunction(() => Math.abs(window.__ocean.story.tilt().aspect - 1840 / 767) < 1e-6, null, { timeout: 10_000 });
+	expect(await story(page, 'shotMode')).toBe('free');
+	// Worked out for step 10's own shot (where the story last put the camera) at the new aspect.
+	const tier = await page.evaluate(() => window.__ocean.status().tier);
+	const fov = await page.evaluate(() => window.__ocean.camera.fov);
+	const expected = polarRange(recipeFor(10).shot, { aspect: 1840 / 767, fovDegrees: fov, reach: movingReach(Tier.presets[tier].rings) });
+	const tilt = await story(page, 'tilt');
+	expect(tilt.max).toBeCloseTo(expected.max, 6);
+	expect(tilt.min).toBeCloseTo(expected.min, 6);
 });
 
 test('scrolling back to the opening shows the finished sea under the opening camera', async ({ page }) => {

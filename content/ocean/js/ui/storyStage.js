@@ -81,15 +81,22 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	let tilt = null;
 	// The pose the tilt range was last worked out for, and the frame's aspect then; the pose last
 	// put on the camera.
-	let tiltPose = openingShot;
+	const tiltPose = { position: [...openingShot.position], target: [...openingShot.target] };
 	let tiltAspect = Number.NaN;
+	// What the camera was last put at (copied, since the shot's pose is rewritten every frame), or
+	// null when it must be put again whatever the pose.
 	let placed = null;
+	const placedPose = { position: [0, 0, 0], target: [0, 0, 0] };
+	// The pose the shot asks for, rewritten every frame (resolveShot).
+	const resolved = { position: [0, 0, 0], target: [0, 0, 0] };
 	let applied = 0;
 	let wantsLayers = false;
 	let holding = false;
 	let held = 0;
 	let watching = 0;
 	let pictures = [];
+	let cameraFrames = 0;
+	let cameraTrail = [];
 	const stillShot = { position: null, target: null, move: 'still' };
 	const applyOptions = { cut: false, ease: true };
 
@@ -100,10 +107,19 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		placed = null;
 	});
 
+	// The tilt range for `pose` at the frame's aspect now; the pose is copied, so a resize can work
+	// the range out again for it (the visitor's free camera, the opening) after the shot's own pose
+	// has been rewritten.
 	function limitTilt(pose) {
-		tiltPose = pose;
+		if (pose !== tiltPose) {
+			for (let i = 0; i < 3; i++) {
+				tiltPose.position[i] = pose.position[i];
+				tiltPose.target[i] = pose.target[i];
+			}
+		}
 		tiltAspect = view.camera.aspect;
-		tilt = polarRange(pose, { aspect: tiltAspect, fovDegrees: view.camera.fov, reach });
+		const range = polarRange(tiltPose, { aspect: tiltAspect, fovDegrees: view.camera.fov, reach });
+		tilt = Object.freeze({ min: range.min, max: range.max, aspect: tiltAspect });
 		rig.limitTilt(tilt.min, tilt.max);
 	}
 	// The opening camera is A2's until the first scroll, but the visitor's orbit is the story's
@@ -196,7 +212,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			stillShot.target = own.target;
 			shot = stillShot;
 		}
-		const target = resolveShot(shot, shotSeconds(shot, now));
+		const target = resolveShot(shot, shotSeconds(shot, now), resolved);
 		applyOptions.cut = cutPending;
 		applyOptions.ease = seconds > 0;
 		// Only a return reads where the camera is (a shot or a cut ignores it).
@@ -215,7 +231,11 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 		limitTilt(pose);
 		rig.applyShot({ position: pose.position, target: pose.target, move: 'still' }, 0);
-		placed = pose;
+		for (let i = 0; i < 3; i++) {
+			placedPose.position[i] = pose.position[i];
+			placedPose.target[i] = pose.target[i];
+		}
+		placed = placedPose;
 		applied += 1;
 	}
 
@@ -240,6 +260,10 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 		look.apply(out.look);
 		applyCamera(out, seconds, now);
+		if (cameraFrames > 0) {
+			cameraFrames -= 1;
+			cameraTrail.push(Object.freeze({ clock: now, step: key, mode: shots.mode(), position: rig.pose().position }));
+		}
 		wantsLayers = wantsFftLayers(out.recipe.engine, ocean.preset.sizes.length);
 	}
 
@@ -317,6 +341,14 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			watching = frames;
 		},
 		pictures: () => [...pictures],
+		// The play clock (Ocean.teachTime) and, for the next `frames` frames, the clock each frame
+		// moved the camera by and where the camera stood after it.
+		clock: () => Ocean.teachTime(ocean),
+		watchCamera: (frames) => {
+			cameraTrail = [];
+			cameraFrames = frames;
+		},
+		cameraTrail: () => [...cameraTrail],
 	});
 
 	return Object.freeze({ setScroll, beforeStep, afterStep, holdsPicture: () => holding, sliders, setSlider, press, charts, hooks });

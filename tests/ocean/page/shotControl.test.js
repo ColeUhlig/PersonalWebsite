@@ -136,3 +136,42 @@ test('the return orbits round the target and takes longer the further it has to 
 	}
 	expect.near(elapsed, RETURN_SECONDS, 2 / 60, 'a short return');
 });
+
+// The return's target is the live blend, and its heading can keep turning during the ease (the
+// shot moving round the target as the blend changes). Once the target's heading passes from + 180
+// degrees, picking the shortest turn again each frame would swap to the other way round and throw
+// the camera across the circle in one frame. The turn is followed continuously instead.
+test("a target whose heading sweeps past half a turn from the start never flips the camera across the circle", () => {
+	const target = [0, 0, 0];
+	const radius = 100;
+	const at = (degrees) => {
+		const a = (degrees * Math.PI) / 180;
+		return { position: [radius * Math.sin(a), 20, radius * Math.cos(a)], target };
+	};
+	const shots = createShotControl();
+	shots.returnToShot();
+	// The camera starts at heading 0; the target starts at 150 degrees and sweeps on to 230 while
+	// the ease runs, crossing 180 (from + 180) part-way.
+	let pose = shots.frame(13, at(0), at(150), 0);
+	let largest = 0;
+	let elapsed = 0;
+	while (shots.mode() === 'returning' && elapsed < 10) {
+		elapsed += 1 / 60;
+		const heading = 150 + Math.min(1, elapsed / 1.0) * 80;
+		const next = shots.frame(13, pose, at(heading), 1 / 60);
+		largest = Math.max(largest, length(sub(next.position, pose.position)));
+		pose = next;
+	}
+	expect.truthy(largest < 8, `no frame moves more than 8 studs: the largest was ${largest.toFixed(1)}`);
+	close(pose.position, at(230).position, 'arrives on the target');
+});
+
+test('resolveShot writes into the pose it is given, so the story allocates nothing per frame', () => {
+	const out = { position: [0, 0, 0], target: [0, 0, 0] };
+	const finale = recipeFor(STEP_COUNT).shot;
+	const resolved = resolveShot(finale, 12, out);
+	expect.equal(resolved, out, 'the same object back');
+	expect.equal(out.position.join(','), shotPosition(finale, 12).join(','), 'the drifted position');
+	expect.equal(out.target.join(','), finale.target.join(','), 'the target');
+	expect.truthy(out.target !== finale.target, "the recipe's own array is not handed out");
+});
