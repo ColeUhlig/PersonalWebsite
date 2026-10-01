@@ -12,7 +12,13 @@
 // material but no wireframe: two triangles 2,048 studs wide would draw one huge diagonal.
 // C2: the `terms` material (lane D's render/termsMaterial.js, a shader that switches each lighting
 // term on alone and follows the stage sun) and `setClip`, which clips every surface material to the
-// flat graph's band.
+// flat graph's band. While the band is on, the white material and the wireframe also leave out every
+// triangle that touches a skirted vertex (Task 14): the coarser rings' skirts hang under a finer
+// ring's edge, out of sight from above, but the band cuts them and they showed as short stubs under
+// the curve, which no flat clip can remove. Those triangles lie inside the finer ring's window (a
+// ring's vertices on that window's edge are never skirted), so nothing visible goes with them. The
+// graph steps wear white; the painted and terms materials are never in a band except for the one
+// frame of a fling, and keep their skirts.
 import * as THREE from 'three';
 import { sunDirection } from '../stages/sun.js';
 import { createTermsMaterial } from './termsMaterial.js';
@@ -48,7 +54,27 @@ function modeOf(look) {
 	return mode;
 }
 
-export function createStageLook({ view, meshes, materials, config }) {
+// Studs above the skirt's depth that still count as skirted: skirted vertices sit exactly at
+// surface.skirtY (a float32), and the sheet never comes within this of it (the skirt hangs at the
+// bounds' depth, below the deepest the sea can reach plus SKIRT_MARGIN).
+const SKIRT_TOLERANCE = 0.01;
+
+// Adds the skirt cut to a material's shader (onBeforeCompile): a vertex at the skirt's depth marks
+// its triangles, and while `skirtHide` is on every fragment of a marked triangle is discarded.
+function cutSkirts(shader, uniforms) {
+	shader.uniforms.skirtY = uniforms.skirtY;
+	shader.uniforms.skirtHide = uniforms.skirtHide;
+	shader.vertexShader = shader.vertexShader
+		.replace('#include <common>', '#include <common>\nuniform float skirtY;\nvarying float vSkirt;')
+		.replace('#include <begin_vertex>', `#include <begin_vertex>\n\tvSkirt = position.y <= skirtY + ${SKIRT_TOLERANCE.toFixed(3)} ? 1.0 : 0.0;`);
+	shader.fragmentShader = shader.fragmentShader
+		.replace('#include <common>', '#include <common>\nuniform float skirtHide;\nvarying float vSkirt;')
+		.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n\tif (skirtHide > 0.5 && vSkirt > 0.0) discard;');
+}
+
+// surface: the engine's surface state (ocean.surface), whose skirtY the skirt cut reads; without it
+// the skirts are never cut.
+export function createStageLook({ view, meshes, materials, config, surface = null }) {
 	const sea = seaColour(config);
 	const shared = {
 		// Pushed back a little in depth so the wireframe drawn at the same depth sits on top of it.
@@ -58,7 +84,11 @@ export function createStageLook({ view, meshes, materials, config }) {
 		terms: createTermsMaterial({ seaColour: sea, sunDirection: view.sunDirection }),
 	};
 	const wireMaterial = new THREE.MeshBasicMaterial({ color: srgb(WIRE), wireframe: true, transparent: true, opacity: WIRE_OPACITY, toneMapped: false });
+	// The skirt cut's uniforms, shared by the white material and the wireframe.
+	const skirt = { skirtY: { value: -1e6 }, skirtHide: { value: 0 } };
+	shared.white.onBeforeCompile = (shader) => cutSkirts(shader, skirt);
 	wireMaterial.onBeforeCompile = (shader) => {
+		cutSkirts(shader, skirt);
 		shader.uniforms.wireFade = { value: new THREE.Vector2(WIRE_FADE[0], WIRE_FADE[1]) };
 		shader.vertexShader = shader.vertexShader
 			.replace('#include <common>', '#include <common>\nvarying float vWireDepth;')
@@ -86,6 +116,7 @@ export function createStageLook({ view, meshes, materials, config }) {
 			material.clippingPlanes = next;
 		}
 		clip = next;
+		skirt.skirtHide.value = clip !== null && surface !== null ? 1 : 0;
 	}
 
 	function setMode(next) {
@@ -120,6 +151,10 @@ export function createStageLook({ view, meshes, materials, config }) {
 	}
 
 	function apply(look) {
+		// The skirt's depth moves with the bounds (a slider raising the sea); one number a frame.
+		if (surface !== null) {
+			skirt.skirtY.value = surface.skirtY;
+		}
 		setMode(modeOf(look));
 		if (mode === 'terms') {
 			shared.terms.setTerms(look.terms);
@@ -165,6 +200,7 @@ export function createStageLook({ view, meshes, materials, config }) {
 			sun: [...view.sunDirection],
 			environment: view.environmentState(),
 			clipped: clip !== null,
+			skirtsHidden: skirt.skirtHide.value === 1,
 			terms: mode === 'terms' ? shared.terms.terms() : null,
 			// A ShaderMaterial ignores clipping planes unless its `clipping` flag is on.
 			termsClips: shared.terms.clipping === true && shared.terms.clippingPlanes === clip,

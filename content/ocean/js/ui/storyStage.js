@@ -72,7 +72,7 @@ const samePose = (a, b) =>
 
 export function createStoryStage({ ocean, view, rig, meshes, materials, config, reducedMotion = false }) {
 	const director = createDirector(ocean);
-	const look = createStageLook({ view, meshes, materials, config });
+	const look = createStageLook({ view, meshes, materials, config, surface: ocean.surface });
 	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
 	const graph = createGraphStage({ view, ocean, look, reducedMotion });
 	const overlays = createSurfaceOverlays({ view, ocean });

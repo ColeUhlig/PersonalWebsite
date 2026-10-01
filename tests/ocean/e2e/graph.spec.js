@@ -94,6 +94,52 @@ test('step 4: no backdrop, the sheet unrolled behind the curve, the curve on its
 	expect(graph.floor).toBeGreaterThan(-(surface.maxAbsY + 1));
 });
 
+// Task 14: the coarser rings' skirts hang under a finer ring's edge, and where the band cuts them
+// they showed as short dark wire stubs under the curve (up to 4.7 studs). While the band is on the
+// stage look leaves out every triangle that touches a skirted vertex, so under the curve, column by
+// column, there is nothing dark: only the white sheet's own edge and the sky.
+test('step 4: no skirt stubs hang under the curve', async ({ page }) => {
+	await load(page, 'step=into-3d&freeze=12', 20);
+	expect((await stage(page, 'look')).skirtsHidden).toBe(true);
+	const stubs = await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => {
+		const source = document.getElementById('ocean');
+		const copy = document.createElement('canvas');
+		copy.width = source.width;
+		copy.height = source.height;
+		const context = copy.getContext('2d');
+		context.drawImage(source, 0, 0);
+		const { data, width, height } = context.getImageData(0, 0, copy.width, copy.height);
+		const at = (x, y) => (y * width + x) * 4;
+		// The curve's accent (#5fd4c4): green and blue well above red.
+		const isCurve = (i) => data[i + 1] - data[i] > 70 && data[i + 2] - data[i] > 60;
+		const luminance = (i) => 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+		const scale = height / window.innerHeight;
+		const reach = Math.round(24 * scale);
+		let columns = 0;
+		let dark = 0;
+		for (let x = 0; x < width; x += 2) {
+			let bottom = -1;
+			for (let y = height - 1; y >= 0; y--) {
+				if (isCurve(at(x, y))) {
+					bottom = y;
+					break;
+				}
+			}
+			if (bottom < 0) continue;
+			columns += 1;
+			for (let y = bottom + Math.round(3 * scale); y < Math.min(height, bottom + reach); y++) {
+				if (luminance(at(x, y)) < 150) {
+					dark += 1;
+					break;
+				}
+			}
+		}
+		resolve({ columns, dark });
+	})));
+	expect(stubs.columns).toBeGreaterThan(200);
+	expect(stubs.dark).toBe(0);
+});
+
 test('step 5 on: no graph, no clip', async ({ page }) => {
 	await load(page, 'step=directions&freeze=12', 10);
 	const graph = await stage(page, 'graph');

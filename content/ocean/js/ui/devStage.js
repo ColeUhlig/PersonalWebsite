@@ -28,7 +28,7 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 			console.warn(`[ocean] s.${id}=${value} refused; ignored (${error.message})`);
 		}
 	}
-	const look = createStageLook({ view, meshes, materials, config });
+	const look = createStageLook({ view, meshes, materials, config, surface: ocean.surface });
 	// C2: the flat graph and the arrows on the surface (spec 10.4, 10.7).
 	const graph = createGraphStage({ view, ocean, look });
 	const overlays = createSurfaceOverlays({ view, ocean });
