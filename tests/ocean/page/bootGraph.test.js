@@ -38,3 +38,12 @@ test('the walker does see three behind main.js, so the check above can fail', ()
 	const { bare } = walk(file('main.js'));
 	expect.truthy(bare.some(({ specifier }) => specifier === 'three'), 'main.js reaches three');
 });
+
+// Final review (parked item): the walker follows only relative specifiers, so a bare or absolute one
+// anywhere in the boot graph (which C2 grew: the page features, the math box) would hide whatever
+// it imports from the check above. Every static import boot.js reaches is relative.
+test('every static import boot.js reaches is relative, so the walker sees the whole graph', () => {
+	const { files, bare } = walk(file('boot.js'));
+	expect.equal(bare.length, 0, `bare or absolute specifiers in the boot graph: ${JSON.stringify(bare.map(({ from, specifier }) => `${from.split('/js/')[1]}: ${specifier}`))}`);
+	expect.truthy([...files].some((path) => path.endsWith('ui/mathBox.js')), 'the walk reaches the math box');
+});
