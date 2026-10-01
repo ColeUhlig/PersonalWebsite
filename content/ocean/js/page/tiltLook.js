@@ -1,16 +1,20 @@
 // Tilting a phone to look around the ocean (piece C Task 9b; browser-free). On a touch-first screen
 // the story turns orbit off so a swipe scrolls the page; the phone's own tilt gives the look-around
-// back. This is the maths: the phone's orientation (DeviceOrientationEvent beta and gamma, degrees)
-// as a change from a baseline, mapped through the screen's rotation, becomes a small yaw and pitch
-// round the current shot's target, clamped to TILT_LIMITS, smoothed on the play clock, and eased
-// back to the shot when the story moves to another step. ui/tilt.js feeds it events;
+// back. This is the maths: the phone's orientation (DeviceOrientationEvent alpha, beta and gamma,
+// degrees) is built into a rotation (a quaternion, in the W3C order R = Rz(alpha) Rx(beta) Ry(gamma),
+// device to earth), taken relative to the baseline's, and read about the screen's own axes for the
+// screen's rotation (0, 90, 180, 270). That holds at any grip, landscape and near upright included:
+// no gimbal flip, no gain that fades with the lean. The turn becomes a small yaw and pitch round the
+// current shot's target, past a dead band, clamped to TILT_LIMITS, smoothed on the play clock, and
+// eased back to the shot when the story moves to another step. ui/tilt.js feeds it events;
 // ui/storyStage.js applies the offset to the shot's pose before the orbit limits, so the tilt range,
 // the camera floor and the reach still hold.
 //
-// The window convention: the phone is a window onto the sea. Tilting its right edge away turns the
-// view right; standing it up looks further towards the horizon (the camera drops), laying it back
-// looks down (the camera rises). yaw is radians counter-clockwise seen from above (about +y), pitch
-// is radians the camera rises (its tilt from straight down shrinks).
+// The joystick convention (Cole judges it on a device): the phone steers the camera. Tipping the top
+// edge away lifts the camera, so it looks further down; bringing it towards you lowers it towards the
+// horizon. Turning the right edge away, or rolling the phone to the right like a steering wheel,
+// swings the view right. yaw is radians counter-clockwise seen from above (about +y), pitch is
+// radians the camera rises (its tilt from straight down shrinks).
 
 export const TILT_LIMITS = Object.freeze({ yawDeg: 12, pitchDeg: 8 });
 // The smoothing's time constant and the ease back on a step change, both in play-clock seconds.
@@ -18,6 +22,9 @@ export const SMOOTHING_SECONDS = 0.25;
 export const RETURN_SECONDS = 1.2;
 // A frame's seconds are capped here, so a stall does not land the camera in one jump.
 export const MAX_STEP_SECONDS = 0.25;
+// A turn smaller than this, on either axis, is no turn: sensor noise on a phone held still never
+// moves the camera, so the story's zero-offset skip still fires. Larger turns lose this much.
+export const DEAD_BAND_DEG = 0.1;
 // Closer than this (radians) the smoothing lands on its target, so a still phone is exactly still
 // and an offset that has gone back to zero costs the story nothing.
 const SNAP = 1e-6;
@@ -27,14 +34,11 @@ const POLAR_EPSILON = 1e-4;
 const DEG = Math.PI / 180;
 const YAW_MAX = TILT_LIMITS.yawDeg * DEG;
 const PITCH_MAX = TILT_LIMITS.pitchDeg * DEG;
+const DEAD_BAND = DEAD_BAND_DEG * DEG;
 
 const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
 const smoothstep = (x) => x * x * (3 - 2 * x);
-// The change from a to b in degrees, wrapped into (-180, 180].
-const change = (a, b) => {
-	const d = (b - a) % 360;
-	return d > 180 ? d - 360 : d <= -180 ? d + 360 : d;
-};
+const banded = (x) => (x > DEAD_BAND ? x - DEAD_BAND : x < -DEAD_BAND ? x + DEAD_BAND : 0);
 const finite = (...values) => values.every((v) => typeof v === 'number' && Number.isFinite(v));
 
 export const isZeroOffset = (offset) => offset.yaw === 0 && offset.pitch === 0;
@@ -47,11 +51,54 @@ export function quarterTurn(angle) {
 	return (((Math.round(angle / 90) * 90) % 360) + 360) % 360;
 }
 
+// Quaternions as [w, x, y, z]. Kept arrays, so a frame allocates nothing.
+const baseQ = [1, 0, 0, 0];
+const nowQ = [1, 0, 0, 0];
+const turnQ = [1, 0, 0, 0];
+
+// The phone's rotation (device to earth) for a reading, in the W3C order Rz(alpha) Rx(beta)
+// Ry(gamma), written into out. A missing alpha (a browser with no compass) counts as 0.
+function rotationOf(reading, out) {
+	const a = (finite(reading.alpha) ? reading.alpha : 0) * DEG * 0.5;
+	const b = reading.beta * DEG * 0.5;
+	const g = reading.gamma * DEG * 0.5;
+	const ca = Math.cos(a);
+	const sa = Math.sin(a);
+	const cb = Math.cos(b);
+	const sb = Math.sin(b);
+	const cg = Math.cos(g);
+	const sg = Math.sin(g);
+	// (ca, 0, 0, sa) (cb, sb, 0, 0) (cg, 0, sg, 0), multiplied out.
+	out[0] = ca * cb * cg - sa * sb * sg;
+	out[1] = ca * sb * cg - sa * cb * sg;
+	out[2] = ca * cb * sg + sa * sb * cg;
+	out[3] = ca * sb * sg + sa * cb * cg;
+	return out;
+}
+
+// The turn from p to q in p's own axes (conj(p) q), written into out.
+function turnBetween(p, q, out) {
+	const pw = p[0];
+	const px = -p[1];
+	const py = -p[2];
+	const pz = -p[3];
+	const qw = q[0];
+	const qx = q[1];
+	const qy = q[2];
+	const qz = q[3];
+	out[0] = pw * qw - px * qx - py * qy - pz * qz;
+	out[1] = pw * qx + px * qw + py * qz - pz * qy;
+	out[2] = pw * qy - px * qz + py * qw + pz * qx;
+	out[3] = pw * qz + px * qy - py * qx + pz * qw;
+	return out;
+}
+
 /**
- * The offset the phone asks for: its change from `baseline`, mapped through the screen's rotation
- * so landscape turns the view the way portrait does, each axis clamped to TILT_LIMITS.
- * @param {{ beta: number, gamma: number }} reading the phone now, degrees
- * @param {{ beta: number, gamma: number }} baseline the phone when tilt started or the step changed
+ * The offset the phone asks for: its turn since `baseline`, read about the screen's axes for its
+ * rotation, past the dead band, each axis clamped to TILT_LIMITS (the joystick convention above).
+ * @param {{ alpha?: number, beta: number, gamma: number }} reading the phone now, degrees
+ * @param {{ alpha?: number, beta: number, gamma: number }} baseline the phone when tilt started, the
+ *   screen turned, or a step change's ease back ended
  * @param {number} screenAngle the screen's rotation, degrees (0, 90, 180, 270)
  * @returns {{ yaw: number, pitch: number }} radians (written into `out` when given)
  */
@@ -62,24 +109,25 @@ export function orientationToOffset(reading, baseline, screenAngle, out = { yaw:
 		out.pitch = 0;
 		return out;
 	}
-	const beta = change(baseline.beta, reading.beta);
-	const gamma = change(baseline.gamma, reading.gamma);
-	// The turn about the screen's vertical axis and about its horizontal one: in portrait those are
-	// the device's y (gamma) and x (beta) axes; a quarter turn of the screen swaps them.
-	let across = gamma;
-	let along = beta;
-	if (angle === 90) {
-		across = beta;
-		along = -gamma;
-	} else if (angle === 180) {
-		across = -gamma;
-		along = -beta;
-	} else if (angle === 270) {
-		across = -beta;
-		along = gamma;
-	}
-	out.yaw = clamp(-across * DEG, -YAW_MAX, YAW_MAX);
-	out.pitch = clamp(-along * DEG, -PITCH_MAX, PITCH_MAX);
+	const q = turnBetween(rotationOf(baseline, baseQ), rotationOf(reading, nowQ), turnQ);
+	// The turn as a rotation vector (axis times angle, radians) in the device's axes; the short way.
+	const sign = q[0] < 0 ? -1 : 1;
+	const half = Math.hypot(q[1], q[2], q[3]);
+	const scale = half < 1e-12 ? 2 * sign : (2 * Math.atan2(half, sign * q[0]) * sign) / half;
+	const x = q[1] * scale;
+	const y = q[2] * scale;
+	const z = q[3] * scale;
+	// About the screen's axes: its right and up are the device's x and y turned by the screen angle
+	// (at 90 the device is turned anticlockwise, so screen right is the device's -y, up its +x).
+	const c = Math.cos(angle * DEG);
+	const s = Math.sin(angle * DEG);
+	const aboutRight = x * c - y * s;
+	const aboutUp = x * s + y * c;
+	// Positive about the right axis brings the top edge towards the visitor (the camera drops);
+	// positive about the up axis takes the right edge away, and negative about the screen's normal
+	// is a roll to the right: both swing the view right (yaw negative).
+	out.yaw = clamp(banded(z - aboutUp), -YAW_MAX, YAW_MAX);
+	out.pitch = clamp(banded(-aboutRight), -PITCH_MAX, PITCH_MAX);
 	return out;
 }
 
@@ -165,8 +213,8 @@ export function clampPolar(pose, min, max, out = newPose()) {
  * While the clock is stopped (a paused sea) the offset holds, and a step change cuts it to zero.
  */
 export function createTiltFollower() {
-	const reading = { beta: Number.NaN, gamma: Number.NaN };
-	const baseline = { beta: Number.NaN, gamma: Number.NaN };
+	const reading = { alpha: 0, beta: Number.NaN, gamma: Number.NaN };
+	const baseline = { alpha: 0, beta: Number.NaN, gamma: Number.NaN };
 	const target = { yaw: 0, pitch: 0 };
 	const current = { yaw: 0, pitch: 0 };
 	const from = { yaw: 0, pitch: 0 };
@@ -177,6 +225,7 @@ export function createTiltFollower() {
 	let lastKey = null;
 
 	function rebase() {
+		baseline.alpha = reading.alpha;
 		baseline.beta = reading.beta;
 		baseline.gamma = reading.gamma;
 		baseAngle = angle;
@@ -190,13 +239,16 @@ export function createTiltFollower() {
 	}
 
 	return Object.freeze({
-		sense(beta, gamma, screenAngle) {
+		// A reading ({ alpha, beta, gamma }, degrees: a DeviceOrientationEvent will do) and the
+		// screen's rotation. One without a finite beta and gamma is ignored.
+		sense(next, screenAngle) {
 			const turn = quarterTurn(screenAngle);
-			if (!finite(beta, gamma, turn)) {
+			if (!finite(next.beta, next.gamma, turn)) {
 				return;
 			}
-			reading.beta = beta;
-			reading.gamma = gamma;
+			reading.alpha = finite(next.alpha) ? next.alpha : 0;
+			reading.beta = next.beta;
+			reading.gamma = next.gamma;
 			angle = turn;
 			if (!returning && (!finite(baseline.beta, baseline.gamma) || baseAngle !== angle)) {
 				rebase();

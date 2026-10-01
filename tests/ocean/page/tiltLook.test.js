@@ -1,12 +1,16 @@
 // Tilting a phone to look around the ocean (piece C Task 9b): page/tiltLook.js, the phone's
 // orientation turned into a small yaw and pitch round the current shot, smoothed on the play clock,
-// and eased back to the shot when the story moves on.
+// and eased back to the shot when the story moves on. The orientation cases build the phone's real
+// rotation (W3C DeviceOrientation: R = Rz(alpha) Rx(beta) Ry(gamma), device to earth), turn it about
+// the screen's own axes, and decompose it back into the alpha, beta and gamma a browser reports, the
+// way the Task 9b review's checker (orient.mjs) does.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
 import {
 	applyOffset,
 	clampPolar,
 	createTiltFollower,
+	DEAD_BAND_DEG,
 	isZeroOffset,
 	orientationToOffset,
 	RETURN_SECONDS,
@@ -16,7 +20,6 @@ import {
 } from '../../../content/ocean/js/page/tiltLook.js';
 
 const DEG = Math.PI / 180;
-const BASE = { beta: 45, gamma: 0 };
 const YAW_MAX = TILT_LIMITS.yawDeg * DEG;
 const PITCH_MAX = TILT_LIMITS.pitchDeg * DEG;
 const SHOT = { position: [0, 18, 55], target: [0, 0, -20] };
@@ -26,61 +29,129 @@ const polarOf = (pose) => {
 	const [dx, dy, dz] = sub(pose.position, pose.target);
 	return Math.atan2(Math.hypot(dx, dz), dy);
 };
-const offsetAt = (reading, angle = 0) => orientationToOffset(reading, BASE, angle);
+// A reading as the follower and orientationToOffset take it.
+const at = (beta, gamma, alpha = 0) => ({ alpha, beta, gamma });
 
-test('the limits, the smoothing and the return are the brief\'s, and the limits are frozen', () => {
+// The W3C rotation and its decomposition (the spec's appendix: beta in [-180, 180), gamma in
+// [-90, 90)), so each case feeds the code exactly what a browser would.
+const mul = (A, B) => A.map((r) => B[0].map((_, j) => r.reduce((s, _, k) => s + r[k] * B[k][j], 0)));
+const Rx = (d) => [[1, 0, 0], [0, Math.cos(d * DEG), -Math.sin(d * DEG)], [0, Math.sin(d * DEG), Math.cos(d * DEG)]];
+const Ry = (d) => [[Math.cos(d * DEG), 0, Math.sin(d * DEG)], [0, 1, 0], [-Math.sin(d * DEG), 0, Math.cos(d * DEG)]];
+const Rz = (d) => [[Math.cos(d * DEG), -Math.sin(d * DEG), 0], [Math.sin(d * DEG), Math.cos(d * DEG), 0], [0, 0, 1]];
+function reading(M) {
+	let a;
+	let b;
+	let g;
+	if (M[2][2] > 0) {
+		a = Math.atan2(-M[0][1], M[1][1]);
+		b = Math.asin(M[2][1]);
+		g = Math.atan2(-M[2][0], M[2][2]);
+	} else {
+		a = Math.atan2(M[0][1], -M[1][1]);
+		b = -Math.asin(M[2][1]);
+		b += b >= 0 ? -Math.PI : Math.PI;
+		g = Math.atan2(M[2][0], -M[2][2]);
+	}
+	return { alpha: a / DEG, beta: b / DEG, gamma: g / DEG };
+}
+// The phone held `lean` degrees back from upright (90 is flat on its back), facing a heading of 30
+// degrees, with the screen turned `angle` (0, 90, 180, 270: the device turned that far
+// anticlockwise).
+const held = (lean, angle) => mul(Rz(30), mul(Rx(90 - lean), Rz(angle)));
+// A turn of `degrees` about the screen's up axis (positive: the right edge goes away from the
+// visitor) or its right axis (positive: the top edge comes towards the visitor), in device axes.
+const SCREEN_UP = { 0: (d) => Ry(d), 90: (d) => Rx(d), 180: (d) => Ry(-d), 270: (d) => Rx(-d) };
+const SCREEN_RIGHT = { 0: (d) => Rx(d), 90: (d) => Ry(-d), 180: (d) => Rx(-d), 270: (d) => Ry(d) };
+// The offset after the phone at M turns by the body rotation T.
+const offsetFor = (M, T, angle) => orientationToOffset(reading(mul(M, T)), reading(M), angle);
+// What a turn of `degrees` gives once the dead band is taken off.
+const banded = (degrees) => Math.sign(degrees) * Math.max(Math.abs(degrees) - DEAD_BAND_DEG, 0) * DEG;
+const LEANS = Object.freeze({ flat: 90, 'at 45°': 45, '20° from upright': 20, '5° from upright': 5 });
+const near = (actual, expected, label) => expect.near(actual, expected, 0.01 * DEG, label);
+
+test('the limits, the dead band, the smoothing and the return are the brief\'s, and the limits are frozen', () => {
 	expect.equal(TILT_LIMITS.yawDeg, 12, 'yaw limit');
 	expect.equal(TILT_LIMITS.pitchDeg, 8, 'pitch limit');
 	expect.equal(Object.isFrozen(TILT_LIMITS), true, 'frozen');
+	expect.equal(DEAD_BAND_DEG, 0.1, 'dead band');
 	expect.equal(SMOOTHING_SECONDS, 0.25, 'smoothing');
 	expect.equal(RETURN_SECONDS, 1.2, 'return');
 });
 
-test('in portrait a left-right tilt turns the view and a forward-back tilt lifts or lowers it, degree for degree', () => {
-	const right = offsetAt({ beta: 45, gamma: 5 });
-	expect.near(right.yaw, -5 * DEG, 1e-12, 'tilting the right edge away swings the view right (the camera clockwise from above)');
-	expect.near(right.pitch, 0, 1e-12, 'no pitch from a sideways tilt');
-	const upright = offsetAt({ beta: 50, gamma: 0 });
-	expect.near(upright.pitch, -5 * DEG, 1e-12, 'standing the phone up lowers the camera towards the horizon');
-	expect.near(upright.yaw, 0, 1e-12, 'no yaw from a forward tilt');
-	const still = offsetAt(BASE);
-	expect.equal(isZeroOffset(still), true, 'the baseline itself is no offset');
+test('the joystick convention: top edge away lifts the camera, right edge away or a roll right swings the view right', () => {
+	const M = held(45, 0);
+	const away = offsetFor(M, SCREEN_RIGHT[0](-3), 0);
+	near(away.pitch, banded(3), 'top edge away: the camera rises and looks down');
+	near(away.yaw, 0, 'no yaw from a nod');
+	const right = offsetFor(M, SCREEN_UP[0](3), 0);
+	near(right.yaw, banded(-3), 'right edge away: the view swings right (the camera clockwise from above)');
+	near(right.pitch, 0, 'no pitch from a twist');
+	const roll = offsetFor(M, Rz(-3), 0);
+	near(roll.yaw, banded(-3), 'a roll to the right (clockwise as the visitor sees the screen): the view swings right');
+	near(roll.pitch, 0, 'no pitch from a roll');
+	expect.equal(isZeroOffset(offsetFor(M, Rz(0), 0)), true, 'the baseline itself is no offset');
+});
+
+test('a 3° twist gives 3° of yaw and a 3° nod 3° of pitch at every lean, in portrait and landscape', () => {
+	for (const angle of [0, 90, 180, 270]) {
+		for (const [name, lean] of Object.entries(LEANS)) {
+			const M = held(lean, angle);
+			const twist = offsetFor(M, SCREEN_UP[angle](3), angle);
+			near(twist.yaw, banded(-3), `screen ${angle}, ${name}: twist yaw`);
+			near(twist.pitch, 0, `screen ${angle}, ${name}: twist pitch`);
+			const nod = offsetFor(M, SCREEN_RIGHT[angle](-3), angle);
+			near(nod.pitch, banded(3), `screen ${angle}, ${name}: nod pitch`);
+			near(nod.yaw, 0, `screen ${angle}, ${name}: nod yaw`);
+		}
+	}
+});
+
+test('a small move through upright changes the offset smoothly, with no jump at the corner', () => {
+	for (const angle of [0, 90, 270]) {
+		const M = held(1, angle);
+		let previous = null;
+		for (let k = 0; k <= 13; k++) {
+			// From 1° back from upright to 2.9° past it, in steps of 0.3° (stepping over exact upright,
+			// where the reported angles themselves are undefined), the top edge coming forward.
+			const offset = offsetFor(M, SCREEN_RIGHT[angle](k * 0.3), angle);
+			near(offset.pitch, banded(-k * 0.3), `screen ${angle}, step ${k}: pitch`);
+			near(offset.yaw, 0, `screen ${angle}, step ${k}: yaw`);
+			if (previous) {
+				expect.truthy(Math.abs(offset.pitch - previous.pitch) <= 0.31 * DEG, `screen ${angle}, step ${k}: no jump`);
+			}
+			previous = offset;
+		}
+	}
+});
+
+test('a turn under the dead band is no offset, so a still phone\'s noise costs nothing', () => {
+	const M = held(30, 0);
+	expect.equal(isZeroOffset(offsetFor(M, mul(SCREEN_UP[0](0.05), SCREEN_RIGHT[0](-0.08)), 0)), true, 'sensor noise');
+	expect.truthy(offsetFor(M, SCREEN_UP[0](0.3), 0).yaw < 0, 'a real turn still counts');
 });
 
 test('each axis is clamped to its limit at both ends', () => {
-	expect.near(offsetAt({ beta: 45, gamma: 40 }).yaw, -YAW_MAX, 1e-12, 'far right');
-	expect.near(offsetAt({ beta: 45, gamma: -40 }).yaw, YAW_MAX, 1e-12, 'far left');
-	expect.near(offsetAt({ beta: 90, gamma: 0 }).pitch, -PITCH_MAX, 1e-12, 'far up');
-	expect.near(offsetAt({ beta: 0, gamma: 0 }).pitch, PITCH_MAX, 1e-12, 'far down');
-	const wild = offsetAt({ beta: 179, gamma: -89 });
+	const M = held(45, 0);
+	near(offsetFor(M, SCREEN_UP[0](40), 0).yaw, -YAW_MAX, 'far right');
+	near(offsetFor(M, SCREEN_UP[0](-40), 0).yaw, YAW_MAX, 'far left');
+	near(offsetFor(M, SCREEN_RIGHT[0](-30), 0).pitch, PITCH_MAX, 'far away');
+	near(offsetFor(M, SCREEN_RIGHT[0](30), 0).pitch, -PITCH_MAX, 'far towards');
+	const wild = orientationToOffset(at(-170, 89, 200), at(45, 0), 0);
 	expect.truthy(Math.abs(wild.yaw) <= YAW_MAX && Math.abs(wild.pitch) <= PITCH_MAX, 'extreme input stays inside');
 });
 
-test('the change from the baseline wraps round, so crossing beta 180 is a small change', () => {
-	const offset = orientationToOffset({ beta: -178, gamma: 0 }, { beta: 178, gamma: 0 }, 0);
-	expect.near(offset.pitch, -4 * DEG, 1e-12, 'four degrees on, not 356 back');
-});
-
-test('landscape maps through the screen angle: 90 and 270 swap the axes, with opposite signs', () => {
-	const at90 = offsetAt({ beta: 50, gamma: 0 }, 90);
-	expect.near(at90.yaw, -5 * DEG, 1e-12, '90: beta turns the view');
-	expect.near(at90.pitch, 0, 1e-12, '90: beta does not pitch');
-	expect.near(offsetAt({ beta: 45, gamma: 5 }, 90).pitch, 5 * DEG, 1e-12, '90: gamma pitches');
-	const at270 = offsetAt({ beta: 50, gamma: 0 }, 270);
-	expect.near(at270.yaw, 5 * DEG, 1e-12, '270: beta turns the view the other way');
-	expect.near(offsetAt({ beta: 45, gamma: 5 }, 270).pitch, -5 * DEG, 1e-12, '270: gamma pitches the other way');
-	expect.near(offsetAt({ beta: 45, gamma: 5 }, 180).yaw, 5 * DEG, 1e-12, '180: upside down reverses gamma');
-	expect.near(offsetAt({ beta: 50, gamma: 0 }, -90).yaw, at270.yaw, 1e-12, 'window.orientation\'s -90 is 270');
-});
-
-test('non-finite input is no offset', () => {
-	for (const reading of [{ beta: Number.NaN, gamma: 3 }, { beta: null, gamma: null }, { beta: 4 }, { beta: Infinity, gamma: 0 }]) {
-		const offset = offsetAt(reading);
-		expect.equal(offset.yaw, 0, `yaw for ${JSON.stringify(reading)}`);
-		expect.equal(offset.pitch, 0, `pitch for ${JSON.stringify(reading)}`);
+test('non-finite input is no offset; a missing alpha (no compass) counts as 0', () => {
+	for (const bad of [at(Number.NaN, 3), at(null, null), { beta: 4 }, at(Infinity, 0)]) {
+		const offset = orientationToOffset(bad, at(45, 0), 0);
+		expect.equal(offset.yaw, 0, `yaw for ${JSON.stringify(bad)}`);
+		expect.equal(offset.pitch, 0, `pitch for ${JSON.stringify(bad)}`);
 	}
-	expect.equal(isZeroOffset(orientationToOffset({ beta: 50, gamma: 5 }, { beta: Number.NaN, gamma: 0 }, 0)), true, 'no baseline');
-	expect.equal(isZeroOffset(orientationToOffset({ beta: 50, gamma: 5 }, BASE, Number.NaN)), true, 'no screen angle');
+	expect.equal(isZeroOffset(orientationToOffset(at(50, 5), at(Number.NaN, 0), 0)), true, 'no baseline');
+	expect.equal(isZeroOffset(orientationToOffset(at(50, 5), at(45, 0), Number.NaN)), true, 'no screen angle');
+	const blind = orientationToOffset({ alpha: null, beta: 45, gamma: 5 }, { alpha: null, beta: 45, gamma: 0 }, 0);
+	near(blind.yaw, banded(-5), 'beta and gamma alone still turn the view');
+	const out = { yaw: 0, pitch: 0 };
+	expect.equal(orientationToOffset(at(50, 5), at(45, 0), 0, out), out, 'writes into out');
 });
 
 test('the smoothing converges on the target and lands on it exactly', () => {
@@ -158,36 +229,36 @@ const run = (follower, key, count, seconds = 1 / 60) => {
 test('the follower starts from the first reading and follows the phone, smoothed', () => {
 	const follower = createTiltFollower();
 	expect.equal(isZeroOffset(run(follower, 3, 5)), true, 'nothing before a reading');
-	follower.sense(45, 0, 0);
+	follower.sense(at(45, 0), 0);
 	expect.equal(isZeroOffset(run(follower, 3, 5)), true, 'the first reading is the baseline');
-	follower.sense(45, 20, 0);
+	follower.sense(at(45, 20), 0);
 	const early = run(follower, 3, 3);
 	expect.truthy(early.yaw < 0 && early.yaw > -YAW_MAX, 'on its way');
 	expect.near(run(follower, 3, 240).yaw, -YAW_MAX, 1e-12, 'arrives at the limit');
-	follower.sense(Number.NaN, null, 0);
+	follower.sense(at(Number.NaN, null), 0);
 	expect.near(run(follower, 3, 5).yaw, -YAW_MAX, 1e-12, 'a blank reading changes nothing');
 });
 
 test('a step change eases the offset to zero over the return, then follows from a new baseline', () => {
 	const follower = createTiltFollower();
-	follower.sense(45, 0, 0);
+	follower.sense(at(45, 0), 0);
 	run(follower, 3, 1);
-	follower.sense(45, 20, 0);
+	follower.sense(at(45, 20), 0);
 	run(follower, 3, 240);
 	const half = run(follower, 4, 36); // 0.6 s of 1.2
 	expect.truthy(half.yaw < -0.2 * YAW_MAX && half.yaw > -0.8 * YAW_MAX, `half way back (${half.yaw})`);
 	expect.equal(isZeroOffset(run(follower, 4, 40)), true, 'back on the shot after the return, though the phone is still tilted');
-	follower.sense(45, 25, 0);
-	expect.near(run(follower, 4, 240).yaw, -5 * DEG, 1e-12, 'follows the phone again from where it was held');
+	follower.sense(at(45, 25), 0);
+	expect.near(run(follower, 4, 240).yaw, banded(-5), 1e-9, 'follows the phone again from where it was held');
 });
 
 test('while the clock is stopped the offset holds, and a step change cuts it to zero', () => {
 	const follower = createTiltFollower();
-	follower.sense(45, 0, 0);
+	follower.sense(at(45, 0), 0);
 	run(follower, 3, 1);
-	follower.sense(45, 6, 0);
+	follower.sense(at(45, 6), 0);
 	const before = run(follower, 3, 3).yaw;
-	follower.sense(45, 12, 0);
+	follower.sense(at(45, 12), 0);
 	expect.equal(run(follower, 3, 10, 0).yaw, before, 'paused: the camera stays put');
 	expect.equal(isZeroOffset(run(follower, 5, 1, 0)), true, 'a step change with no clock is a cut');
 	expect.equal(isZeroOffset(run(follower, 5, 10)), true, 'and the phone as held is the new baseline');
@@ -195,14 +266,14 @@ test('while the clock is stopped the offset holds, and a step change cuts it to 
 
 test('turning the screen, or resetting, takes a new baseline', () => {
 	const follower = createTiltFollower();
-	follower.sense(45, 0, 0);
+	follower.sense(at(45, 0), 0);
 	run(follower, 2, 1);
-	follower.sense(10, 40, 90);
+	follower.sense(at(10, 40), 90);
 	expect.equal(isZeroOffset(run(follower, 2, 240)), true, 'a rotation to landscape rebases');
-	follower.sense(10, 45, 90);
+	follower.sense(at(10, 45), 90);
 	expect.truthy(!isZeroOffset(run(follower, 2, 240)), 'then follows');
 	follower.reset();
 	expect.equal(isZeroOffset(follower.offset()), true, 'reset clears the offset');
-	follower.sense(30, 10, 90);
+	follower.sense(at(30, 10), 90);
 	expect.equal(isZeroOffset(run(follower, 2, 240)), true, 'and the next reading is the baseline');
 });

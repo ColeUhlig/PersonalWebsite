@@ -5,13 +5,15 @@
 import { test, expect } from '@playwright/test';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { CAMERA_FLOOR } from '../../../content/ocean/js/page/orbitLimits.js';
-import { RETURN_SECONDS, TILT_LIMITS } from '../../../content/ocean/js/page/tiltLook.js';
+import { DEAD_BAND_DEG, RETURN_SECONDS, TILT_LIMITS } from '../../../content/ocean/js/page/tiltLook.js';
 import { oceanRunning, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
 
 const DEG = Math.PI / 180;
 const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
 // A little slack on the limits for the float round trip through OrbitControls.
 const SLACK = 0.05 * DEG;
+// A turn of `degrees` once the dead band is taken off.
+const banded = (degrees) => Math.sign(degrees) * (Math.abs(degrees) - DEAD_BAND_DEG) * DEG;
 
 const story = (page, name, ...args) => page.evaluate(([n, a]) => window.__ocean.story[n](...a), [name, args]);
 const tiltState = (page) => page.evaluate(() => window.__tilt?.state() ?? null);
@@ -111,7 +113,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await tilt(page, 45, 5);
 		await waitClock(page, 2);
 		let turn = turnFrom(shot, await story(page, 'pose'));
-		expect(turn.yaw).toBeCloseTo(-5 * DEG, 3);
+		expect(turn.yaw).toBeCloseTo(banded(-5), 3);
 		expect(Math.abs(turn.pitch)).toBeLessThan(1e-4);
 		expect(Math.abs(turn.radius)).toBeLessThan(1e-3);
 		// Extreme readings: each axis stops at its limit, and laying the phone back far enough to
@@ -149,7 +151,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await tilt(page, 45, -8);
 		await waitClock(page, 2);
 		const turn = turnFrom(opening, await story(page, 'pose'));
-		expect(turn.yaw).toBeCloseTo(8 * DEG, 3);
+		expect(turn.yaw).toBeCloseTo(banded(8), 3);
 		await tilt(page, 45, 0);
 		await waitClock(page, 3);
 		const pose = await story(page, 'pose');
@@ -223,6 +225,51 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		expect(largest, `the largest move in one frame: ${largest.toFixed(2)} studs`).toBeLessThan(8);
 		expect(errors).toEqual([]);
 	});
+
+	// A phone held still still reports a little noise; under the dead band it is no turn, so the
+	// story stops putting the camera anywhere new.
+	test("a still phone's sensor noise leaves the camera alone", async ({ page }) => {
+		const errors = watchErrors(page);
+		await page.addInitScript(openPhone);
+		await oceanRunning(page);
+		await startTilting(page);
+		const shot = await settleOn(page, 3);
+		await waitClock(page, RETURN_SECONDS + 0.3);
+		const noise = [[45.04, 0.03], [44.97, -0.05], [45.02, 0.06], [44.95, -0.02], [45.05, 0.04]];
+		await page.evaluate((readings) => {
+			let i = 0;
+			window.__noise = setInterval(() => {
+				const [beta, gamma] = readings[i++ % readings.length];
+				window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { alpha: 0.02 * (i % 3), beta, gamma }));
+			}, 16);
+		}, noise);
+		await waitClock(page, 0.5);
+		const applied = await story(page, 'applied');
+		await waitClock(page, 1);
+		expect(await story(page, 'applied')).toBe(applied);
+		const turn = turnFrom(shot, await story(page, 'pose'));
+		expect(Math.abs(turn.yaw)).toBeLessThan(1e-9);
+		expect(Math.abs(turn.pitch)).toBeLessThan(1e-9);
+		await page.evaluate(() => clearInterval(window.__noise));
+		expect(errors).toEqual([]);
+	});
+
+	test('a phone that sends no reading within 3 s has no tilt, and a late one does nothing', async ({ page }) => {
+		const errors = watchErrors(page);
+		await page.addInitScript(openPhone);
+		await oceanRunning(page);
+		expect(await tiltState(page)).toBe('off');
+		await page.waitForFunction(() => window.__tilt.state() === 'unsupported', null, { timeout: 10_000 });
+		expect(await page.locator('#tilt').isHidden()).toBe(true);
+		const shot = await settleOn(page, 3);
+		await tilt(page, 45, 0);
+		await tilt(page, 45, 9);
+		await waitClock(page, 1);
+		expect(await tiltState(page)).toBe('unsupported');
+		const turn = turnFrom(shot, await story(page, 'pose'));
+		expect(Math.abs(turn.yaw)).toBeLessThan(1e-6);
+		expect(errors).toEqual([]);
+	});
 });
 
 test.describe('on a phone that asks for motion access (iOS)', () => {
@@ -252,7 +299,7 @@ test.describe('on a phone that asks for motion access (iOS)', () => {
 		await tilt(page, 45, 6);
 		await waitClock(page, 2);
 		turn = turnFrom(shot, await story(page, 'pose'));
-		expect(turn.yaw).toBeCloseTo(-6 * DEG, 3);
+		expect(turn.yaw).toBeCloseTo(banded(-6), 3);
 		expect(errors).toEqual([]);
 	});
 
@@ -274,19 +321,11 @@ test.describe('on a phone that asks for motion access (iOS)', () => {
 		expect(errors).toEqual([]);
 	});
 
-	test('the button sits over the ocean, clear of the motion button, and shows a focus ring', async ({ page }) => {
+	test('the button shows a visible focus ring', async ({ page }) => {
 		await page.addInitScript(askingPhone, 'granted');
 		await oceanRunning(page);
 		const button = page.locator('#tilt');
 		await expect(button).toBeVisible();
-		await expect(page.locator('#motion')).toBeVisible();
-		const box = await button.boundingBox();
-		const motion = await page.locator('#motion').boundingBox();
-		const canvas = await page.evaluate(() => document.getElementById('ocean').getBoundingClientRect().toJSON());
-		expect(box.y + box.height).toBeLessThanOrEqual(canvas.bottom);
-		expect(box.x + box.width).toBeLessThanOrEqual(390);
-		const apart = box.y + box.height <= motion.y || motion.y + motion.height <= box.y || box.x + box.width <= motion.x || motion.x + motion.width <= box.x;
-		expect(apart).toBe(true);
 		await button.focus();
 		const outline = await button.evaluate((el) => {
 			const style = getComputedStyle(el);
@@ -297,21 +336,122 @@ test.describe('on a phone that asks for motion access (iOS)', () => {
 	});
 });
 
+// Where the pills (the tilt and motion buttons) land on touch screens, through the whole page: they
+// never overlap each other, never cover readable text, and on a narrow screen sit over the ocean's
+// half. Text counts as covered when it is the top thing at the overlap (the Task 9b review's check):
+// text the ocean's canvas already hides on a narrow screen does not count.
+async function pillProblems(page, scrolls) {
+	const total = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+	const problems = [];
+	for (let i = 0; i <= scrolls; i++) {
+		await page.evaluate((y) => window.scrollTo(0, y), Math.round((total * i) / scrolls));
+		await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+		const found = await page.evaluate(() => {
+			const hit = (a, c) => a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom;
+			const pills = ['tilt', 'motion'].map((id) => document.getElementById(id)).filter((b) => !b.hidden);
+			const boxes = pills.map((b) => b.getBoundingClientRect());
+			const out = [];
+			if (boxes.length === 2 && hit(boxes[0], boxes[1])) out.push('the pills overlap');
+			const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+			for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+				if (!n.textContent.trim() || pills.some((b) => b.contains(n))) continue;
+				const range = document.createRange();
+				range.selectNodeContents(n);
+				for (const rect of range.getClientRects()) {
+					for (const box of boxes) {
+						if (!hit(rect, box)) continue;
+						const x = (Math.max(rect.left, box.left) + Math.min(rect.right, box.right)) / 2;
+						const y = (Math.max(rect.top, box.top) + Math.min(rect.bottom, box.bottom)) / 2;
+						const top = document.elementsFromPoint(x, y).find((e) => !pills.some((b) => b === e || b.contains(e)) && !e.classList.contains('pills'));
+						if (top && (top === n.parentElement || top.contains(n.parentElement) || n.parentElement.contains(top))) {
+							out.push(`covers "${n.textContent.trim().slice(0, 30)}" at scroll ${Math.round(window.scrollY)}`);
+						}
+					}
+				}
+			}
+			return out;
+		});
+		problems.push(...found);
+	}
+	return [...new Set(problems)];
+}
+
+const SCREENS = [
+	{ width: 390, height: 844 },
+	{ width: 1024, height: 768 },
+	{ width: 932, height: 430 },
+	{ width: 1180, height: 820 },
+];
+
+for (const { width, height } of SCREENS) {
+	test.describe(`the pills on a ${width} × ${height} touch screen`, () => {
+		test.use({ viewport: { width, height }, isMobile: true, hasTouch: true });
+
+		test('never overlap each other or cover text, anywhere on the page', async ({ page }) => {
+			test.setTimeout(240_000);
+			await page.addInitScript(askingPhone, 'granted');
+			await oceanRunning(page);
+			await expect(page.locator('#tilt')).toBeVisible();
+			await expect(page.locator('#motion')).toBeVisible();
+			if (width < 900) {
+				const canvas = await page.evaluate(() => document.getElementById('ocean').getBoundingClientRect().toJSON());
+				for (const id of ['#tilt', '#motion']) {
+					const box = await page.locator(id).boundingBox();
+					expect(box.y + box.height).toBeLessThanOrEqual(canvas.bottom);
+					expect(box.x + box.width).toBeLessThanOrEqual(width);
+				}
+			}
+			expect(await pillProblems(page, 40)).toEqual([]);
+		});
+	});
+}
+
+test.describe('the pills with the text at twice its size', () => {
+	test.use({ viewport: { width: 1024, height: 768 }, isMobile: true, hasTouch: true });
+
+	test('still never overlap each other or cover text', async ({ page }) => {
+		test.setTimeout(240_000);
+		await page.addInitScript(askingPhone, 'denied');
+		await page.addInitScript(() => {
+			document.addEventListener('DOMContentLoaded', () => {
+				document.documentElement.style.fontSize = '200%';
+			});
+		});
+		await oceanRunning(page);
+		await page.locator('#tilt').tap();
+		await expect(page.locator('#tilt')).toHaveText('Motion access was denied');
+		expect(await pillProblems(page, 20)).toEqual([]);
+	});
+});
+
 test.describe('under reduced motion', () => {
 	test.use({ ...PHONE, reducedMotion: 'reduce' });
 
-	test('there is no button and orientation events do nothing', async ({ page }) => {
+	// Reduced motion starts the clock stopped, and a stopped clock freezes the tilt anyway; the clock
+	// is played here so the camera could move if tilt were on.
+	test('orientation events do nothing, even with the ocean playing', async ({ page }) => {
 		const errors = watchErrors(page);
-		await page.addInitScript(askingPhone, 'granted');
+		await page.addInitScript(openPhone);
 		await oceanRunning(page);
 		const shot = await settleOn(page, 3);
-		expect(await page.locator('#tilt').isHidden()).toBe(true);
-		expect(await tiltState(page)).toBe('off');
+		await page.locator('#motion').tap();
+		await expect(page.locator('#motion')).toHaveText('Pause the ocean');
 		await tilt(page, 45, 0);
+		await waitClock(page, 0.3);
 		await tilt(page, 45, 9);
-		await waitFrames(page, 30);
+		await waitClock(page, 1.5);
+		expect(await tiltState(page)).toBe('off');
 		const turn = turnFrom(shot, await story(page, 'pose'));
 		expect(Math.abs(turn.yaw)).toBeLessThan(1e-6);
 		expect(errors).toEqual([]);
+	});
+
+	test('a phone that asks for motion access gets no button', async ({ page }) => {
+		await page.addInitScript(askingPhone, 'granted');
+		await oceanRunning(page);
+		await waitFrames(page, 10);
+		expect(await page.locator('#tilt').isHidden()).toBe(true);
+		expect(await tiltState(page)).toBe('off');
+		expect(await page.evaluate(() => window.__permissionRequests)).toBe(0);
 	});
 });
