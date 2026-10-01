@@ -260,16 +260,16 @@
 			<article class="panel">
 				<p class="chapter">Chapter four · The real ocean</p>
 				<h2 id="step-14-title">Time and frequency</h2>
-				<p>Placeholder: back to the flat graph, and the same waves as spikes.</p>
+				<p>Back to a flat graph for a minute. So far each wave has been a curve. The same waves can be written another way: as a list of how much of each frequency there is. Then each wave is a single spike, placed at how often it repeats and as tall as the wave. The chart below does that with the same FFT code the ocean runs on; add waves with the slider and a spike appears for each.</p>
 				<div class="controls" data-controls="14" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="frequency">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>Placeholder caption.</figcaption>
+					<figcaption>The waves on the graph over one tile (top) and the same waves as spikes (bottom), worked out with the ocean's own FFT code in your browser.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>y(x) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(k_i x + \varphi_i)</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>y(x) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i\,{\sin(k_i x + \varphi_i)} \;\Longleftrightarrow\; \hat{y}(k)</code></div>
+					<p class="math-note">On the left of the arrow, the waves as a curve; on the right, the same waves as one spike each, written ŷ.</p>
 				</details>
 			</article>
 		</section>
@@ -277,16 +277,16 @@
 		<section class="step" id="step-15" data-step="15" data-step-id="fourier" aria-labelledby="step-15-title">
 			<article class="panel">
 				<h2 id="step-15-title">Taking a chord apart</h2>
-				<p>Placeholder: a chord split into its tones and put back together.</p>
+				<p>Going from a curve to its spikes and back loses nothing, and that's the useful part. Think of a chord: split it into its notes, drop one, put it back together, and you get the chord without that note. Switch the tones off and on.</p>
 				<div class="controls" data-controls="15" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="fourier">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>Placeholder caption.</figcaption>
+					<figcaption>Three tones summed into a chord, and the chord rebuilt from the tones still switched on (bold), with each tone as a spike underneath; a tone switched off is dashed.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>y(t) = \sum_{j} \htmlClass{t-note}{a_j} \sin(2\pi f_j t), \qquad \hat{y} = \mathcal{F}\{y\}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>y(t) = \sum_{j} \htmlClass{t-note}{a_j} \sin(2\pi f_j t), \qquad \hat{y} = \mathcal{F}\{y\}, \qquad y = \mathcal{F}^{-1}\{\hat{y}\}</code></div>
+					<p class="math-note">𝓕 turns a signal into its frequencies and 𝓕⁻¹ turns them back; a tone switched off is a spike set to zero before going back.</p>
 				</details>
 			</article>
 		</section>
@@ -311,16 +311,16 @@
 		<section class="step" id="step-17" data-step="17" data-step-id="random-sea" aria-labelledby="step-17-title">
 			<article class="panel">
 				<h2 id="step-17-title">A random ocean</h2>
-				<p>Placeholder: each wave's random height and starting angle, as arrows held still.</p>
+				<p>A real sea isn't a neat set of chosen waves, so each wave from the spectrum gets a random height from a bell curve and a random starting angle. Here they are as arrows, held still: each arrow is one wave, its length half that wave's crest height and its angle where the wave starts. Press New sea for a different roll of the dice.</p>
 				<div class="controls" data-controls="17" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="phase" data-motion="still">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>Placeholder caption.</figcaption>
+					<figcaption>The tallest waves in the 256-stud layer as arrows, held at their starting angles.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,\htmlClass{t-seed}{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<p class="math-note">The ξ are random numbers from a bell curve, picked by the seed (the New sea button). The random numbers come from a documented generator rather than Roblox's own, so this is the same kind of sea as the game's, not the same waves.</p>
 				</details>
 			</article>
 		</section>
@@ -328,7 +328,7 @@
 		<section class="step" id="step-18" data-step="18" data-step-id="time" aria-labelledby="step-18-title">
 			<article class="panel">
 				<h2 id="step-18-title">Setting it moving</h2>
-				<p>A real sea isn't a neat set of chosen waves, so each wave from the spectrum gets a random height from a bell curve and a random starting angle. The arrows are real waves from this sea, turning at the speeds the dispersion gives them (short waves turn fastest, though long waves travel fastest), looping every 120 s.</p>
+				<p>Now let the clock run. How fast a wave turns depends only on its length, a rule called the dispersion. The arrows are real waves from this sea, turning at the speeds the dispersion gives them (short waves turn fastest, though long waves travel fastest), looping every 120 s.</p>
 				<div class="controls" data-controls="18" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="phase" data-motion="turning">
 					<div class="chart-body" data-copy-skip="live"></div>
@@ -337,7 +337,7 @@
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,\htmlClass{t-seed}{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}, \quad \tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,e^{-i\omega t} + \tilde h_0^{*}(-\mathbf{k})\,e^{i\omega t}, \quad \omega = \sqrt{g k \tanh(k d)}, \quad e^{i\theta} = \cos\theta + i\sin\theta</code></div>
-					<p class="math-note">The ξ are random numbers from a bell curve, picked by the seed (the New sea button). d is the water depth the engine uses, 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves, so ω is close to √(gk) and long waves outrun short ones. The code rounds each ω down to a whole number of turns per 120 s, so the sea repeats every 120 s. Euler's formula turns each wave into an arrow spinning in the complex plane. The random numbers come from a documented generator rather than Roblox's own, so this is the same kind of sea as the game's, not the same waves.</p>
+					<p class="math-note">d is the water depth the engine uses, 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves, so ω is close to √(gk) and long waves outrun short ones. The code rounds each ω down to a whole number of turns per 120 s, so the sea repeats every 120 s. Euler's formula turns each wave into an arrow spinning in the complex plane.</p>
 				</details>
 			</article>
 		</section>
@@ -375,12 +375,12 @@
 		<section class="step" id="step-20" data-step="20" data-step-id="choppiness" aria-labelledby="step-20-title">
 			<article class="panel">
 				<h2 id="step-20-title">Choppiness</h2>
-				<p>Placeholder: the sea from the side; a second set of transforms pushes points sideways.</p>
+				<p>So far the FFT only moves points up and down, and the sea looks soft. Run another set of transforms over the same waves and you get a sideways push for every point, toward the crests, which is what sharpens them. It's the Gerstner idea again, done for the whole spectrum at once.</p>
 				<div class="controls" data-controls="20" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\mathbf{x}' = \mathbf{x} + \htmlClass{t-chop}{c}\,\mathbf{D}(\mathbf{x}, t)</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>\mathbf{D}(\mathbf{x}, t) = \sum_{\mathbf{k}} i\,\frac{\mathbf{k}}{\lvert\mathbf{k}\rvert}\,\tilde h(\mathbf{k}, t)\,e^{i\,\mathbf{k}\cdot\mathbf{x}}, \qquad \mathbf{x}' = \mathbf{x} + \htmlClass{t-chop}{c}\,\mathbf{D}</code></div>
+					<p class="math-note">D is the sideways push and c, the choppiness, scales it. Tessendorf's notes write the push with −i; the code uses +i, which moves water toward the crests, the way a Gerstner wave does.</p>
 				</details>
 			</article>
 		</section>
@@ -415,16 +415,16 @@
 			<article class="panel">
 				<p class="chapter">Chapter five · Textures</p>
 				<h2 id="step-22-title">The answer is a grid of numbers</h2>
-				<p>Placeholder: the transform's answer as images of numbers.</p>
+				<p>Here's what the FFT actually hands back: not a surface, but grids of numbers. Grids of heights, of slopes and of sideways pushes, for each layer. Here are three of them for the biggest layer, live in your browser, drawn as pictures: blue below zero, pale at zero, amber above.</p>
 				<div class="controls" data-controls="22" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="fields">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>Placeholder caption.</figcaption>
+					<figcaption>The 256-stud layer's height, slope and sideways push, straight from the engine running in your browser, as they are right now.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>h_{ij},\ \ \partial_x h_{ij},\ \ D_{x,ij}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>h_{ij},\ \ \partial_x h_{ij},\ \ D_{x,ij}, \quad i, j = 0 \ldots N-1</code></div>
+					<p class="math-note">The height h, the slope along x and the sideways push along x, one value per grid cell: column i, row j of an N × N grid.</p>
 				</details>
 			</article>
 		</section>
@@ -432,26 +432,26 @@
 		<section class="step" id="step-23" data-step="23" data-step-id="sampling" aria-labelledby="step-23-title">
 			<article class="panel">
 				<h2 id="step-23-title">Reading between the grid points</h2>
-				<p>Placeholder: one point among its four neighbours, and the wrap at the edge.</p>
+				<p>The points the surface is built from (the next step shows them) don't sit exactly on the grid, so each one blends the four grid values around it, weighted by how close it is. That's bilinear sampling. At the edge the grid wraps round to the other side, which is why the sea tiles without a seam; the dot swings back and forth across that edge, which is drawn as a dashed line.</p>
 				<div class="controls" data-controls="23" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="sampling">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>Placeholder caption.</figcaption>
+					<figcaption>One point between grid values: the four it blends and how much of each, beside the engine's own answer for the same point.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>h = (1-f_u)(1-f_v)\,h_{00} + f_u(1-f_v)\,h_{10} + (1-f_u)f_v\,h_{01} + f_u f_v\,h_{11}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>h(u, v) = {(1-f_u)(1-f_v)\,h_{00}} + {f_u(1-f_v)\,h_{10}} + {(1-f_u)f_v\,h_{01}} + {f_u f_v\,h_{11}}, \quad \text{indices} \bmod N</code></div>
+					<p class="math-note">f_u and f_v are how far the point sits between its grid neighbours; the indices wrap round at the grid's edge.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
 					<dl>
 						<dt>Normally</dt>
-						<dd>Placeholder.</dd>
+						<dd>The graphics card's texture hardware does this blend for free, for every pixel, wrap-around included.</dd>
 						<dt>In Roblox</dt>
-						<dd>Placeholder.</dd>
+						<dd>There's no shader to read a texture from, so nothing does it for me.</dd>
 						<dt>What I did</dt>
-						<dd>Placeholder.</dd>
+						<dd>Wrote the blend in Luau and ran it for every point the script moves, for each layer that point's ring uses, every frame (the outermost ring every other frame).</dd>
 					</dl>
 				</aside>
 			</article>
@@ -460,12 +460,12 @@
 		<section class="step" id="step-24" data-step="24" data-step-id="mesh" aria-labelledby="step-24-title">
 			<article class="panel">
 				<h2 id="step-24-title">The mesh</h2>
-				<p>Placeholder: the rings of the mesh under a wireframe.</p>
+				<p>All those numbers end up on a mesh: rings of points centred where the camera looks, each ring twice as coarse as the one inside it, so the detail goes where you're looking. The rings snap to a fixed grid as the camera moves, so the waves don't swim.</p>
 				<div class="controls" data-controls="24" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\Delta_r = 2^r, \qquad \mathbf{c}_r = \Delta_r \operatorname{round}(\mathbf{p} / \Delta_r)</code></div>
-					<p class="math-note">Placeholder.</p>
+					<div class="tex" data-copy-skip="math"><code>\Delta_r = 2^r\ \text{studs}, \qquad \mathbf{c}_r = 2\Delta_r\,\operatorname{round}\big(\mathbf{p} / 2\Delta_r\big)</code></div>
+					<p class="math-note">Ring r has its points Δ_r studs apart, and its centre snaps to the nearest multiple of twice Δ_r under p, the point the camera looks at. Twice, so the edge of each ring lands on the next ring's points and the two keep meeting.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
@@ -486,16 +486,16 @@
 		<section class="step" id="step-25" data-step="25" data-step-id="painted" aria-labelledby="step-25-title">
 			<article class="panel">
 				<h2 id="step-25-title">Painted maps</h2>
-				<p>Placeholder: the painted colour, glow and ripple maps, live.</p>
+				<p>Colour, the glow mask and the ripples (a normal map) can't be worked out pixel by pixel in Roblox, so two worker threads paint them into images and hand them over a slice at a time. This page does the same. These are its real maps, live in your browser, as its painters leave them.</p>
 				<div class="controls" data-controls="25" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="painted">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>Placeholder caption.</figcaption>
+					<figcaption>The colour, glow-mask and ripple maps the painters are making right now, shrunk to fit.</figcaption>
 				</figure>
 				<details class="math">
 					<summary>The math</summary>
 					<div class="tex" data-copy-skip="math"><code>\text{rgb} = \tfrac{1}{2}(n_x,\ n_z,\ n_y) + \tfrac{1}{2}</code></div>
-					<p class="math-note">Placeholder.</p>
+					<p class="math-note">Each ripple-map pixel stores the surface's direction as a colour: the normal's x, z and y, each squeezed from between minus one and one into the range a pixel can hold.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
@@ -503,11 +503,11 @@
 						<dt>Normally</dt>
 						<dd>A pixel shader works out the colour of every pixel on screen, every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh, and ripples come from a normal map. On a mesh built by code, the normal map only worked when I passed it in as the material was created. Setting it afterwards, the obvious way, broke the shine.</dd>
+						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh, and ripples come from a normal map. On a mesh built by code, the normal map only worked when I passed it in as the material was created; setting it afterwards, the obvious way, broke the shine. Game scripts can't swap a material's textures; only plugins can. Every image has to be handed over the moment the material is created, and after that I can only rewrite its pixels.</dd>
 						<dt>What I did</dt>
 						<dd>Paint the colour, glow mask and ripple maps on two worker threads and each frame hand Roblox part of them: one band of the colour map, and the glow mask or the ripple map in turn.</dd>
 						<dt>The number</dt>
-						<dd>Measured before I added foam, handing over one image a frame cost 0.037 ms of script time in Studio.</dd>
+						<dd>Measured before I added foam, back when the game handed Roblox one whole image a frame: 0.037 ms of script time in Studio. Now each frame carries a band of the colour map and the glow mask or the ripple map, and I haven't timed that on its own.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -521,8 +521,8 @@
 				<div class="controls" data-controls="26" data-copy-skip="live"></div>
 				<details class="math">
 					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>J = (1 + \partial_x D_x)(1 + \partial_z D_z) - \partial_x D_z\,\partial_z D_x, \qquad f \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \beta\,{\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)</code></div>
-					<p class="math-note">J (the Jacobian) drops below the whitecap level w where the water folds. f is the foam: it grows there by β times how far J is under w, and everywhere it keeps a fraction δ of itself each step.</p>
+					<div class="tex" data-copy-skip="math"><code>J = {(1 + c\,\partial_x D_x)(1 + c\,\partial_z D_z)} - {(c\,\partial_x D_z)^2}, \qquad f \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \beta\,{\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)</code></div>
+					<p class="math-note">J (the Jacobian) measures how much the sideways push (c times D, from the choppiness step) squeezes the surface, and drops below the whitecap level w where the water folds. (∂ₓD_z and ∂_zDₓ are equal, hence the square.) f is the foam: it grows there by β times how far J is under w, and everywhere it keeps a fraction δ of itself each step.</p>
 				</details>
 				<aside class="card">
 					<h3>Roblox says no</h3>
@@ -530,7 +530,7 @@
 						<dt>Normally</dt>
 						<dd>Foam lives in a texture the GPU updates in place, every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>Game scripts can't swap a material's textures; only plugins can. Every image has to be handed over the moment the material is created, and after that I can only rewrite its pixels.</dd>
+						<dd>No pixel shaders again: foam has to be painted into the colour map like everything else.</dd>
 						<dt>What I did</dt>
 						<dd>Run the foam on a painter worker and paint it into the colour map a quarter at a time.</dd>
 						<dt>The number</dt>
@@ -609,12 +609,13 @@
 			<section class="block" id="recap" aria-labelledby="recap-title">
 				<h3 id="recap-title">Every time Roblox said no</h3>
 				<ul>
-					<li>No moving meshes on the GPU: a script builds the surface with EditableMesh.</li>
 					<li>No vertex shaders: a script moves every point, every frame.</li>
-					<li>No pixel shaders: colour, glow and ripples are painted into images.</li>
-					<li>No tessellation: rings of patches around the camera instead.</li>
+					<li>No pixel shaders for light: Roblox's own lighting does the highlight and the sky reflection.</li>
 					<li>No GPU compute: the FFT runs in Luau on three worker Actors.</li>
 					<li>Workers take turns: a frame-counted fade hides it.</li>
+					<li>No texture hardware to sample with: the blend is Luau arithmetic.</li>
+					<li>No moving meshes on the GPU and no tessellation: rings of patches built with EditableMesh.</li>
+					<li>No pixel shaders: colour, glow and ripples are painted into images.</li>
 					<li>No texture swaps from game scripts: every image is handed over up front.</li>
 					<li>No lighting hooks: 232 materials on the top tier, each with its own glow.</li>
 				</ul>

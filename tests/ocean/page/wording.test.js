@@ -10,7 +10,7 @@ const html = readFileSync(new URL('../../../content/ocean/index.html', import.me
 const sections = structureOf(html);
 const text = (inner) => inner.replace(/<div class="tex"[\s\S]*?<\/div>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 // The steps this lane has written so far: Task 12 sets 13, Task 13 sets 28.
-export const WRITTEN_UP_TO = 13;
+export const WRITTEN_UP_TO = 28;
 
 test('no placeholder is left in the steps written so far', () => {
 	for (const section of sections.filter((s) => s.n <= WRITTEN_UP_TO)) {
