@@ -151,16 +151,16 @@ export function mountControls({ root, step, story, onChange = () => {} }) {
 			const open = buttons.filter((button) => !button.disabled);
 			const place = open.indexOf(buttons[at]);
 			const last = open.length - 1;
-			const step = NEXT_KEYS.has(event.key) ? (place === last ? 0 : place + 1)
+			const next = NEXT_KEYS.has(event.key) ? (place === last ? 0 : place + 1)
 				: PREVIOUS_KEYS.has(event.key) ? (place <= 0 ? last : place - 1)
 					: event.key === 'Home' ? 0
 						: event.key === 'End' ? last
 							: null;
-			if (step === null || last < 0) return;
-			const next = buttons.indexOf(open[step]);
+			if (next === null || last < 0) return;
+			const chosen = buttons.indexOf(open[next]);
 			event.preventDefault();
-			set(slider.id, slider.options[next]);
-			buttons[next].focus();
+			set(slider.id, slider.options[chosen]);
+			buttons[chosen].focus();
 		});
 		group.append(...buttons);
 		const label = element('span', { className: 'control-label' }, [...swatches(slider), slider.label]);
