@@ -7,7 +7,7 @@ import { createPainterWorker } from '../../../content/ocean/js/workers/painterWo
 import * as Ocean from '../../../content/ocean/js/engine/ocean.js';
 import { probeSurface } from '../../../content/ocean/js/engine/surfaceProbe.js';
 import { createDirector } from '../../../content/ocean/js/stages/director.js';
-import { STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
+import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 
 // Steps by id (piece C2, Task 0).
@@ -136,7 +136,8 @@ test('frame() returns the look, the shot and the charts of the blended recipe', 
 	const { director } = build();
 	director.setStep(GERSTNER, 0.5);
 	const out = director.frame();
-	expect.equal(out.shot.position.join(','), '-20,157,35', 'halfway between the crest [-40, 14, -20] and the look-down [0, 300, 90]');
+	const halfway = recipeFor(GERSTNER).shot.position.map((v, i) => (v + recipeFor(GERSTNER + 1).shot.position[i]) / 2);
+	out.shot.position.forEach((v, i) => expect.near(v, halfway[i], 1e-9, `halfway between the crest shot and the tiling look-down [${i}]`));
 	expect.equal(out.look.material, 'terms', 'the terms look');
 	expect.equal(out.recipe.from, GERSTNER, 'from');
 	expect.equal(out.charts, out.recipe.charts, 'charts');

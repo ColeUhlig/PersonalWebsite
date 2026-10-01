@@ -30,7 +30,8 @@
 // range and the reach hold whatever the phone does. With no offset nothing extra runs.
 // C2: each frame also applies the flat graph (render/graphStage.js) and the surface overlays
 // (render/surfaceOverlays.js); while the graph's backdrop is half opaque or more the orbit and the
-// phone's tilt are held.
+// phone's tilt are held: a camera the visitor dragged eases back to the shot as the hold comes on,
+// and the tilt eases out and back in as a step change eases it.
 import * as Charts from '../engine/charts.js';
 import * as Ocean from '../engine/ocean.js';
 import { probeSurface } from '../engine/surfaceProbe.js';
@@ -240,8 +241,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		const now = Ocean.teachTime(ocean);
 		const seconds = tiltClock === null ? 0 : Math.min(Math.max(now - tiltClock, 0), MAX_FRAME_SECONDS);
 		tiltClock = now;
-		const offset = tiltSource.frame(key, seconds);
-		return graphHeld || isZeroOffset(offset) ? null : offset;
+		// The graph's hold eases the tilt out (and back in) like a step change (tiltLook.js).
+		const offset = tiltSource.frame(key, seconds, graphHeld);
+		return isZeroOffset(offset) ? null : offset;
 	}
 
 	// Before the first scroll the camera is A2's opening shot; a tilt swings it round that shot, and
@@ -335,7 +337,13 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		look.apply(out.look);
 		graph.apply(out.look.graph);
 		overlays.apply(out.look.overlay);
+		const wasHeld = graphHeld;
 		graphHeld = out.look.graph.opacity >= GRAPH_HOLD;
+		// A camera the visitor dragged before the hold came on goes back to the shot (Task 0 fix
+		// round 1): the graph must never be seen from off its shot.
+		if (graphHeld && !wasHeld) {
+			shots.release();
+		}
 		rig.holdOrbit(graphHeld);
 		applyCamera(out, seconds, now);
 		if (cameraFrames > 0) {
@@ -380,7 +388,19 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	// The phase arrows are built once per sea and seed (a cascade build, 4 to 9 ms) and turned every
 	// call, through the cache the dev route uses too. The random-sea step's sea is its recipe's own (it
 	// has no sea sliders), so a blend from the jonswap step does not rebuild them every frame.
-	const arrowsAt = Charts.createPhaseArrowCache({ sizes: ocean.preset.sizes, n: ocean.preset.n });
+	// C2 (Task 0 fix round 1): one cache per step, so the random-sea step's arrows (its seed slider)
+	// and the time step's (its own recipe seed, pre-flight R13) never rebuild each other every frame.
+	const arrowCaches = new Map();
+	const arrowsFor = (step) => {
+		let cache = arrowCaches.get(step);
+		if (!cache) {
+			cache = Charts.createPhaseArrowCache({ sizes: ocean.preset.sizes, n: ocean.preset.n });
+			arrowCaches.set(step, cache);
+		}
+		return cache;
+	};
+	// A step's seed: its New sea slider's value when it has one, else its recipe's own seed.
+	const seedOf = (step) => (recipeFor(step).sliders.some((s) => s.id === 'seed') ? director.valueOf(step, 'seed') : recipeFor(step).engine.seed);
 	// The spectrum chart's fixed top: JONSWAP at the wind and fetch sliders' maxima, so a stronger
 	// wind raises the curve on the chart instead of rescaling the axis.
 	let ceiling = null;
@@ -397,13 +417,15 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			}
 			return ceiling;
 		},
-		// C2: an optional time, so the random-sea step's arrows can be drawn still at t = 0 (lane E).
-		phaseArrows(t = ocean.t) {
-			const sea = recipeFor(stepOf('random-sea')).engine.sea;
-			return arrowsAt({ ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch }, director.valueOf(stepOf('random-sea'), 'seed'), t);
+		// C2: an optional time, so the random-sea step's arrows can be drawn still at t = 0, and an
+		// optional step whose sea and seed they show (lane E draws the time step's with its own seed,
+		// pre-flight R13).
+		phaseArrows(t = ocean.t, step = stepOf('random-sea')) {
+			const sea = recipeFor(step).engine.sea;
+			return arrowsFor(step)({ ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch }, seedOf(step), t);
 		},
 		transforms: (n) => Charts.measureTransforms(n),
-		seed: () => director.valueOf(stepOf('random-sea'), 'seed'),
+		seed: (step = stepOf('random-sea')) => seedOf(step),
 	});
 
 	const hooks = Object.freeze({
@@ -414,6 +436,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		look: () => look.probe(),
 		graph: () => graph.probe(),
 		overlays: () => overlays.probe(),
+		// C2 fix round 1: the phase arrows and the seed of a given step, as the charts read them.
+		phaseArrows: (t, step) => charts.phaseArrows(t, step),
+		seed: (step) => charts.seed(step),
 		shotMode: () => shots.mode(),
 		trail: () => [...trail],
 		clearTrail: () => {

@@ -106,6 +106,15 @@ export function createShotControl({ returnSeconds = RETURN_SECONDS } = {}) {
 				elapsed = 0;
 			}
 		},
+		// C2 (Task 0 fix round 1): the shot must take the camera back now, even from the visitor
+		// (the flat graph's hold came on): ease to it from wherever the camera is at the next frame.
+		release() {
+			if (mode !== 'shot') {
+				mode = 'returning';
+				from = null;
+				elapsed = 0;
+			}
+		},
 		mode: () => mode,
 		// Once a frame. key: the step being read (0 for the opening); pose: where the camera is now;
 		// target: the pose the shot asks for; dt: the play clock's seconds since the last frame.
