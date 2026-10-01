@@ -92,9 +92,9 @@ export function createCameraRig(camera, dom, config) {
 		// Piece C: the story's orbit. No zoom, so the wheel scrolls the page (OrbitControls returns
 		// before preventDefault when zoom is off); no pan, since the rings follow the target; a limited
 		// reach (page/orbitLimits.js STORY_MAX_DISTANCE), which keeps the sky dome, the fog and the
-		// horizon in the range they were tuned for. A touch-first screen gets no orbit at all, so a swipe over the ocean scrolls. A screen
-		// with any touch pointer (a touch laptop) keeps the orbit for its mouse, but a vertical swipe
-		// still scrolls the page.
+		// horizon in the range they were tuned for. A touch-first screen gets no orbit at all, so a
+		// swipe over the ocean scrolls. A screen with any touch pointer (a touch laptop) keeps the
+		// orbit for its mouse, but a vertical swipe still scrolls the page.
 		limitForStory({ coarsePointer, anyCoarsePointer = coarsePointer }) {
 			controls.enableZoom = false;
 			controls.enablePan = false;

@@ -87,13 +87,14 @@ function steepCap(distance, targetY, aspect, tanHalf, reach, maxPolar) {
 }
 
 /**
- * The tilt range the visitor may orbit through from `pose`, in radians.
+ * The tilt range the visitor may orbit through from `pose`, in radians. Written into `out` and
+ * returned: the story works the range out on every frame a shot moves, so it passes a scratch
+ * object (and a reused options object).
  * @param {{ position: number[], target: number[] }} pose the shot the camera stands at
- * @param {{ aspect: number, fovDegrees: number, reach: number, horizonHeight?: number, maxPolar?: number }} view
+ * @param {{ aspect: number, fovDegrees: number, reach: number, horizonHeight?: number, maxPolar?: number }} options
+ * @param {{ min: number, max: number }} [out] where the range is written
  * @returns {{ min: number, max: number }}
  */
-// Written into `out` and returned: the story works the range out on every frame a shot moves, so
-// it passes a scratch object (and a reused options object).
 export function polarRange(pose, options, out = { min: 0, max: 0 }) {
 	const dx = pose.position[0] - pose.target[0];
 	const dy = pose.position[1] - pose.target[1];
