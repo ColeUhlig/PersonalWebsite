@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 import * as WaveBanks from '../../../content/ocean/js/engine/waveBanks.js';
 import { bankSpikes } from '../../../content/ocean/js/page/frequencyMath.js';
 import { grid, load, meanDiff, stage, waitFrames, watchErrors } from './helpers/stage.js';
-import { oceanRunning, scrollToId } from './helpers/story.js';
+import { oceanRunning, scrollToFigure, scrollToId } from './helpers/story.js';
 
 let errors;
 test.beforeEach(({ page }) => {
@@ -67,7 +67,8 @@ test.describe('on a phone', () => {
 		test.setTimeout(180_000);
 		await oceanRunning(page);
 		for (const id of ['frequency', 'fourier']) {
-			await scrollToId(page, id, 0.2);
+			// The figure on screen: a chart draws only then, and on a phone it sits below the step's words.
+			await scrollToFigure(page, id, 'figure.chart');
 			const name = id === 'frequency' ? 'frequency' : 'fourier';
 			await expect(page.locator(`figure[data-chart="${name}"] svg`)).toHaveCount(1, { timeout: 30_000 });
 			const outside = await page.evaluate((chart) => {

@@ -3,7 +3,7 @@
 // painted maps live (Task 11), on the probed tier and on Medium (Review Focus 4, Task 11).
 import { test, expect } from '@playwright/test';
 import { watchErrors } from './helpers/stage.js';
-import { oceanRunning, scrollToId } from './helpers/story.js';
+import { oceanRunning, scrollToFigure, scrollToId } from './helpers/story.js';
 
 let errors;
 test.beforeEach(({ page }) => {
@@ -130,7 +130,8 @@ test.describe('on a phone', () => {
 		test.setTimeout(180_000);
 		await oceanRunning(page);
 		for (const [id, count] of [['fields', 3], ['sampling', 1], ['painted', 3]]) {
-			await scrollToId(page, id, 0.2);
+			// The figure on screen: an inset draws only then, and on a phone it sits below the step's words.
+			await scrollToFigure(page, id, 'figure.inset');
 			const canvases = page.locator(`figure[data-inset="${id}"] canvas`);
 			await expect(canvases).toHaveCount(count, { timeout: 30_000 });
 			await expect.poll(() => page.evaluate((name) => window.__insets[name]() != null, id), { timeout: 30_000 }).toBe(true);

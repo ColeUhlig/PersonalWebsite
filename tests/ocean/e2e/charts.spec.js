@@ -4,7 +4,7 @@
 import { test, expect } from '@playwright/test';
 import { arrowEnd } from '../../../content/ocean/js/page/chartGeometry.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
-import { oceanRunning, scrollToId, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
+import { oceanRunning, scrollToFigure, scrollToId, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
 
 // The charts' steps by id (piece C2, Task 0): the spectrum is the jonswap step's; the phase arrows
 // are held still in the random-sea step's figure and turn in the time step's; the FFT timing is the
@@ -363,8 +363,10 @@ test('a fast device still times 64 × 64', async ({ page }) => {
 for (const width of [390, 320]) test(`the charts read at 12 px on a ${width} px phone`, async ({ page }) => {
 	await page.setViewportSize({ width, height: 844 });
 	await oceanRunning(page);
-	for (const step of [stepOf('frequency'), stepOf('fourier'), SPECTRUM, STILL, PHASE, TIMING]) {
-		await scrollToStep(page, step, 0.2);
+	for (const id of ['frequency', 'fourier', 'jonswap', 'random-sea', 'time', 'fft']) {
+		const step = stepOf(id);
+		// The figure on screen: a chart draws only then, and on a phone it sits below the step's words.
+		await scrollToFigure(page, id, 'figure.chart');
 		await page.waitForFunction((n) => document.querySelector(`#step-${n} figure.chart svg text`), step, { timeout: 30_000 });
 		const sizes = await page.evaluate((n) => {
 			const svg = document.querySelector(`#step-${n} figure.chart svg`);
