@@ -34,6 +34,7 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'so the 256-stud pattern gets harder to spot', source: FACTS, quote: 'over 256, 64 and 16 studs' },
 	{ phrase: "That's how 12,288 wave components pass for far more", source: FACTS, quote: '3 × 64 × 64 = 12,288' },
 	{ phrase: 'The tallest waves in the 256-stud layer', source: FACTS, quote: 'over 256, 64 and 16 studs' },
+	{ phrase: "The 256-stud layer's height, slope and sideways push", source: FACTS, quote: 'over 256, 64 and 16 studs' },
 	{ phrase: 'A 256 × 256 foam field, painted into the 512 × 512 colour map', source: FACTS, quote: 'the colour map is 512 × 512 and the foam field 256 × 256' },
 	{ phrase: 'they fit a 256-stud tile exactly', source: FACTS, quote: 'the teaching bank sits on the 256-stud tile' },
 	{ phrase: 'Here L is the 256-stud tile', source: FACTS, quote: 'the teaching bank sits on the 256-stud tile' },
@@ -46,12 +47,14 @@ export const COPY_SOURCES = Object.freeze([
 	{ phrase: 'This live ocean needs WebGL 2', source: 'site:content/ocean/js/webgl.js', quote: 'asks for WebGL 2 only' },
 	// The teaching recipes (facts.test.js checks the count in the recipe's data).
 	{ phrase: 'The page keeps only the 4 tallest (the small ones would blur at this distance)', source: FACTS, quote: "the tiling step sums the bank's 4 tallest waves" },
+	// C2 lane G, step 6 (spec 10: never "all directions").
+	{ phrase: 'Their headings fan out within 45° either side of one heading', source: FACTS, quote: "the teaching bank's headings lie within 45° either side of one heading" },
 	// The proof panel's runtime (proofPanel.js fills its note from runtime.js; copy.test.js checks it).
 	{ phrase: 'a fork of Luau 0.711', source: RUNTIME, quote: "LUAU_RELEASE = '0.711'" },
 	{ phrase: 'packaged as luau-web 1.4.0', source: RUNTIME, quote: "LUAU_WEB_VERSION = '1.4.0'" },
 	// Studio measurements (roblox-ocean docs/research/bench.md, Mac16,12, Studio 0.739).
 	{ phrase: "About 3.5 ms a frame in Studio with Luau's native code generation, 7.7 ms without it", source: BENCH, quote: 'the write dropped from 7.7 to 3.5 ms' },
-	{ phrase: 'handing over one image a frame cost 0.037 ms of script time in Studio', source: BENCH, quote: 'upload 0.037' },
+	{ phrase: 'back when the game handed Roblox one whole image a frame: 0.037 ms of script time in Studio', source: BENCH, quote: 'upload 0.037' },
 	{ phrase: 'One 64 × 64 inverse FFT takes 1.00 ms in Studio', source: BENCH, quote: 'FFT.inverse2D, 64 x 64 | 1.00' },
 	{ phrase: 'it looked like 20 fps to me', source: BENCH, quote: 'like 20 fps' },
 	{ phrase: 'the game ran at about 44 fps', source: BENCH, quote: 'about 44 fps' },
