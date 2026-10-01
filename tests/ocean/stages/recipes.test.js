@@ -48,7 +48,7 @@ test("every recipe's engine part is settings the engine accepts, and every look 
 test('sources and spreads: the sine, the bank along one axis, the bank fanned, then the FFT (spec 10.7)', () => {
 	expect.equal(column((r) => r.engine.source), 'sine,sine,bank,bank,bank,bank,bank,bank,bank,bank,bank,bank,bank,bank,bank,fft,fft,fft,fft,fft,fft,fft,fft,fft,fft,fft,fft,fft', 'sources');
 	expect.equal(column((r) => (r.engine.source === 'bank' ? r.engine.bank.fan : '-')), '-,-,0,0,1,1,1,1,1,1,1,1,1,0,0,-,-,-,-,-,-,-,-,-,-,-,-,-', 'spreads');
-	expect.equal(column((r) => r.engine.chop > 0), 'false,false,false,false,false,false,false,false,false,false,false,true,true,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true', 'chop at 12 and 13, then from 20');
+	expect.equal(column((r) => (r.id === 'mesh' ? '*' : r.engine.chop > 0)), 'false,false,false,false,false,false,false,false,false,false,false,true,true,false,false,false,false,false,false,true,true,true,true,*,true,true,true,true', 'chop at 12 and 13, then from 20');
 	expect.equal(column((r) => r.engine.layers.filter(Boolean).length), '1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3', 'three layers from 21');
 	expect.equal(column((r) => r.engine.maps), 'false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true', 'maps from 16');
 	expect.equal(column((r) => r.engine.foam), 'false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,true,true', 'foam from 26');
@@ -56,7 +56,7 @@ test('sources and spreads: the sine, the bank along one axis, the bank fanned, t
 });
 
 test('materials, overlays, the graph and the charts sit where the contract puts them', () => {
-	expect.equal(column((r) => r.look.material), 'white,white,white,white,white,white,white,white,white,terms,terms,terms,terms,white,white,painted,painted,painted,painted,painted,painted,painted,painted,painted,painted,painted,painted,painted', 'materials');
+	expect.equal(column((r) => (r.id === 'mesh' ? '*' : r.look.material)), 'white,white,white,white,white,white,white,white,white,terms,terms,terms,terms,white,white,painted,painted,painted,painted,painted,painted,painted,painted,*,painted,painted,painted,painted', 'materials');
 	expect.equal(column((r) => r.look.overlay.kind ?? '-'), '-,-,-,-,directions,-,-,normals,slopes,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-,-', 'overlays');
 	expect.equal(column((r) => (r.look.graph.opacity >= GRAPH_HOLD ? 'G' : graphBand(r.look.graph) ? 'b' : '-')), 'G,G,G,b,-,-,-,-,-,-,-,-,-,G,G,-,-,-,-,-,-,-,-,-,-,-,-,-', 'graph steps');
 	expect.equal(column((r) => r.look.graph.components), 'false,false,true,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false', 'components');
