@@ -97,6 +97,23 @@ test("the phase arrows are cascade 1's tallest waves at the ocean's seed, turnin
 	expect.truthy(Array.isArray(later), 'plain array');
 });
 
+// One cache for the dev route and the story (ui/devStage.js, ui/storyStage.js): built once per sea
+// and seed, turned every call.
+test('the phase-arrow cache builds once per sea and seed and turns the arrows every call', () => {
+	const at = Charts.createPhaseArrowCache({ sizes: [256, 64, 16], n: 64 });
+	const first = at(HERO, 7, 0);
+	const direct = Charts.phaseArrowsAt(Charts.createPhaseArrows(HERO, { seed: 7, sizes: [256, 64, 16], n: 64 }), 3.7);
+	expect.equal(JSON.stringify(at(HERO, 7, 3.7)), JSON.stringify(direct), 'the same arrows as building them directly');
+	expect.equal(at.builds(), 1, 'turned, not rebuilt');
+	at({ ...HERO }, 7, 1);
+	expect.equal(at.builds(), 1, 'an equal sea is the same sea');
+	at(HERO, 8, 1);
+	expect.equal(at.builds(), 2, 'a new seed rebuilds');
+	at({ ...HERO, windSpeed: HERO.windSpeed + 1 }, 8, 1);
+	expect.equal(at.builds(), 3, 'a new wind rebuilds');
+	expect.equal(first.length, 8, 'eight arrows by default');
+});
+
 test('the transform timing measures both ways and proves they agree', () => {
 	const result = Charts.measureTransforms(8);
 	expect.equal(result.n, 8, 'n');

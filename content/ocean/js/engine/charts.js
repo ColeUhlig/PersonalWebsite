@@ -153,6 +153,28 @@ export function createPhaseArrows(params, { seed = SEED, count = 8, sizes = Tier
 	return Object.freeze({ components: Object.freeze(components) });
 }
 
+/**
+ * The phase arrows for the page's charts (the dev route and the story), built once per sea and seed
+ * and turned every call: `at(params, seed, t)` returns phaseArrowsAt at time t, rebuilding only when
+ * the wind, the fetch or the seed changed. `at.builds()` counts the builds.
+ */
+export function createPhaseArrowCache({ sizes, n }) {
+	let arrows = null;
+	let key = '';
+	let builds = 0;
+	function at(params, seed, t) {
+		const next = `${params.windSpeed}|${params.fetch}|${seed}`;
+		if (next !== key) {
+			arrows = createPhaseArrows(params, { seed, sizes, n });
+			key = next;
+			builds += 1;
+		}
+		return phaseArrowsAt(arrows, t);
+	}
+	at.builds = () => builds;
+	return at;
+}
+
 // Each arrow at time t: h0 e^{-i omega t} (Euler's formula), the phasor the cascade's evolve turns.
 // Builds `count` small objects per call (8 by default): cheap, but call it once a frame at most.
 export function phaseArrowsAt(arrows, t) {

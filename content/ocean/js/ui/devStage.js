@@ -48,18 +48,10 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 	// A refused frame is reported once per distinct error, not on every frame it repeats on.
 	const reported = new Set();
 
-	// The phase arrows are built once per sea (a cascade build) and turned every call.
-	let arrows = null;
-	let arrowsKey = '';
-	function phaseArrows() {
-		const { params, seed } = ocean.live;
-		const key = `${params.windSpeed}|${params.fetch}|${seed}`;
-		if (key !== arrowsKey) {
-			arrows = Charts.createPhaseArrows(params, { seed, sizes: ocean.preset.sizes, n: ocean.preset.n });
-			arrowsKey = key;
-		}
-		return Charts.phaseArrowsAt(arrows, ocean.t);
-	}
+	// The phase arrows are built once per sea (a cascade build) and turned every call; the story
+	// shares the cache (engine/charts.js createPhaseArrowCache).
+	const arrowsAt = Charts.createPhaseArrowCache({ sizes: ocean.preset.sizes, n: ocean.preset.n });
+	const phaseArrows = () => arrowsAt(ocean.live.params, ocean.live.seed, ocean.t);
 
 	return {
 		// Before Ocean.step: the recipe's settings reach the engine and its look and shot the scene,

@@ -127,6 +127,21 @@ test('layers: only the switched-on cascades evolve, the rings sample them and th
 	expect.equal(Ocean.status(ocean).layers.join(','), 'true,false,false', 'the status says so');
 });
 
+// The story checks every frame whether any layer is sampled (ui/storyStage.js): a cheap read that
+// agrees with the status.
+test('anyLayerSampled says whether the rings sample any cascade, as the status does', async () => {
+	const { ocean, advance } = build();
+	await advance(6);
+	expect.equal(Ocean.anyLayerSampled(ocean), true, 'the finished sea samples its layers');
+	Ocean.configureStage(ocean, settings({ ...TEACHING, source: 'bank', bank: { count: 32 } }));
+	await advance(2);
+	expect.equal(Ocean.anyLayerSampled(ocean), false, 'a bank sea samples none');
+	expect.equal(Ocean.anyLayerSampled(ocean), Ocean.status(ocean).layers.some(Boolean), 'agrees with the status');
+	Ocean.configureStage(ocean, settings({ layers: [true, true, true] }));
+	await advance(12);
+	expect.equal(Ocean.anyLayerSampled(ocean), Ocean.status(ocean).layers.some(Boolean), 'agrees again');
+});
+
 test('a wind slider dragged every frame retunes one cascade at a time, never faster than the gap, and never reconfigures anything (Review Focus 1)', async () => {
 	const { ocean, cascadeCounts, painterCounts, advance } = build();
 	await advance(6);

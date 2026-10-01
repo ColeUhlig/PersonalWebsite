@@ -50,18 +50,28 @@ test("the tilt range always holds the shot's own angle, so applying a shot never
 	}
 });
 
-test('a low shot may tilt up over the whole range, but never lower than it stands: the crests are near', () => {
-	for (const step of [4, 5, 13]) {
+test('a low shot may tilt up over the whole range, but never sink below the floor: the crests are near', () => {
+	// Shots at or below CAMERA_FLOOR may not sink at all.
+	for (const step of [4, 5]) {
 		const shot = recipeFor(step).shot;
+		expect.truthy(shot.position[1] <= CAMERA_FLOOR, `step ${step} stands at or below the floor`);
 		const range = polarRange(shot, view(16 / 9));
 		expect.equal(range.min, 0, `step ${step} min`);
 		expect.near(range.max, polarOf(shot).polar, 1e-9, `step ${step} max`);
 	}
+	// The finale drifts above the floor (A3's FINALE_HEIGHT): it may come down to the floor, no further.
+	const finale = recipeFor(STEP_COUNT).shot;
+	const { distance, polar } = polarOf(finale);
+	const floorTilt = Math.acos((CAMERA_FLOOR - finale.target[1]) / distance);
+	const range = polarRange(finale, view(16 / 9));
+	expect.equal(range.min, 0, 'finale min');
+	expect.truthy(range.max <= floorTilt + 1e-9, `finale max ${range.max} within the floor's ${floorTilt}`);
+	expect.truthy(range.max >= polar, "the finale's own tilt is inside its range");
 	// A shot above CAMERA_FLOOR may come down to it, and no further.
 	const above = { position: [0, 30, 60], target: [0, 0, 0] };
-	const range = polarRange(above, view(16 / 9));
-	expect.near(polarOf(above).distance * Math.cos(range.max), CAMERA_FLOOR, 1e-9, 'down to the floor');
-	expect.truthy(range.max < MAX_POLAR, 'short of level');
+	const aboveRange = polarRange(above, view(16 / 9));
+	expect.near(polarOf(above).distance * Math.cos(aboveRange.max), CAMERA_FLOOR, 1e-9, 'down to the floor');
+	expect.truthy(aboveRange.max < MAX_POLAR, 'short of level');
 });
 
 test('from a high shot the frame can tip no further than the moving water, never to the horizon', () => {

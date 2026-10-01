@@ -554,6 +554,12 @@ export function report(ocean) {
 	return ocean.lastReport;
 }
 
+// Whether the rings sample any cascade layer now (status().layers.some(Boolean) without building
+// the status): the story reads it every frame.
+export function anyLayerSampled(ocean) {
+	return ocean.sampled.includes(true);
+}
+
 export function status(ocean) {
 	const cascadeMode = ocean.cascades.mode();
 	const painterMode = PainterClient.mode(ocean.painter);

@@ -48,7 +48,10 @@ export function movingReach(rings) {
 // `fovDegrees` and an `aspect`. Euclidean, so it holds at any heading. Infinity once the top of the
 // frame reaches the horizon.
 export function frameReach({ distance, polar, targetY, aspect, fovDegrees }) {
-	const tanHalf = Math.tan((fovDegrees / 2) * (Math.PI / 180));
+	return reachAt(distance, polar, targetY, aspect, Math.tan((fovDegrees / 2) * (Math.PI / 180)));
+}
+
+function reachAt(distance, polar, targetY, aspect, tanHalf) {
 	const height = targetY + distance * Math.cos(polar);
 	const down = Math.cos(polar) - tanHalf * Math.sin(polar);
 	if (!(down > 0)) {
@@ -63,18 +66,18 @@ export function frameReach({ distance, polar, targetY, aspect, fovDegrees }) {
 }
 
 // The steepest-side cap: the largest tilt whose frame reaches no further than `reach`.
-function steepCap(reachAt, reach, maxPolar) {
-	if (reachAt(0) > reach) {
+function steepCap(distance, targetY, aspect, tanHalf, reach, maxPolar) {
+	if (reachAt(distance, 0, targetY, aspect, tanHalf) > reach) {
 		return 0;
 	}
-	if (reachAt(maxPolar) <= reach) {
+	if (reachAt(distance, maxPolar, targetY, aspect, tanHalf) <= reach) {
 		return maxPolar;
 	}
 	let lo = 0;
 	let hi = maxPolar;
 	for (let i = 0; i < BISECTIONS; i++) {
 		const mid = (lo + hi) / 2;
-		if (reachAt(mid) <= reach) {
+		if (reachAt(distance, mid, targetY, aspect, tanHalf) <= reach) {
 			lo = mid;
 		} else {
 			hi = mid;
@@ -100,8 +103,7 @@ export function polarRange(pose, { aspect, fovDegrees, reach, horizonHeight = HO
 }
 
 function tiltBand(distance, polar, targetY, { aspect, fovDegrees, reach, horizonHeight, maxPolar }) {
-	const reachAt = (tilt) => frameReach({ distance, polar: tilt, targetY, aspect, fovDegrees });
-	const steepMax = steepCap(reachAt, reach, maxPolar);
+	const steepMax = steepCap(distance, targetY, aspect, Math.tan((fovDegrees / 2) * (Math.PI / 180)), reach, maxPolar);
 	// The least tilt that keeps the camera within horizonHeight of the ground.
 	const lowMin = Math.acos(Math.min(Math.max((horizonHeight - targetY) / distance, -1), 1));
 	if (steepMax >= lowMin) {

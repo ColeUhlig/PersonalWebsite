@@ -256,17 +256,18 @@ test('a retune sent while an evolve is in flight lands after it: the reply in fl
 	doubled(received[2], received[0]);
 });
 
+// Load-proof: the lookup is made several times slower than this machine's own rebuild (measured
+// first, best of a few), and the retune's time, best of a few, must come in under the lookup's. Had
+// the timer started before the lookup, every retune would take at least the lookup.
 test('the main-thread retune times the rebuild, not the config lookup', () => {
-	let slow = false;
+	let lookupMs = 0;
 	const cascades = createCascades({
 		count: 1,
 		cells: CELLS,
 		configFor: (index) => {
-			if (slow) {
-				const until = performance.now() + 30;
-				while (performance.now() < until) {
-					// a config lookup that takes 30 ms
-				}
+			const until = performance.now() + lookupMs;
+			while (performance.now() < until) {
+				// a slow config lookup
 			}
 			return configFor(index);
 		},
@@ -276,7 +277,16 @@ test('the main-thread retune times the rebuild, not the config lookup', () => {
 		onReady: () => {},
 		log: { warn() {} },
 	});
-	slow = true;
-	cascades.retune(1);
-	expect.truthy(cascades.lastRetuneMs[0] < 25, `the rebuild alone: ${cascades.lastRetuneMs[0].toFixed(1)} ms`);
+	const bestOf = (runs) => {
+		let best = Infinity;
+		for (let i = 0; i < runs; i++) {
+			cascades.retune(1);
+			best = Math.min(best, cascades.lastRetuneMs[0]);
+		}
+		return best;
+	};
+	const rebuildMs = bestOf(3);
+	lookupMs = Math.max(30, 4 * rebuildMs + 10);
+	const timedMs = bestOf(3);
+	expect.truthy(timedMs < lookupMs, `the rebuild alone: ${timedMs.toFixed(1)} ms, against a ${lookupMs.toFixed(1)} ms lookup (rebuild ${rebuildMs.toFixed(1)} ms)`);
 });
