@@ -1,1 +1,234 @@
-/* The math box (piece C2; lane A owns this file; spec 10.3). */
+/* The math box (piece C2; lane A owns this file; spec 10.3). A glass card at the top right on a
+   desktop, under the site link; the phone's bar is Task 2's. No backdrop-filter (the page's rule). */
+.mathbox {
+	position: fixed;
+	top: 56px;
+	right: var(--gutter);
+	z-index: 3;
+	box-sizing: border-box;
+	width: min(400px, 32vw);
+	/* Clear of the pill column at the bottom right however large the text (style.css --pill-stack is
+	   in rem, so it grows with it): the card scrolls inside itself before it reaches the pills. */
+	max-height: calc(100vh - 56px - var(--pill-stack));
+	max-height: calc(100svh - 56px - var(--pill-stack));
+	overflow-y: auto;
+	padding: 12px 16px 14px;
+	border-radius: 14px;
+	background: var(--glass);
+	border: 1px solid var(--line);
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+	color: var(--ink);
+}
+
+.mathbox-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.mathbox-title {
+	margin: 0;
+	font-size: 0.75rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--accent);
+}
+
+.mathbox-toggle {
+	padding: 4px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+
+.mathbox-toggle:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.mathbox-eq {
+	margin: 8px 0 6px;
+}
+
+.mathbox .tex-rendered {
+	font-size: 1rem;
+}
+
+.mathbox-changed {
+	margin: 0;
+	font-size: 0.9rem;
+	line-height: 1.45;
+	color: var(--ink-dim);
+}
+
+.mathbox-label {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+/* What the step adds: a quiet tint always (and all under reduced motion), a glow on entry. */
+.mathbox .fresh {
+	border-radius: 4px;
+	background: rgba(95, 212, 196, 0.16);
+}
+
+.mathbox.is-entering .fresh {
+	animation: mathbox-fresh 1.2s ease-out;
+}
+
+@keyframes mathbox-fresh {
+	0% {
+		background: rgba(95, 212, 196, 0.55);
+		box-shadow: 0 0 12px rgba(95, 212, 196, 0.6);
+	}
+
+	100% {
+		background: rgba(95, 212, 196, 0.16);
+		box-shadow: none;
+	}
+}
+
+/* Pre-flight R14: over the finale's full-width blocks and the footer the card has nothing new and
+   would cover their text, so on a desktop it steps aside (ui/mathBox.js sets the class). */
+@media (min-width: 900px) {
+	.mathbox.is-yielding {
+		display: none;
+	}
+}
+
+/* The bar's and the sheet's controls are a phone's only. */
+.mathbox-open,
+.mathbox-close {
+	display: none;
+}
+
+/* Task 2: under 900 px the box is a slim bar pinned at the top of the lower half, directly under the
+   ocean (whose half ends at 50svh); the lower half's padding already makes room for it (style.css
+   --mathbar-height). */
+@media (max-width: 899.98px) {
+	.mathbox {
+		top: 50vh;
+		top: 50svh;
+		right: 0;
+		left: 0;
+		width: auto;
+		height: var(--mathbar-height);
+		max-height: none;
+		overflow: hidden;
+		padding: 0 var(--gutter);
+		border-radius: 0;
+		border-width: 1px 0;
+		display: flex;
+		align-items: center;
+		box-shadow: none;
+		/* Opaque, bar and sheet alike: panel text scrolling under it must not show behind the maths. */
+		background: var(--body-bg);
+	}
+
+	.mathbox-head,
+	.mathbox-changed,
+	.mathbox-toggle {
+		display: none;
+	}
+
+	.mathbox-body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* One line, small; a line that runs past the edge fades out there rather than wrapping. */
+	.mathbox-eq {
+		margin: 0;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+
+	.mathbox.is-overflowing .mathbox-eq {
+		-webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+		mask-image: linear-gradient(to right, #000 85%, transparent);
+	}
+
+	.mathbox .tex-rendered {
+		padding: 0;
+		font-size: 0.8rem;
+	}
+
+	.mathbox .tex-rendered > .katex {
+		white-space: nowrap;
+	}
+
+	.mathbox-eq code {
+		white-space: nowrap;
+	}
+
+	/* The whole bar is the button that opens the sheet. */
+	.mathbox-open {
+		display: block;
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		border: 0;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.mathbox-open:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -3px;
+	}
+
+	/* Open: a sheet over the lower half, the whole box inside it. */
+	.mathbox.is-open {
+		height: auto;
+		bottom: 0;
+		display: block;
+		overflow-y: auto;
+		padding: 12px var(--gutter) 20px;
+		border-width: 1px 0 0;
+	}
+
+	.mathbox.is-open .mathbox-head,
+	.mathbox.is-open .mathbox-changed {
+		display: flex;
+	}
+
+	.mathbox.is-open .mathbox-changed {
+		display: block;
+		margin-top: 8px;
+	}
+
+	.mathbox.is-open .mathbox-eq {
+		white-space: normal;
+		-webkit-mask-image: none;
+		mask-image: none;
+	}
+
+	.mathbox.is-open .tex-rendered {
+		font-size: 1rem;
+	}
+
+	.mathbox.is-open .tex-rendered .katex-display > .katex {
+		white-space: normal;
+	}
+
+	.mathbox.is-open .mathbox-open {
+		display: none;
+	}
+
+	.mathbox.is-open .mathbox-close {
+		display: inline-block;
+		padding: 4px 12px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: transparent;
+		color: var(--ink);
+		font: inherit;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+}
