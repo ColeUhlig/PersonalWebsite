@@ -10,6 +10,7 @@
 // (returnSeconds 0) or while the play clock is stopped (ease: false): the ease reads the clock, so
 // with no clock it would never arrive.
 import { shotPosition } from '../stages/drift.js';
+import { smoothstep } from './motion.js';
 
 export const RETURN_SECONDS = 1.2;
 // A return longer than RETURN_SECONDS at this speed, in studs a second along the way round, takes
@@ -17,7 +18,6 @@ export const RETURN_SECONDS = 1.2;
 export const RETURN_STUDS_PER_SECOND = 150;
 export const MAX_RETURN_SECONDS = 3;
 
-const smoothstep = (x) => x * x * (3 - 2 * x);
 const lerp = (a, b, w) => a + (b - a) * w;
 const lerp3 = (a, b, w) => [lerp(a[0], b[0], w), lerp(a[1], b[1], w), lerp(a[2], b[2], w)];
 // The shortest turn from angle a to angle b, in (-PI, PI].

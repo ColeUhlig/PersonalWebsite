@@ -48,9 +48,9 @@ import { movingReach, polarRange } from '../page/orbitLimits.js';
 import { holdThenBlend, positionOf, smoothPosition, splitPosition } from '../page/scrollMap.js';
 import { createShotControl, resolveShot } from '../page/shotControl.js';
 import { applyOffset, clampPolar, isZeroOffset } from '../page/tiltLook.js';
+import { MAX_FRAME_SECONDS } from '../page/motion.js';
 
 const TRAIL_LENGTH = 64;
-const MAX_FRAME_SECONDS = 0.25;
 export const HOLD_MAX_FRAMES = 10;
 
 // Whether a recipe's engine asks for an FFT layer this tier runs (the first `count` layers).

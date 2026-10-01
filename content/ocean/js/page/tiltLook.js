@@ -18,13 +18,12 @@
 // (the share of it about the screen's up axis; held flat, a turn on the spot is a pure roll and does
 // nothing). yaw is radians counter-clockwise seen from above (about +y), pitch is radians the camera
 // rises (its tilt from straight down shrinks).
+import { MAX_FRAME_SECONDS, smoothstep } from './motion.js';
 
 export const TILT_LIMITS = Object.freeze({ yawDeg: 12, pitchDeg: 8 });
 // The smoothing's time constant and the ease back on a step change, both in play-clock seconds.
 export const SMOOTHING_SECONDS = 0.25;
-export const RETURN_SECONDS = 1.2;
-// A frame's seconds are capped here, so a stall does not land the camera in one jump.
-export const MAX_STEP_SECONDS = 0.25;
+export const TILT_RETURN_SECONDS = 1.2;
 // A turn smaller than this about either screen axis is no turn: sensor noise on a phone held still
 // never moves the camera, so the story's zero-offset skip still fires. Larger turns lose this much.
 // Each axis is banded on its own, and each reads a single device axis, so noise on other axes never
@@ -42,7 +41,6 @@ const PITCH_MAX = TILT_LIMITS.pitchDeg * DEG;
 const DEAD_BAND = DEAD_BAND_DEG * DEG;
 
 const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
-const smoothstep = (x) => x * x * (3 - 2 * x);
 const banded = (x) => (x > DEAD_BAND ? x - DEAD_BAND : x < -DEAD_BAND ? x + DEAD_BAND : 0);
 const finite = (...values) => values.every((v) => typeof v === 'number' && Number.isFinite(v));
 
@@ -141,11 +139,11 @@ export function orientationToOffset(reading, baseline, screenAngle, out = { yaw:
 
 /**
  * An exponential approach from `current` to `target` over `seconds` of the play clock (capped at
- * MAX_STEP_SECONDS), with time constant SMOOTHING_SECONDS: the same clock time gives the same
- * offset at any frame rate.
+ * MAX_FRAME_SECONDS, page/motion.js), with time constant SMOOTHING_SECONDS: the same clock time
+ * gives the same offset at any frame rate.
  */
 export function smoothOffset(current, target, seconds, out = { yaw: 0, pitch: 0 }) {
-	const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, MAX_STEP_SECONDS);
+	const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, MAX_FRAME_SECONDS);
 	const k = 1 - Math.exp(-dt / SMOOTHING_SECONDS);
 	out.yaw = approach(current.yaw, target.yaw, k);
 	out.pitch = approach(current.pitch, target.pitch, k);
@@ -285,13 +283,13 @@ export function createTiltFollower() {
 			}
 			lastKey = key;
 			lastHeld = held;
-			const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, MAX_STEP_SECONDS);
+			const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, MAX_FRAME_SECONDS);
 			if (returning) {
-				elapsed = dt > 0 ? elapsed + dt : RETURN_SECONDS;
-				if (elapsed >= RETURN_SECONDS) {
+				elapsed = dt > 0 ? elapsed + dt : TILT_RETURN_SECONDS;
+				if (elapsed >= TILT_RETURN_SECONDS) {
 					settle();
 				} else {
-					const left = 1 - smoothstep(elapsed / RETURN_SECONDS);
+					const left = 1 - smoothstep(elapsed / TILT_RETURN_SECONDS);
 					current.yaw = from.yaw * left;
 					current.pitch = from.pitch * left;
 				}

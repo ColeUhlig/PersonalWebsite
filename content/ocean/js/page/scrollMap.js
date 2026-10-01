@@ -4,6 +4,7 @@
 // in one go is taken at once rather than eased, so a fling never sweeps the engine through every
 // recipe in between.
 import { STEP_COUNT } from '../stages/steps.js';
+import { smoothstep } from './motion.js';
 
 export const NARROW_QUERY = '(max-width: 899.98px)';
 // The story's last step (stages/steps.js); scrollMap.test.js checks it is STEP_COUNT.
@@ -43,8 +44,7 @@ export function readScroll(sections, anchor) {
 // recipe) until HOLD_UNTIL, then smoothstep up to 1 (the next step's) at the section's end, so a
 // snap the director makes halfway through a blend lands at about 0.75 of the section.
 export function holdThenBlend(progress) {
-	const x = clamp01((progress - HOLD_UNTIL) / (1 - HOLD_UNTIL));
-	return x * x * (3 - 2 * x);
+	return smoothstep(clamp01((progress - HOLD_UNTIL) / (1 - HOLD_UNTIL)));
 }
 
 export function positionOf(reading) {

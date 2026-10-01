@@ -13,7 +13,7 @@ import {
 	DEAD_BAND_DEG,
 	isZeroOffset,
 	orientationToOffset,
-	RETURN_SECONDS,
+	TILT_RETURN_SECONDS,
 	SMOOTHING_SECONDS,
 	smoothOffset,
 	TILT_LIMITS,
@@ -75,7 +75,7 @@ test('the limits, the dead band, the smoothing and the return are the brief\'s, 
 	expect.equal(Object.isFrozen(TILT_LIMITS), true, 'frozen');
 	expect.equal(DEAD_BAND_DEG, 0.1, 'dead band');
 	expect.equal(SMOOTHING_SECONDS, 0.25, 'smoothing');
-	expect.equal(RETURN_SECONDS, 1.2, 'return');
+	expect.equal(TILT_RETURN_SECONDS, 1.2, 'return');
 });
 
 test('the joystick convention: top edge away lifts the camera, right edge away swings the view right', () => {

@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
 import { STEP_COUNT, stepOf } from '../../../content/ocean/js/stages/steps.js';
 import { CAMERA_FLOOR } from '../../../content/ocean/js/page/orbitLimits.js';
-import { DEAD_BAND_DEG, RETURN_SECONDS, TILT_LIMITS } from '../../../content/ocean/js/page/tiltLook.js';
+import { DEAD_BAND_DEG, TILT_RETURN_SECONDS, TILT_LIMITS } from '../../../content/ocean/js/page/tiltLook.js';
 import { oceanRunning, scrollToId, waitFrames, watchErrors } from './helpers/story.js';
 import { story } from './helpers/stage.js';
 
@@ -111,7 +111,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		expect(await page.locator('#tilt').isHidden()).toBe(true);
 		const shot = await settleOn(page, 'foam');
 		// The scroll into the step was a step change: the tilt eases back and takes a new baseline.
-		await waitClock(page, RETURN_SECONDS + 0.3);
+		await waitClock(page, TILT_RETURN_SECONDS + 0.3);
 		// Five degrees to the right: the view turns right, the camera clockwise from above.
 		await tilt(page, 45, 5);
 		await waitClock(page, 2);
@@ -172,7 +172,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await oceanRunning(page);
 		await startTilting(page);
 		await settleOn(page, 'foam');
-		await waitClock(page, RETURN_SECONDS + 0.3);
+		await waitClock(page, TILT_RETURN_SECONDS + 0.3);
 		await tilt(page, 45, 40);
 		await waitClock(page, 2);
 		expect((await page.evaluate(() => window.__tilt.offset())).yaw).toBeCloseTo(-TILT_LIMITS.yawDeg * DEG, 3);
@@ -198,7 +198,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		// Back on the shot within the return (with a little slack for frames).
 		const back = after.find((o) => o.yaw === 0);
 		expect(back).toBeTruthy();
-		expect(back.clock - after[0].clock).toBeLessThan(RETURN_SECONDS + 0.3);
+		expect(back.clock - after[0].clock).toBeLessThan(TILT_RETURN_SECONDS + 0.3);
 		const turn = turnFrom(shot, await story(page, 'pose'));
 		expect(Math.abs(turn.yaw)).toBeLessThan(1e-4);
 		expect(Math.abs(turn.pitch)).toBeLessThan(1e-4);
@@ -215,7 +215,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await startTilting(page);
 		await scrollToId(page, 'finale', 0.1);
 		await page.waitForFunction((last) => window.__ocean.story.state().step === last, STEP_COUNT, { timeout: 60_000 });
-		await waitClock(page, RETURN_SECONDS + 0.3);
+		await waitClock(page, TILT_RETURN_SECONDS + 0.3);
 		await tilt(page, 45, 40);
 		await waitClock(page, 2);
 		await story(page, 'watchCamera', 180);
@@ -241,7 +241,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await oceanRunning(page);
 		await startTilting(page);
 		const shot = await settleOn(page, 'sine');
-		await waitClock(page, RETURN_SECONDS + 0.3);
+		await waitClock(page, TILT_RETURN_SECONDS + 0.3);
 		await tilt(page, 45, 40);
 		await waitClock(page, 2);
 		const turn = turnFrom(shot, await story(page, 'pose'));
@@ -259,7 +259,7 @@ test.describe('on a phone that sends orientation without asking (Android)', () =
 		await oceanRunning(page);
 		await startTilting(page);
 		const shot = await settleOn(page, 'foam');
-		await waitClock(page, RETURN_SECONDS + 0.3);
+		await waitClock(page, TILT_RETURN_SECONDS + 0.3);
 		const noise = [[45.04, 0.03], [44.97, -0.05], [45.02, 0.06], [44.95, -0.02], [45.05, 0.04]];
 		await page.evaluate((readings) => {
 			let i = 0;
