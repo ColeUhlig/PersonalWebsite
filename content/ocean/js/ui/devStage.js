@@ -6,6 +6,7 @@ import * as Charts from '../engine/charts.js';
 import * as Ocean from '../engine/ocean.js';
 import { probeSurface } from '../engine/surfaceProbe.js';
 import { createDirector } from '../stages/director.js';
+import { graphBand } from '../stages/graph.js';
 import { recipeFor } from '../stages/recipes.js';
 import { resolveSliderValues } from '../stages/route.js';
 import { createStageLook } from '../render/stageLook.js';
@@ -82,7 +83,8 @@ export function startStageRoute({ route, ocean, view, rig, meshes, materials, co
 			}
 			look.apply(out.look);
 			graph.apply(out.look.graph);
-			overlays.apply(out.look.overlay);
+			// The tile lines go while the graph's band clips the sea (final review Minor 6).
+			overlays.apply(out.look.overlay, graphBand(out.look.graph) !== null);
 			const seconds = shotSeconds(out.shot);
 			if (route.shots) {
 				rig.applyShot(out.shot, seconds);

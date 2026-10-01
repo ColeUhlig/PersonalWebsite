@@ -41,7 +41,7 @@ import { createStageLook } from '../render/stageLook.js';
 import { watchKeepClear } from './keepClear.js';
 import { createGraphStage } from '../render/graphStage.js';
 import { createSurfaceOverlays } from '../render/surfaceOverlays.js';
-import { GRAPH_HOLD } from '../stages/graph.js';
+import { GRAPH_HOLD, graphBand } from '../stages/graph.js';
 import { stepOf } from '../stages/steps.js';
 import { SHOTS } from '../render/cameraRig.js';
 import { movingReach, polarRange } from '../page/orbitLimits.js';
@@ -342,7 +342,8 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 		look.apply(out.look);
 		graph.apply(out.look.graph);
-		overlays.apply(out.look.overlay);
+		// The tile lines go while the graph's band clips the sea (final review Minor 6).
+		overlays.apply(out.look.overlay, graphBand(out.look.graph) !== null);
 		const wasHeld = graphHeld;
 		graphHeld = out.look.graph.opacity >= GRAPH_HOLD;
 		// A camera the visitor dragged before the hold came on goes back to the shot (Task 0 fix

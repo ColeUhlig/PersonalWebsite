@@ -176,6 +176,12 @@ test('step 13 draws the tile edges at multiples of the tile, and its neighbours 
 		await load(page, `step=${id}&freeze=12`, 10);
 		expect((await stage(page, 'overlays')).tiles.shown, id).toBe(false);
 	}
+	// Final review Minor 6: in the blend into step 14 the graph's band clips the sea and the backdrop
+	// comes in; the tile lines go with the sea rather than float over the backdrop.
+	await load(page, 'step=tiling&progress=0.3&freeze=12', 10);
+	await waitFrames(page, 3);
+	expect((await stage(page, 'graph')).band, 'the band is on at 0.3').not.toBe(null);
+	expect((await stage(page, 'overlays')).tiles.shown, 'tile lines while banded').toBe(false);
 });
 
 // Task 15 polish (the walk: on a phone the heading arrows and the frame's T and B were a few pixels

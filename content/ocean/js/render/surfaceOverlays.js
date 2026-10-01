@@ -135,10 +135,12 @@ export function createSurfaceOverlays({ view, ocean }) {
 	}
 
 	return {
-		apply(overlay) {
+		// `banded`: whether the graph's band clips the sea this frame; the tile lines go with the sea
+		// rather than float over the backdrop (final review Minor 6).
+		apply(overlay, banded = false) {
 			kind = overlay.kind;
 			spacing = overlay.spacing;
-			tiles.show(kind === 'tiles');
+			tiles.show(kind === 'tiles' && !banded);
 		},
 		frame(t, focus) {
 			// Hidden and already cleared: nothing to sample, write or upload, and both meshes stay invisible.
