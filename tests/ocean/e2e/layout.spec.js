@@ -209,3 +209,77 @@ test('the home page links to the ocean, and the ocean links home', async ({ page
 	await expect(page.locator('header.site a[href="/"]')).toHaveCount(1);
 	await expect(page.locator('footer.site a[href="/"]')).toHaveCount(1);
 });
+
+// Task 14 (from C Task 9b's re-review): on a wide screen the opening card sits centred in the window
+// (not raised by the pills' room), the finale's blocks are centred with the pills' column clear on
+// both sides, and on a short landscape phone, even with the text at twice its size, the pills cover
+// none of the opening's words.
+async function openingLayout(page) {
+	return page.evaluate(() => {
+		const box = (el) => el.getBoundingClientRect();
+		const pills = [...document.querySelectorAll('.pills > *')].filter((el) => !el.hidden).map(box);
+		const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+		const covered = [];
+		const walker = document.createTreeWalker(document.querySelector('.opening'), NodeFilter.SHOW_TEXT);
+		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+			if (!n.textContent.trim()) continue;
+			const range = document.createRange();
+			range.selectNodeContents(n);
+			for (const rect of range.getClientRects()) if (pills.some((p) => hit(rect, p))) covered.push(n.textContent.trim().slice(0, 30));
+		}
+		const card = box(document.querySelector('.opening-inner'));
+		return { pills: pills.length, covered, cardCentre: (card.top + card.bottom) / 2, height: window.innerHeight };
+	});
+}
+
+for (const { width, height } of [{ width: 1366, height: 767 }, { width: 1024, height: 768 }, { width: 1920, height: 1080 }]) {
+	test.describe(`on a ${width} × ${height} touch screen`, () => {
+		test.use({ viewport: { width, height }, isMobile: true, hasTouch: true });
+
+		test('the opening card is centred in the window and clear of the pills', async ({ page }) => {
+			await page.goto('/ocean/');
+			await page.waitForFunction(() => document.body.dataset.ocean === 'running', null, { timeout: 90_000 });
+			const layout = await openingLayout(page);
+			expect(layout.pills).toBeGreaterThan(0);
+			expect(Math.abs(layout.cardCentre - layout.height / 2)).toBeLessThan(2);
+			expect(layout.covered).toEqual([]);
+		});
+
+		test("the finale's blocks are centred, the pills' column clear on both sides", async ({ page }) => {
+			await page.goto('/ocean/');
+			await page.waitForFunction(() => document.body.dataset.ocean === 'running', null, { timeout: 90_000 });
+			const blocks = await page.evaluate(() => {
+				const room = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pill-width')) * parseFloat(getComputedStyle(document.documentElement).fontSize) + 32;
+				return [...document.querySelectorAll('.step-finale .block')].filter((b) => !b.hidden).map((b) => {
+					const r = b.getBoundingClientRect();
+					return { left: r.left, right: window.innerWidth - r.right, width: r.width, room };
+				});
+			});
+			expect(blocks.length).toBeGreaterThan(0);
+			for (const block of blocks) {
+				expect(Math.abs(block.left - block.right)).toBeLessThan(1.5);
+				expect(block.right).toBeGreaterThanOrEqual(block.room - 0.5);
+				expect(block.width).toBeLessThanOrEqual(1100.5);
+			}
+		});
+	});
+}
+
+for (const scale of ['100%', '200%']) {
+	test.describe(`on a 932 × 430 landscape phone with the text at ${scale}`, () => {
+		test.use({ viewport: { width: 932, height: 430 }, isMobile: true, hasTouch: true });
+
+		test("the pills cover none of the opening's words", async ({ page }) => {
+			await page.addInitScript((size) => {
+				document.addEventListener('DOMContentLoaded', () => {
+					document.documentElement.style.fontSize = size;
+				});
+			}, scale);
+			await page.goto('/ocean/');
+			await page.waitForFunction(() => document.body.dataset.ocean === 'running', null, { timeout: 90_000 });
+			const layout = await openingLayout(page);
+			expect(layout.pills).toBeGreaterThan(0);
+			expect(layout.covered).toEqual([]);
+		});
+	});
+}

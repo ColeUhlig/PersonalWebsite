@@ -785,20 +785,32 @@ footer.site a {
 }
 
 /* A wide screen: the story's full-width parts keep the pills' column clear (.pills). The opening
-   only ever moves up from where it starts, so it keeps clear of the column's height at the bottom,
-   which leaves its title centred; the finale's blocks and the footer keep clear of its width. */
+   keeps clear of the column's height at the bottom, and the same at the top so its card stays
+   centred in the window (C2 Task 14); the finale's blocks keep clear of the column's width on both
+   sides, so they stay centred too, and the footer keeps clear of it. */
 @media (min-width: 900px) {
 	.opening {
+		padding-top: var(--pill-stack);
 		padding-bottom: var(--pill-stack);
 	}
 
-	.step-finale {
-		padding-right: var(--pill-room);
+	.block {
+		width: min(1100px, calc(100% - 2 * var(--pill-room)));
 	}
 
 	footer.site {
 		padding-left: var(--pill-room);
 		padding-right: var(--pill-room);
+	}
+}
+
+/* A short wide screen (a phone on its side): the pills' column reaches up past the opening card, so
+   the card keeps clear of its width instead, on both sides so it stays centred. The room is capped
+   at 30vw so that with the text at twice its size (the column's room doubles with it) the card keeps
+   enough width to read; the pills themselves stay narrower than that (C2 Task 14). */
+@media (min-width: 900px) and (max-height: 600px) {
+	.opening {
+		padding: var(--gutter) min(var(--pill-room), 30vw);
 	}
 }
 
