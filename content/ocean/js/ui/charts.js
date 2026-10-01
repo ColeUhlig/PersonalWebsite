@@ -1,15 +1,19 @@
-// The story's three charts (piece C; spec 3; steps `jonswap`, `random-sea` and `time`, and `fft`),
+// The story's charts (piece C; spec 3; extended by C2, lane E): four figures in steps `jonswap`,
+// `random-sea`, `time` and `fft` (lane E's frequency and fourier figures are ui/frequencyCharts.js's),
 // inline SVG in the page's dark chart tokens (style.css), fed by A3's chart data through the story
 // stage's read-only accessors. Every number they show is live, either computed from the sea on
-// screen or measured in this browser, and each chart says which; the numbers sit in .chart-body, which carries data-copy-skip="live" (the
-// figcaptions outside it are copy-checked). Each SVG is drawn one unit per CSS pixel of its chart's
-// width (redrawn when that width changes), so its 12 px text is 12 px on a phone as on a laptop.
+// screen or measured in this browser, and each chart says which; the numbers sit in .chart-body,
+// which carries data-copy-skip="live" (the figcaptions outside it are copy-checked). Each SVG is
+// drawn one unit per CSS pixel of its chart's width (redrawn when that width changes), so its 12 px
+// text is 12 px on a phone as on a laptop.
 //   spectrum (`jonswap`): JONSWAP energy against wave frequency on a log axis whose top is the
 //     stormiest sea the sliders allow (page/spectrumLayout.js), with each wave layer's band shaded
 //     and the peak marked. Redrawn at most about 10 times a second while a slider drags.
-//   phase (`random-sea` and `time`): the tallest waves of the 256-stud layer, each an arrow turning at the speed the
-//     dispersion gives it (short waves' arrows turn fastest), looping every 120 s; turned every
-//     frame through the story's phase-arrow cache, and only while the chart is on screen.
+//   phase (steps 17 and 18, `random-sea` and `time`): the tallest waves of the 256-stud layer as
+//     arrows, held still at their starting angles in step 17's figure (`data-motion="still"`),
+//     turning in step 18's at the speed the dispersion gives each (short waves' arrows turn
+//     fastest), looping every 120 s, turned every frame through the story's phase-arrow cache and
+//     only while the chart is on screen. Each figure draws its own step's sea (its own seed).
 //   transforms (`fft`): the wave-by-wave sum against the FFT, timed in this browser when the chart
 //     comes on screen and again for each new grid size, read as page/transformTiming.js rules (a
 //     rounded speedup, one re-measure, the operation ratio when the timing was disturbed). A grid
@@ -21,7 +25,7 @@ import { stepOf } from '../stages/steps.js';
 import { fasterJudge, formatMs, formatSteps, formatTiny, operationRatio, roundSpeedup, timeTransforms, tooSlowToTime } from '../page/transformTiming.js';
 
 const NS = 'http://www.w3.org/2000/svg';
-const MIN_WIDTH = 240;
+const MIN_WIDTH = 200; // below a 320 px phone's chart body (about 222 px), so its 12 px text stays 12 px
 const FALLBACK_WIDTH = 320;
 // About this wide per character at 12 px, for a text the browser cannot measure (not laid out).
 const CHAR_WIDTH = 6.6;
@@ -188,7 +192,29 @@ function spectrumChart(figure, story, onLayout) {
 	return { draw, resize: draw };
 }
 
+// The phase arrows' figure in each step: held still in random-sea's, turning in time's. Each figure
+// draws its own step's sea (R13: step 18's arrows use step 18's seed, not step 17's New sea).
+const PHASE_STEP = Object.freeze({ still: stepOf('random-sea'), turning: stepOf('time') });
+// Below this column width (CSS px) a wavelength label drops its word "studs" (the note says the
+// labels are in studs), so the widest, "256 studs" (about 59 px at 12 px), never spills into the
+// next ring's column on a 320 px phone (about 55 px columns).
+const LABEL_ROOM = 64;
+
+// The words for each motion: the SVG's label and the note under it (both live, in .chart-body).
+const PHASE_WORDS = Object.freeze({
+	still: (count, tallest) => [
+		`The ${count} tallest waves of the 256-stud layer as arrows, held at their starting angles: each wave's random height and phase`,
+		`Computed from the sea on screen. Each arrow is one wave: its angle is the wave's starting phase, and its length is half that wave's crest height above the mean level, scaled so the longest arrow (${tallest.toFixed(2)} studs) fills its ring. Labels are wavelengths in studs.`,
+	],
+	turning: (count, tallest) => [
+		`The ${count} tallest waves of the 256-stud layer as arrows, turning at the speeds the dispersion gives them and looping every 120 seconds; the shortest waves' arrows turn fastest`,
+		`Computed from the sea on screen. Each arrow is one wave: its angle is the wave's phase now, and its length is half that wave's crest height above the mean level, scaled so the longest arrow (${tallest.toFixed(2)} studs) fills its ring. Labels are wavelengths in studs; short waves' arrows turn fastest.`,
+	],
+});
+
 function phaseChart(figure, story, onLayout) {
+	const motion = figure.dataset.motion === 'still' ? 'still' : 'turning';
+	const step = PHASE_STEP[motion];
 	let arrows = [];
 	let frame = 0;
 	let reported = false;
@@ -197,12 +223,13 @@ function phaseChart(figure, story, onLayout) {
 		const column = width / 4;
 		const radius = Math.min(32, column / 2 - 6);
 		const row = radius * 2 + 32;
+		const unit = column >= LABEL_ROOM ? ' studs' : '';
 		const tallest = Math.max(...waves.map((a) => a.amplitude));
-		const root = canvasFor(figure, width, row * 2 + 4, `The ${waves.length} tallest waves of the 256-stud layer as arrows, turning at the speeds the dispersion gives them and looping every 120 seconds; the shortest waves' arrows turn fastest`, [
-			`Computed from the sea on screen. Each arrow is one wave: its angle is the wave's phase now, and its length is half that wave's crest height above the mean level, scaled so the longest arrow (${tallest.toFixed(2)} studs) fills its ring. Labels are wavelengths in studs; short waves' arrows turn fastest.`,
-		]);
+		const [label, words] = PHASE_WORDS[motion](waves.length, tallest);
+		const root = canvasFor(figure, width, row * 2 + 4, label, [words]);
 		const defs = svg('defs');
-		const marker = svg('marker', { id: 'chart-arrowhead', viewBox: '0 0 6 6', refX: 5, refY: 3, markerWidth: 4, markerHeight: 4, orient: 'auto' });
+		// One marker per figure (two phase figures share the page), so no id is used twice.
+		const marker = svg('marker', { id: `chart-arrowhead-${motion}`, viewBox: '0 0 6 6', refX: 5, refY: 3, markerWidth: 4, markerHeight: 4, orient: 'auto' });
 		marker.append(svg('path', { class: 'chart-arrowhead', d: 'M0 0 L6 3 L0 6 Z' }));
 		defs.append(marker);
 		root.append(defs);
@@ -211,17 +238,17 @@ function phaseChart(figure, story, onLayout) {
 			const cy = 6 + radius + Math.floor(i / 4) * row;
 			root.append(svg('circle', { class: 'chart-ring', cx, cy, r: radius }));
 			root.append(svg('circle', { class: 'chart-hub', cx, cy, r: 1.5 }));
-			const line = svg('line', { class: 'chart-arrow', x1: cx, y1: cy, x2: cx, y2: cy, 'marker-end': 'url(#chart-arrowhead)' });
+			const line = svg('line', { class: 'chart-arrow', x1: cx, y1: cy, x2: cx, y2: cy, 'marker-end': `url(#chart-arrowhead-${motion})` });
 			root.append(line);
-			root.append(svg('text', { class: 'chart-text chart-wavelength', x: cx, y: cy + radius + 16, 'text-anchor': 'middle' }, `${wave.wavelength.toFixed(0)} studs`));
+			root.append(svg('text', { class: 'chart-text chart-wavelength', x: cx, y: cy + radius + 16, 'text-anchor': 'middle' }, `${wave.wavelength.toFixed(0)}${unit}`));
 			return { line, cx, cy, radius, x2: '', y2: '' };
 		});
 		onLayout();
 	}
-	// One frame: the arrows at the ocean's time now. Only a coordinate that moved is written, so a
-	// paused sea costs no DOM work.
+	// One frame: the arrows at the ocean's time now (still: at t = 0, their starting angles), for this
+	// figure's own step's sea. Only a coordinate that moved is written, so a paused sea costs no DOM work.
 	function turn() {
-		const waves = story.charts.phaseArrows();
+		const waves = motion === 'still' ? story.charts.phaseArrows(0, step) : story.charts.phaseArrows(undefined, step);
 		if (arrows.length !== waves.length) build(waves);
 		const tallest = Math.max(...waves.map((a) => a.amplitude));
 		waves.forEach((wave, i) => {
@@ -233,30 +260,41 @@ function phaseChart(figure, story, onLayout) {
 			if (y2 !== arrow.y2) arrow.line.setAttribute('y2', (arrow.y2 = y2));
 		});
 	}
-	// A frame that throws stops the turning until the chart next comes on screen; the error is
-	// logged once a page, not again on every return.
-	function loop() {
+	// Every turn the chart starts itself (on show, each frame of the loop, the still one at mount)
+	// runs here: a throw stops the arrows until the chart next comes on screen, logged once a page,
+	// not again on every return. Returns whether the turn went through.
+	function guardedTurn() {
 		try {
 			turn();
+			return true;
 		} catch (error) {
 			if (!reported) {
 				reported = true;
 				console.error('[ocean] the phase arrows stopped', error);
 			}
-			return;
+			return false;
 		}
-		frame = requestAnimationFrame(loop);
 	}
+	function loop() {
+		if (guardedTurn()) frame = requestAnimationFrame(loop);
+	}
+	// Turning: the loop runs only while on screen. Still: drawn once more on show, never looped.
+	let shown = false;
 	const visible = whileVisible(figure, () => {
+		shown = true;
 		cancelAnimationFrame(frame);
-		frame = requestAnimationFrame(loop);
+		if (motion === 'still') guardedTurn();
+		else frame = requestAnimationFrame(loop);
 	}, () => cancelAnimationFrame(frame));
-	// Drawn once at the start, so the panel has its arrows (still) before the chart comes on screen.
-	turn();
-	// A new seed or a new width: the arrows are rebuilt on the next turn.
+	// The still figure is drawn at mount, so step 17's panel has its arrows before it comes on
+	// screen. The turning one waits for its first show: its sea's arrow cache is not built at the
+	// story's start (main-thread time a phone needs then).
+	if (motion === 'still') guardedTurn();
+	// A new seed or a new width: the arrows are rebuilt now if nothing else will (the still figure,
+	// or a turning one shown before and off screen now), else on the loop's next turn or first show.
 	function draw() {
 		arrows = [];
-		if (!visible()) turn();
+		if (motion === 'still' || (shown && !visible())) turn();
 	}
 	return { draw, resize: draw };
 }
@@ -492,33 +530,46 @@ function safely(name, work, fallback = null) {
 }
 
 // Redraws a chart when its width changes (one SVG unit per CSS pixel); changes in a frame land once.
-function watchWidth(figures, charts) {
+function watchWidth(drawn) {
 	if (typeof ResizeObserver === 'undefined') return;
 	const widths = new Map();
+	const byBody = new Map(drawn.map((entry) => [entry.figure.querySelector('.chart-body'), entry]));
 	const observer = new ResizeObserver((entries) => {
 		for (const entry of entries) {
-			const name = entry.target.closest('figure').dataset.chart;
+			const { name, chart } = byBody.get(entry.target);
 			const width = Math.round(entry.contentRect.width);
-			const before = widths.get(name);
-			widths.set(name, width);
-			if (before !== undefined && before !== width && charts[name]) safely(name, () => charts[name].resize());
+			const before = widths.get(entry.target);
+			widths.set(entry.target, width);
+			if (before !== undefined && before !== width) safely(name, () => chart.resize());
 		}
 	});
-	for (const figure of Object.values(figures)) observer.observe(figure.querySelector('.chart-body'));
+	for (const body of byBody.keys()) observer.observe(body);
 }
 
 export function mountCharts(story, { onLayout = () => {} } = {}) {
-	const figures = Object.fromEntries([...document.querySelectorAll('figure.chart[data-chart]')].map((f) => [f.dataset.chart, f]));
+	const all = [...document.querySelectorAll('figure.chart[data-chart]')];
 	const MAKERS = { spectrum: spectrumChart, phase: phaseChart, transforms: transformChart };
-	const charts = Object.fromEntries(Object.entries(MAKERS).map(([name, make]) => [name, figures[name] ? safely(name, () => make(figures[name], story, onLayout)) : null]));
+	// name -> the charts drawn under that name (two phase charts: steps 17 and 18). The figures this
+	// module does not draw (lane E's frequency and fourier, ui/frequencyCharts.js) are skipped.
+	const charts = { spectrum: [], phase: [], transforms: [] };
+	const drawn = [];
+	for (const figure of all) {
+		const name = figure.dataset.chart;
+		if (!MAKERS[name]) continue;
+		const chart = safely(name, () => MAKERS[name](figure, story, onLayout));
+		if (!chart) continue;
+		charts[name].push({ figure, chart });
+		drawn.push({ name, figure, chart });
+	}
+	const each = (name, fn) => charts[name].forEach(({ chart }) => safely(name, () => fn(chart)));
 	const BY_STEP = { [stepOf('jonswap')]: 'spectrum', [stepOf('random-sea')]: 'phase', [stepOf('time')]: 'phase', [stepOf('fft')]: 'transforms' };
-	const drawSpectrum = throttled(() => safely('spectrum', () => charts.spectrum.draw()), SPECTRUM_REDRAW_MS);
+	const drawSpectrum = throttled(() => each('spectrum', (c) => c.draw()), SPECTRUM_REDRAW_MS);
 	let queued = new Set();
 	// ocean:slider fires only for a value that really changed. The spectrum redraws at most about
 	// 10 times a second while a slider drags; the other charts draw once per frame of changes.
 	document.addEventListener('ocean:slider', (event) => {
 		const name = BY_STEP[event.detail.step];
-		if (!name || !charts[name]) return;
+		if (!name || charts[name].length === 0) return;
 		if (name === 'spectrum') {
 			drawSpectrum();
 			return;
@@ -527,19 +578,19 @@ export function mountCharts(story, { onLayout = () => {} } = {}) {
 			requestAnimationFrame(() => {
 				const names = queued;
 				queued = new Set();
-				for (const n of names) safely(n, () => charts[n].draw());
+				for (const n of names) each(n, (c) => c.draw());
 			});
 		}
 		queued.add(name);
 	});
-	if (charts.spectrum) safely('spectrum', () => charts.spectrum.draw());
-	watchWidth(figures, charts);
+	each('spectrum', (c) => c.draw());
+	watchWidth(drawn);
 	return Object.freeze({
 		redraw() {
-			for (const [name, chart] of Object.entries(charts)) if (chart) safely(name, () => chart.draw({ force: true }));
+			for (const name of Object.keys(charts)) each(name, (c) => c.draw({ force: true }));
 		},
 		hooks: Object.freeze({
-			useTransforms: (fn) => charts.transforms?.useTransforms(fn),
+			useTransforms: (fn) => charts.transforms[0]?.chart.useTransforms(fn),
 		}),
 	});
 }
