@@ -4,12 +4,18 @@
 // Task 0): `S.<id>` is the step's number, `at(id)` its section's selector.
 import { test, expect } from '@playwright/test';
 import { STEP_IDS, stepOf } from '../../../content/ocean/js/stages/steps.js';
+import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
+import { formatValue, toInput } from '../../../content/ocean/js/page/sliderModel.js';
 import { oceanRunning, scrollToId, waitFrames, watchErrors } from './helpers/story.js';
+import { story } from './helpers/stage.js';
 
 const S = Object.fromEntries(STEP_IDS.map((id) => [id, stepOf(id)]));
 const at = (id) => `#step-${stepOf(id)}`;
+// A step's slider as its recipe declares it (lanes tune the values; Task 0 fix round 1, U4), and the
+// text the control shows for a value.
+const sliderOf = (stepId, id) => recipeFor(stepOf(stepId)).sliders.find((s) => s.id === id);
+const shown = (stepId, id, value = sliderOf(stepId, id).default) => formatValue(sliderOf(stepId, id), value);
 
-const story = (page, name, ...args) => page.evaluate(([n, a]) => window.__ocean.story[n](...a), [name, args]);
 
 // Sets a range control's value the way a drag does (an input event), without scrolling it into view:
 // Playwright cannot fill a range input, and scrolling would move the story.
@@ -29,12 +35,12 @@ test("every panel builds its recipe's controls", async ({ page }) => {
 	await expect(page.locator(`${at('sine')} .control`)).toHaveCount(2);
 	await expect(page.locator(`${at('sine')} .control label`)).toHaveText(['Height', 'Length']);
 	await expect(page.locator(`${at('moving-sine')} .control label`)).toHaveText(['Speed']);
-	await expect(page.locator(`${at('sine')} [data-slider="amplitude"] output`)).toHaveText('2.50 studs');
+	await expect(page.locator(`${at('sine')} [data-slider="amplitude"] output`)).toHaveText(shown('sine', 'amplitude'));
 	await expect(page.locator(`${at('into-3d')} [data-slider="wireframe"] input[role=switch]`)).toBeChecked();
 	await expect(page.locator(`${at('unlit')} [data-slider="wireframe"] input[role=switch]`)).not.toBeChecked();
 	await expect(page.locator(`${at('random-sea')} [data-slider="seed"] button.control-press`)).toHaveText('New sea');
 	await expect(page.locator(`${at('fft')} [data-slider="transformN"] button[role=radio]`)).toHaveCount(4);
-	await expect(page.locator(`${at('jonswap')} [data-slider="fetch"] output`)).toHaveText('80,000 m');
+	await expect(page.locator(`${at('jonswap')} [data-slider="fetch"] output`)).toHaveText(shown('jonswap', 'fetch'));
 	await expect(page.locator(`${at('finale')} .control`)).toHaveCount(0);
 	await expect(page.locator(`${at('sine')} [data-slider="amplitude"] .swatch.t-amp`)).toHaveCount(1);
 	// C2: the wireframe switch is not a term in any formula, so it has no swatch.
@@ -46,10 +52,11 @@ test('the height slider on the sine step raises the sine on screen', async ({ pa
 	await oceanRunning(page);
 	await scrollToId(page, 'sine', 0.05);
 	await waitFrames(page, 10);
-	await setRange(page, 'sine', 'amplitude', 4);
-	await expect(page.locator(`${at('sine')} [data-slider="amplitude"] output`)).toHaveText('4.00 studs');
+	const tallest = sliderOf('sine', 'amplitude').max;
+	await setRange(page, 'sine', 'amplitude', tallest);
+	await expect(page.locator(`${at('sine')} [data-slider="amplitude"] output`)).toHaveText(shown('sine', 'amplitude', tallest));
 	await waitFrames(page, 10);
-	expect((await story(page, 'surface')).maxAbsY).toBeGreaterThan(3);
+	expect((await story(page, 'surface')).maxAbsY).toBeGreaterThan(0.75 * tallest);
 });
 
 test('a slider on the next panel changes that step, not the one being read (Review Focus 4)', async ({ page }) => {
@@ -57,13 +64,15 @@ test('a slider on the next panel changes that step, not the one being read (Revi
 	await oceanRunning(page);
 	await scrollToId(page, 'fourier', 0.2);
 	await waitFrames(page, 5);
-	for (const value of [5, 9, 14, 18, 22]) await setRange(page, 'jonswap', 'wind', value);
+	const wind = sliderOf('jonswap', 'wind');
+	const drag = [0.1, 0.3, 0.5, 0.8, 1].map((w) => wind.min + w * (wind.max - wind.min));
+	for (const value of drag) await setRange(page, 'jonswap', 'wind', value);
 	const state = await story(page, 'state');
 	expect(state.step).toBe(S.fourier);
-	expect(state.values[String(S.jonswap)].wind).toBe(22);
-	await expect(page.locator(`${at('jonswap')} [data-slider="wind"] output`)).toHaveText('22.0 m/s');
+	expect(state.values[String(S.jonswap)].wind).toBe(wind.max);
+	await expect(page.locator(`${at('jonswap')} [data-slider="wind"] output`)).toHaveText(shown('jonswap', 'wind', wind.max));
 	await scrollToId(page, 'jonswap', 0.2);
-	await page.waitForFunction(() => Math.abs(window.__ocean.status().windSpeed - 22) < 1e-9, null, { timeout: 120_000 });
+	await page.waitForFunction((top) => Math.abs(window.__ocean.status().windSpeed - top) < 1e-9, wind.max, { timeout: 120_000 });
 	expect(errors).toEqual([]);
 });
 
@@ -98,18 +107,19 @@ test("the many-waves step's wave count shows a live timing of its sum, measured 
 	const points = vertices.toLocaleString('en-US');
 	const timing = page.locator(`${at('many-waves')} [data-slider="waveCount"] .control-timing[data-copy-skip="live"]`);
 	const reads = (count) => new RegExp(`^${count} wave${count === 1 ? '' : 's'} over ${points} points: \\d+(\\.\\d+)? ms in your browser just now$`);
-	await expect(timing).toHaveText(reads(16), { timeout: 60_000 });
+	const count = sliderOf('many-waves', 'waveCount');
+	await expect(timing).toHaveText(reads(count.default), { timeout: 60_000 });
 	// Filled at load, but not announced until the visitor reaches the step.
 	expect(await timing.getAttribute('aria-live')).toBeNull();
 	await scrollToId(page, 'many-waves', 0.2);
 	await expect(timing).toHaveAttribute('aria-live', 'polite');
-	await setRange(page, 'many-waves', 'waveCount', 32);
-	await expect(timing).toHaveText(reads(32), { timeout: 60_000 });
+	await setRange(page, 'many-waves', 'waveCount', count.max);
+	await expect(timing).toHaveText(reads(count.max), { timeout: 60_000 });
 	// The longest stretch the costliest measurement held the main thread for, in ms (it yields
 	// between slices).
 	expect(Number(await timing.getAttribute('data-longest-slice'))).toBeLessThan(30);
-	await setRange(page, 'many-waves', 'waveCount', 1);
-	await expect(timing).toHaveText(reads(1), { timeout: 60_000 });
+	await setRange(page, 'many-waves', 'waveCount', count.min);
+	await expect(timing).toHaveText(reads(count.min), { timeout: 60_000 });
 	expect(await timing.textContent()).not.toContain('Roblox');
 	expect(errors).toEqual([]);
 });
@@ -138,20 +148,21 @@ test('the fetch slider moves under the arrow keys at both ends, and reads out it
 	const input = page.locator(`${at('jonswap')} [data-slider="fetch"] input`);
 	const output = page.locator(`${at('jonswap')} [data-slider="fetch"] output`);
 	const metres = async () => Number((await output.textContent()).replace(/[^0-9]/g, ''));
-	await expect(input).toHaveAttribute('aria-valuetext', '80,000 m');
+	const fetch = sliderOf('jonswap', 'fetch');
+	await expect(input).toHaveAttribute('aria-valuetext', shown('jonswap', 'fetch'));
 	await setRange(page, 'jonswap', 'fetch', 0);
-	await expect(output).toHaveText('5,000 m');
+	await expect(output).toHaveText(shown('jonswap', 'fetch', fetch.min));
 	await input.focus();
 	await page.keyboard.press('ArrowRight');
-	expect(await metres()).toBeGreaterThan(5000);
+	expect(await metres()).toBeGreaterThan(fetch.min);
 	await expect(input).toHaveAttribute('aria-valuetext', await output.textContent());
 	await page.keyboard.press('ArrowLeft');
-	await expect(output).toHaveText('5,000 m');
+	await expect(output).toHaveText(shown('jonswap', 'fetch', fetch.min));
 	await page.keyboard.press('End');
-	await expect(output).toHaveText('200,000 m');
-	// Track position 752 is the default's neighbourhood (80,100 m once snapped).
-	await setRange(page, 'jonswap', 'fetch', 752);
-	expect(Math.abs((await metres()) - 80000)).toBeLessThanOrEqual(500);
+	await expect(output).toHaveText(shown('jonswap', 'fetch', fetch.max));
+	// The default's track position (80,100 m once snapped, at A3's 80,000 m default).
+	await setRange(page, 'jonswap', 'fetch', toInput(fetch, fetch.default));
+	expect(Math.abs((await metres()) - fetch.default)).toBeLessThanOrEqual(500);
 	await input.focus();
 	let presses = 0;
 	while ((await metres()) >= 25300 && presses < 400) {
@@ -197,9 +208,10 @@ test('the grid-size choice is a radio group: one tab stop, arrows and Home/End m
 // to the value the director holds, with no event. Mounted on a story that refuses everything.
 test('a refused change is logged and the control shows the held value again', async ({ page }) => {
 	await oceanRunning(page);
-	const result = await page.evaluate(async () => {
+	const chop = sliderOf('gerstner', 'chop');
+	const result = await page.evaluate(async (declared) => {
 		const { mountControls } = await import('/ocean/js/ui/controls.js');
-		const slider = { id: 'chop', label: 'Choppiness', kind: 'range', min: 0, max: 2, step: 0.01, default: 1.3, unit: '', scale: 'linear', value: 1.3, available: true };
+		const slider = { ...declared, value: declared.default, available: true };
 		const root = document.createElement('div');
 		document.body.append(root);
 		const logged = [];
@@ -214,18 +226,18 @@ test('a refused change is logged and the control shows the held value again', as
 				onChange: (detail) => events.push(detail),
 			});
 			const input = root.querySelector('input[type=range]');
-			input.value = '0.2';
+			input.value = String(slider.min);
 			input.dispatchEvent(new Event('input', { bubbles: true }));
 			return { logged, events, position: input.value, shown: root.querySelector('output').textContent };
 		} finally {
 			console.error = original;
 			root.remove();
 		}
-	});
+	}, chop);
 	expect(result.logged).toEqual(['[ocean] step 5 refused chop']);
 	expect(result.events).toEqual([]);
-	expect(result.position).toBe('1.3');
-	expect(result.shown).toBe('1.30');
+	expect(result.position).toBe(String(chop.default));
+	expect(result.shown).toBe(formatValue(chop, chop.default));
 });
 
 // The clamp is the story's: the dev route (?step=<id>) takes the URL's knobs as they are. Wind 30 is

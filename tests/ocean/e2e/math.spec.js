@@ -41,11 +41,14 @@ test("a term's colour in the maths matches its slider's swatch", async ({ page }
 	await oceanRunning(page);
 	await page.locator(`${at('sine')} details.math summary`).click();
 	await expect(page.locator(`${at('sine')} .tex .t-amp`).first()).toBeVisible({ timeout: 30_000 });
-	const colours = await page.evaluate((step) => ({
+	// The speed term is the moving-sine step's: the still sine's maths has no ω (lanes A and G).
+	// Every line is typeset at once, so the closed one's spans carry their colour too.
+	await expect(page.locator(`${at('moving-sine')} .tex .t-speed`).first()).toBeAttached({ timeout: 30_000 });
+	const colours = await page.evaluate(([step, moving]) => ({
 		term: getComputedStyle(document.querySelector(`${step} .tex .t-amp`)).color,
 		swatch: getComputedStyle(document.querySelector(`${step} [data-slider="amplitude"] .swatch`)).color,
-		speed: getComputedStyle(document.querySelector(`${step} .tex .t-speed`)).color,
-	}), at('sine'));
+		speed: getComputedStyle(document.querySelector(`${moving} .tex .t-speed`)).color,
+	}), [at('sine'), at('moving-sine')]);
 	expect(colours.term).toBe(colours.swatch);
 	expect(colours.speed).not.toBe(colours.term);
 });
