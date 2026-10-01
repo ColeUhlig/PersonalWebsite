@@ -48,7 +48,7 @@ export const COPY_SOURCES = Object.freeze([
 	// The teaching recipes (facts.test.js checks the count in the recipe's data).
 	{ phrase: 'The page keeps only the 4 tallest (the small ones would blur at this distance)', source: FACTS, quote: "the tiling step sums the bank's 4 tallest waves" },
 	// C2 lane G, step 6 (spec 10: never "all directions").
-	{ phrase: 'fan out within 45° either side of one heading', source: FACTS, quote: "the teaching bank's headings lie within 45° either side of one heading" },
+	{ phrase: 'Their headings fan out within 45° either side of one heading', source: FACTS, quote: "the teaching bank's headings lie within 45° either side of one heading" },
 	// The proof panel's runtime (proofPanel.js fills its note from runtime.js; copy.test.js checks it).
 	{ phrase: 'a fork of Luau 0.711', source: RUNTIME, quote: "LUAU_RELEASE = '0.711'" },
 	{ phrase: 'packaged as luau-web 1.4.0', source: RUNTIME, quote: "LUAU_WEB_VERSION = '1.4.0'" },
