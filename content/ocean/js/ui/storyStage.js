@@ -5,8 +5,14 @@
 // built it. Above step 1 (the opening) it shows step 13's recipe, the finished sea, under the
 // opening camera. The position (step + progress) is smoothed toward the scroll and cut when it jumps
 // more than a step, so a fling never sweeps the engine through the recipes in between
-// (page/scrollMap.js). Under reduced motion there is no smoothing, no blending of shots, no drift
-// and no easing back.
+// (page/scrollMap.js). The director blends by holdThenBlend of the progress (page/scrollMap.js):
+// each step holds its own recipe while its panel is read, the first half of its section, and eases
+// into the next over the second half; the smoothing and the jump check work in scroll units. Under
+// reduced motion there is no smoothing, no blending of shots, no drift and no easing back.
+// Scrolling back up out of the finale lets its drift go: the camera eases from where the drift left
+// it to the still shot (page/shotControl.js returnToShot) rather than jumping there. The camera and
+// its tilt range are set only when the pose (or the frame's aspect) changed, so a settled scroll
+// costs nothing.
 // Motion reads the play clock (Ocean.teachTime), never the frame's wall time: the smoothing and the
 // ease back run on its seconds, and while it is stopped (reduced motion, a paused sea) the story
 // goes straight to where the scroll says.
@@ -25,12 +31,30 @@ import { recipeFor, STEP_COUNT } from '../stages/recipes.js';
 import { createStageLook } from '../render/stageLook.js';
 import { SHOTS } from '../render/cameraRig.js';
 import { movingReach, polarRange } from '../page/orbitLimits.js';
-import { positionOf, smoothPosition, splitPosition } from '../page/scrollMap.js';
+import { holdThenBlend, positionOf, smoothPosition, splitPosition } from '../page/scrollMap.js';
 import { createShotControl, resolveShot } from '../page/shotControl.js';
 
 const TRAIL_LENGTH = 64;
 const MAX_FRAME_SECONDS = 0.25;
 export const HOLD_MAX_FRAMES = 10;
+
+// Whether a recipe's engine asks for an FFT layer this tier runs (the first `count` layers).
+function wantsFftLayers(engine, count) {
+	if (engine.source !== 'fft') {
+		return false;
+	}
+	for (let i = 0; i < count && i < engine.layers.length; i++) {
+		if (engine.layers[i]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+const samePose = (a, b) =>
+	a !== null &&
+	a.position[0] === b.position[0] && a.position[1] === b.position[1] && a.position[2] === b.position[2] &&
+	a.target[0] === b.target[0] && a.target[1] === b.target[1] && a.target[2] === b.target[2];
 
 export function createStoryStage({ ocean, view, rig, meshes, materials, config, reducedMotion = false }) {
 	const director = createDirector(ocean);
@@ -45,21 +69,41 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	let cutPending = false;
 	let position = Number.NaN;
 	let key = 0;
+	let previousKey = 0;
 	let clock = null;
 	// The teaching clock when the shot's move last became 'drift': the finale turns from there, so
 	// the camera does not jump at the snap into step 13 however long the page has been open.
 	let driftStart = null;
+	// Set when the scroll leaves the finale while the blend still asks for the drift: the drift is
+	// let go (the camera eases back to the still shot) until the shot stops asking or the finale
+	// is read again.
+	let driftLetGo = false;
 	let tilt = null;
+	// The pose the tilt range was last worked out for, and the frame's aspect then; the pose last
+	// put on the camera.
+	let tiltPose = openingShot;
+	let tiltAspect = Number.NaN;
+	let placed = null;
+	let applied = 0;
 	let wantsLayers = false;
 	let holding = false;
 	let held = 0;
 	let watching = 0;
 	let pictures = [];
+	const stillShot = { position: null, target: null, move: 'still' };
+	const applyOptions = { cut: false, ease: true };
 
-	rig.onUserOrbit(() => shots.orbited(key));
+	// The visitor moved the camera: what was last placed is no longer where it stands, so the next
+	// pose the story asks for is placed even if it is the same one.
+	rig.onUserOrbit(() => {
+		shots.orbited(key);
+		placed = null;
+	});
 
 	function limitTilt(pose) {
-		tilt = polarRange(pose, { aspect: view.camera.aspect, fovDegrees: view.camera.fov, reach });
+		tiltPose = pose;
+		tiltAspect = view.camera.aspect;
+		tilt = polarRange(pose, { aspect: tiltAspect, fovDegrees: view.camera.fov, reach });
 		rig.limitTilt(tilt.min, tilt.max);
 	}
 	// The opening camera is A2's until the first scroll, but the visitor's orbit is the story's
@@ -95,17 +139,37 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 		position = reducedMotion || !(seconds > 0) ? target : smoothPosition(position, target, seconds);
 		const { step, progress } = splitPosition(position);
-		director.setStep(step, reducedMotion ? 0 : progress);
+		director.setStep(step, reducedMotion ? 0 : holdThenBlend(progress));
 		return step;
 	}
 
+	// How long the shot's drift has run. Leaving the finale (scrolling back up into step 12, where
+	// the blend still asks for the drift) or the shot no longer asking for it lets the drift go, and
+	// the camera eases from where the drift left it instead of jumping to the still shot.
 	function shotSeconds(shot, now) {
+		if (key === STEP_COUNT) {
+			driftLetGo = false;
+		} else if (previousKey === STEP_COUNT && shot.move === 'drift') {
+			letGoOfDrift(now);
+			driftLetGo = true;
+		}
 		if (shot.move !== 'drift') {
-			driftStart = null;
+			letGoOfDrift(now);
+			driftLetGo = false;
+			return 0;
+		}
+		if (driftLetGo) {
 			return 0;
 		}
 		driftStart ??= now;
 		return now - driftStart;
+	}
+
+	function letGoOfDrift(now) {
+		if (driftStart !== null && now > driftStart) {
+			shots.returnToShot();
+		}
+		driftStart = null;
 	}
 
 	// A frame the engine refuses (the director has already gone back to the values it last took) is
@@ -123,23 +187,50 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	}
 
 	function applyCamera(out, seconds, now) {
-		const shot = key === 0 ? openingShot : reducedMotion ? { ...recipeFor(key).shot, move: 'still' } : out.shot;
+		let shot = out.shot;
+		if (key === 0) {
+			shot = openingShot;
+		} else if (reducedMotion) {
+			const own = recipeFor(key).shot;
+			stillShot.position = own.position;
+			stillShot.target = own.target;
+			shot = stillShot;
+		}
 		const target = resolveShot(shot, shotSeconds(shot, now));
-		const pose = shots.frame(key, rig.pose(), target, seconds, { cut: cutPending, ease: seconds > 0 });
+		applyOptions.cut = cutPending;
+		applyOptions.ease = seconds > 0;
+		// Only a return reads where the camera is (a shot or a cut ignores it).
+		const current = shots.mode() === 'shot' ? null : rig.pose();
+		const pose = shots.frame(key, current, target, seconds, applyOptions);
 		cutPending = false;
 		if (pose) {
-			limitTilt(pose);
-			rig.applyShot({ position: pose.position, target: pose.target, move: 'still' }, 0);
+			place(pose);
 		}
+	}
+
+	// Puts the camera at `pose`, and works out its tilt range, only when either changed.
+	function place(pose) {
+		if (samePose(placed, pose) && tiltAspect === view.camera.aspect) {
+			return;
+		}
+		limitTilt(pose);
+		rig.applyShot({ position: pose.position, target: pose.target, move: 'still' }, 0);
+		placed = pose;
+		applied += 1;
 	}
 
 	// Before Ocean.step (dt is the frame's wall time and is not used: motion reads the play clock).
 	function beforeStep() {
+		// A resize changes the frame's aspect, and with it how far the visitor may tilt.
+		if (view.camera.aspect !== tiltAspect) {
+			limitTilt(tiltPose);
+		}
 		if (!started) {
 			return;
 		}
 		const now = Ocean.teachTime(ocean);
 		const seconds = clockSeconds(now);
+		previousKey = key;
 		key = followScroll(seconds);
 		trail.push(key);
 		if (trail.length > TRAIL_LENGTH) trail.shift();
@@ -149,8 +240,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		}
 		look.apply(out.look);
 		applyCamera(out, seconds, now);
-		const { source, layers } = out.recipe.engine;
-		wantsLayers = source === 'fft' && layers.some((on, i) => on && i < ocean.preset.sizes.length);
+		wantsLayers = wantsFftLayers(out.recipe.engine, ocean.preset.sizes.length);
 	}
 
 	// After Ocean.step, when this frame's sea is written: hold the picture while the recipe asks for
@@ -160,7 +250,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 			return;
 		}
 		view.settleEnvironment();
-		const flat = wantsLayers && !Ocean.status(ocean).layers.some(Boolean);
+		const flat = wantsLayers && !Ocean.anyLayerSampled(ocean);
 		holding = flat && held < HOLD_MAX_FRAMES;
 		held = flat ? held + 1 : 0;
 		if (watching > 0) {
@@ -184,10 +274,9 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 	const press = (step, id) => onStep(step, () => director.press(id));
 
 	// The phase arrows are built once per sea and seed (a cascade build, 4 to 9 ms) and turned every
-	// call. Step 8's sea is its recipe's own (it has no sea sliders), so a blend from step 7 does not
-	// rebuild them every frame.
-	let arrows = null;
-	let arrowsKey = '';
+	// call, through the cache the dev route uses too. Step 8's sea is its recipe's own (it has no sea
+	// sliders), so a blend from step 7 does not rebuild them every frame.
+	const arrowsAt = Charts.createPhaseArrowCache({ sizes: ocean.preset.sizes, n: ocean.preset.n });
 	const charts = Object.freeze({
 		spectrum() {
 			const params = { ...ocean.live.params, windSpeed: director.valueOf(7, 'wind'), fetch: director.valueOf(7, 'fetch') };
@@ -195,14 +284,7 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		},
 		phaseArrows() {
 			const sea = recipeFor(8).engine.sea;
-			const params = { ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch };
-			const seed = director.valueOf(8, 'seed');
-			const arrowsFor = `${params.windSpeed}|${params.fetch}|${seed}`;
-			if (arrowsFor !== arrowsKey) {
-				arrows = Charts.createPhaseArrows(params, { seed, sizes: ocean.preset.sizes, n: ocean.preset.n });
-				arrowsKey = arrowsFor;
-			}
-			return Charts.phaseArrowsAt(arrows, ocean.t);
+			return arrowsAt({ ...ocean.live.params, windSpeed: sea.windSpeed, fetch: sea.fetch }, director.valueOf(8, 'seed'), ocean.t);
 		},
 		transforms: (n) => Charts.measureTransforms(n),
 		seed: () => director.valueOf(8, 'seed'),
@@ -223,10 +305,13 @@ export function createStoryStage({ ocean, view, rig, meshes, materials, config, 
 		sliders,
 		setSlider,
 		press,
-		// Test hooks: the camera's pose and the tilt range it may orbit through; the next `frames`
-		// frames' pictures (the step, whether the picture was held, the sea's tallest vertex).
+		// Test hooks: the camera's pose and the tilt range it may orbit through; how many times the
+		// story has put the camera somewhere new; whether the visitor may orbit at all; the next
+		// `frames` frames' pictures (the step, whether the picture was held, the sea's tallest vertex).
 		pose: () => rig.pose(),
 		tilt: () => tilt,
+		applied: () => applied,
+		orbitEnabled: () => rig.orbitEnabled(),
 		watchPictures: (frames) => {
 			pictures = [];
 			watching = frames;

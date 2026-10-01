@@ -2,11 +2,15 @@
 // orbit and the ease back to the next step's shot.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { createShotControl, DRIFT_PERIOD_SECONDS, resolveShot, RETURN_SECONDS } from '../../../content/ocean/js/page/shotControl.js';
+import { createShotControl, DRIFT_PERIOD_SECONDS, MAX_RETURN_SECONDS, resolveShot, RETURN_SECONDS, RETURN_STUDS_PER_SECOND } from '../../../content/ocean/js/page/shotControl.js';
+import { DRIFT_PERIOD, shotPosition } from '../../../content/ocean/js/stages/drift.js';
+import { recipeFor, STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
 
 const SHOT = { position: [0, 14, 40], target: [0, 2, -120] };
 const AWAY = { position: [90, 30, 10], target: [0, 2, -120] };
 const close = (a, b, label) => a.forEach((v, i) => expect.near(v, b[i], 1e-9, `${label}[${i}]`));
+const sub = (a, b) => a.map((v, i) => v - b[i]);
+const length = (v) => Math.hypot(...v);
 
 test('a still shot resolves to itself; a drift circles its target once every four minutes', () => {
 	const still = resolveShot({ ...SHOT, move: 'still' }, 100);
@@ -61,4 +65,74 @@ test('with the clock stopped (ease: false) a return goes straight to the shot, a
 	expect.equal(moving.mode(), 'returning', 'under way');
 	close(moving.frame(4, AWAY, SHOT, 0, { ease: false }).position, SHOT.position, 'finished');
 	expect.equal(moving.mode(), 'shot', 'shot');
+});
+
+// One drift source: the camera rig (stages/drift.js shotPosition, which the clearance check walks)
+// and the story's resolveShot must put the camera in the same place.
+test("the story's drift is A3's drift, to the last bit", () => {
+	const finale = recipeFor(STEP_COUNT).shot;
+	expect.equal(DRIFT_PERIOD_SECONDS, DRIFT_PERIOD, 'one period');
+	for (const seconds of [0, 0.37, 10, 61.5, 239.9, 1000]) {
+		const resolved = resolveShot(finale, seconds);
+		expect.equal(resolved.position.join(','), shotPosition(finale, seconds).join(','), `at ${seconds} s`);
+		expect.equal(resolved.target.join(','), finale.target.join(','), `target at ${seconds} s`);
+	}
+});
+
+// The finale's drift letting go (scrolling back up out of it) would jump the camera from the
+// drifted pose to the still shot: it eases there from where the camera is instead.
+test('returnToShot eases from where the camera is, unless the visitor has the camera', () => {
+	const shots = createShotControl();
+	close(shots.frame(12, SHOT, SHOT, 0.016).position, SHOT.position, 'on the shot');
+	shots.returnToShot();
+	expect.equal(shots.mode(), 'returning', 'returning');
+	const first = shots.frame(12, AWAY, SHOT, 0);
+	close(first.position, AWAY.position, 'starts where the camera is');
+	let pose = first;
+	for (let t = 0; t < MAX_RETURN_SECONDS + 1; t += 0.05) {
+		pose = shots.frame(12, pose, SHOT, 0.05);
+	}
+	close(pose.position, SHOT.position, 'arrives');
+	expect.equal(shots.mode(), 'shot', 'back on the shot');
+	// A visitor holding the camera on this step keeps it.
+	shots.orbited(12);
+	shots.returnToShot();
+	expect.equal(shots.mode(), 'free', 'still free');
+	expect.equal(shots.frame(12, AWAY, SHOT, 0.016), null, 'left alone');
+});
+
+// Returning from a long way round (the finale drifted half a turn) takes longer, so no frame's
+// step is large; a short way takes RETURN_SECONDS.
+test('the return orbits round the target and takes longer the further it has to go', () => {
+	const target = [0, 2, -120];
+	const shot = { position: [0, 21, 40], target };
+	const far = { position: [0, 21, -280], target };
+	const radius = length(sub(shot.position, target));
+	const shots = createShotControl();
+	shots.returnToShot();
+	let pose = shots.frame(13, far, shot, 0);
+	let seconds = 0;
+	let largest = 0;
+	while (shots.mode() === 'returning' && seconds < 10) {
+		const next = shots.frame(13, pose, shot, 1 / 60);
+		largest = Math.max(largest, length(sub(next.position, pose.position)));
+		// Spherical: the camera stays its distance from the target all the way round.
+		expect.near(length(sub(next.position, target)), radius, 1e-6, `radius at ${seconds.toFixed(2)} s`);
+		pose = next;
+		seconds += 1 / 60;
+	}
+	const expected = Math.min(MAX_RETURN_SECONDS, Math.max(RETURN_SECONDS, (Math.PI * radius) / RETURN_STUDS_PER_SECOND));
+	expect.near(seconds, expected, 2 / 60, `half a turn takes ${seconds.toFixed(2)} s`);
+	expect.truthy(seconds > RETURN_SECONDS, 'longer than a short return');
+	expect.truthy(largest < 8, `no frame moves more than 8 studs at 60 fps: ${largest.toFixed(2)}`);
+	// A short way round still takes RETURN_SECONDS.
+	const near = createShotControl();
+	near.orbited(3);
+	let short = near.frame(4, AWAY, SHOT, 0);
+	let elapsed = 0;
+	while (near.mode() === 'returning' && elapsed < 10) {
+		short = near.frame(4, short, SHOT, 1 / 60);
+		elapsed += 1 / 60;
+	}
+	expect.near(elapsed, RETURN_SECONDS, 2 / 60, 'a short return');
 });

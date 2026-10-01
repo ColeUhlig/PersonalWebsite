@@ -7,6 +7,9 @@ export const NARROW_QUERY = '(max-width: 899.98px)';
 // The recipes' STEP_COUNT (stages/recipes.js); scrollMap.test.js checks they agree.
 export const LAST_STEP = 13;
 export const SMOOTH_SECONDS = 0.25;
+// Cole's ruling: a step holds its own recipe (shot and sea) until this far through its section,
+// while its panel is read, and eases into the next step's over the rest.
+export const HOLD_UNTIL = 0.5;
 // A sticky panel's top in style.css, and the gap kept under a panel taller than the view.
 export const PANEL_TOP = '10vh';
 export const PANEL_BOTTOM_GAP_PX = 16;
@@ -32,6 +35,14 @@ export function readScroll(sections, anchor) {
 	}
 	const progress = current.height > 0 ? clamp01((anchor - current.top) / current.height) : 0;
 	return { phase: 'step', step: current.step, progress };
+}
+
+// The progress the director blends by, from the progress through the section: 0 (the step's own
+// recipe) until HOLD_UNTIL, then smoothstep up to 1 (the next step's) at the section's end, so a
+// snap the director makes halfway through a blend lands at about 0.75 of the section.
+export function holdThenBlend(progress) {
+	const x = clamp01((progress - HOLD_UNTIL) / (1 - HOLD_UNTIL));
+	return x * x * (3 - 2 * x);
 }
 
 export function positionOf(reading) {

@@ -29,6 +29,8 @@ export function createCameraRig(camera, dom, config) {
 	controls.update();
 	// Where applyShot puts the camera, kept across frames (the shot is applied every frame).
 	const placed = [0, 0, 0];
+	// True while applyShot moves the camera, so its 'change' is not read as the visitor's.
+	let applying = false;
 	return {
 		update: () => controls.update(),
 		focus(out) {
@@ -52,29 +54,61 @@ export function createCameraRig(camera, dom, config) {
 			controls.enableDamping = false;
 			camera.position.set(placed[0], placed[1], placed[2]);
 			controls.target.set(target[0], target[1], target[2]);
-			controls.update();
+			applying = true;
+			try {
+				controls.update();
+			} finally {
+				applying = false;
+			}
 		},
 		// Piece C: where the camera is and what it looks at; the story eases back to a shot from here.
 		pose() {
 			return { position: camera.position.toArray(), target: controls.target.toArray() };
 		},
-		// Piece C: calls back when the visitor starts dragging the camera.
+		// Piece C: calls back when the visitor has dragged the camera: the first 'change' after a
+		// 'start', so a plain click (a start and an end with no move) does not count.
 		onUserOrbit(callback) {
-			controls.addEventListener('start', callback);
-			return () => controls.removeEventListener('start', callback);
+			let pressed = false;
+			const onStart = () => {
+				pressed = true;
+			};
+			const onChange = () => {
+				if (pressed && !applying) {
+					pressed = false;
+					callback();
+				}
+			};
+			const onEnd = () => {
+				pressed = false;
+			};
+			controls.addEventListener('start', onStart);
+			controls.addEventListener('change', onChange);
+			controls.addEventListener('end', onEnd);
+			return () => {
+				controls.removeEventListener('start', onStart);
+				controls.removeEventListener('change', onChange);
+				controls.removeEventListener('end', onEnd);
+			};
 		},
 		// Piece C: the story's orbit. No zoom, so the wheel scrolls the page (OrbitControls returns
 		// before preventDefault when zoom is off); no pan, since the rings follow the target; a limited
-		// reach. A touch-first screen gets no orbit at all, so a swipe over the ocean scrolls.
-		limitForStory({ coarsePointer }) {
+		// reach. A touch-first screen gets no orbit at all, so a swipe over the ocean scrolls. A screen
+		// with any touch pointer (a touch laptop) keeps the orbit for its mouse, but a vertical swipe
+		// still scrolls the page.
+		limitForStory({ coarsePointer, anyCoarsePointer = coarsePointer }) {
 			controls.enableZoom = false;
 			controls.enablePan = false;
 			controls.maxDistance = STORY_MAX_DISTANCE;
 			if (coarsePointer) {
 				controls.enabled = false;
+			}
+			if (coarsePointer || anyCoarsePointer) {
 				dom.style.touchAction = 'pan-y';
 			}
 		},
+		// Piece C: whether the visitor may orbit at all (limitForStory turns it off on touch-first
+		// screens).
+		orbitEnabled: () => controls.enabled,
 		// Piece C: the tilt range (radians from straight down) the visitor may orbit through from the
 		// current shot (page/orbitLimits.js polarRange). update() clamps to it, so the story sets a
 		// range that holds the shot before applying it.

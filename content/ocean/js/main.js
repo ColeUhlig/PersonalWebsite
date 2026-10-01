@@ -69,7 +69,10 @@ export function startOcean({ config, route, now, reducedMotion = false, onPersis
 	// Piece C: without a route the scroll story drives the ocean (ui/storyStage.js).
 	const story = route ? null : createStoryStage({ ...parts, reducedMotion });
 	if (story) {
-		rig.limitForStory({ coarsePointer: window.matchMedia('(pointer: coarse)').matches });
+		rig.limitForStory({
+			coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+			anyCoarsePointer: window.matchMedia('(any-pointer: coarse)').matches,
+		});
 	}
 	const stage = dev ?? story;
 	window.__ocean = {

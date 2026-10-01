@@ -2,7 +2,7 @@
 // smoothed position, and the sticky top that keeps a tall panel's bottom in view.
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { LAST_STEP, NARROW_QUERY, SMOOTH_SECONDS, positionOf, readScroll, readingLine, smoothPosition, splitPosition, stickyTop } from '../../../content/ocean/js/page/scrollMap.js';
+import { HOLD_UNTIL, LAST_STEP, NARROW_QUERY, SMOOTH_SECONDS, holdThenBlend, positionOf, readScroll, readingLine, smoothPosition, splitPosition, stickyTop } from '../../../content/ocean/js/page/scrollMap.js';
 import { STEP_COUNT } from '../../../content/ocean/js/stages/recipes.js';
 
 const SECTIONS = [
@@ -62,4 +62,25 @@ test('a sticky panel sits 10vh down, or high enough that its bottom stays 16 px 
 	expect.equal(stickyTop(843.7), 'min(10vh, 100svh - 843.7px - 16px)', 'a tall panel goes above the top');
 	expect.equal(stickyTop(Number.NaN), '10vh', 'no height yet: the stylesheet value');
 	expect.equal(stickyTop(-5), '10vh', 'a negative height: the stylesheet value');
+});
+
+// Cole's ruling: each step holds its own shot and sea while its panel is read (the first half of
+// its section), then eases into the next over the second half.
+test("a step holds its own recipe for the first half of its section, then eases into the next", () => {
+	expect.equal(HOLD_UNTIL, 0.5, 'the hold ends halfway');
+	for (const p of [0, 0.1, 0.25, 0.4, 0.5]) {
+		expect.equal(holdThenBlend(p), 0, `held at ${p}`);
+	}
+	expect.near(holdThenBlend(0.75), 0.5, 1e-12, 'halfway through the ease');
+	expect.near(holdThenBlend(0.6), 0.104, 1e-12, 'smoothstep(0.5, 1, 0.6)');
+	expect.near(holdThenBlend(0.9), 0.896, 1e-12, 'smoothstep(0.5, 1, 0.9)');
+	expect.equal(holdThenBlend(1), 1, 'the next step at the end');
+	let last = 0;
+	for (let p = 0; p <= 1; p += 0.01) {
+		const b = holdThenBlend(p);
+		expect.truthy(b >= last && b >= 0 && b <= 1, `rises from 0 to 1 at ${p}`);
+		last = b;
+	}
+	expect.equal(holdThenBlend(-0.2), 0, 'clamped below');
+	expect.equal(holdThenBlend(1.3), 1, 'clamped above');
 });

@@ -4,7 +4,8 @@
 // Shot numbers come from the recipes themselves, never copies, so A3's later shot changes hold.
 import { test, expect } from '@playwright/test';
 import { recipeFor } from '../../../content/ocean/js/stages/recipes.js';
-import { STORY_MAX_DISTANCE } from '../../../content/ocean/js/page/orbitLimits.js';
+import { movingReach, polarRange, STORY_MAX_DISTANCE } from '../../../content/ocean/js/page/orbitLimits.js';
+import * as Tier from '../../../content/ocean/js/core/tier.js';
 import { oceanRunning, scrollToOpening, scrollToStep, waitFrames, watchErrors } from './helpers/story.js';
 
 const story = (page, name, ...args) => page.evaluate(([n, a]) => window.__ocean.story[n](...a), [name, args]);
@@ -21,12 +22,16 @@ const polarOf = (pose) => {
 const HORIZON_TILT = Math.PI / 2 - (35 * Math.PI) / 180;
 
 // Waits until the smoothed position has caught up with the scroll, then checks the camera stands
-// where the blended recipe's shot says.
+// where the blended recipe's shot says. The director blends by smoothstep(0.5, 1, p) of the
+// section's progress p (page/scrollMap.js holdThenBlend): each step holds its own recipe while its
+// panel is read.
 async function expectAtShot(page) {
 	await page.waitForFunction(() => {
 		const s = window.__ocean.story.state();
 		const r = window.__ocean.story.reading();
-		return r.phase === 'step' && s.step === r.step && (r.step === 13 || Math.abs(s.progress - r.progress) < 1e-3);
+		const x = Math.min(Math.max((r.progress - 0.5) / 0.5, 0), 1);
+		const blend = x * x * (3 - 2 * x);
+		return r.phase === 'step' && s.step === r.step && (r.step === 13 || Math.abs(s.progress - blend) < 1e-3);
 	}, null, { timeout: 60_000 });
 	await waitFrames(page, 2);
 	const shot = (await story(page, 'recipe')).shot;
@@ -57,7 +62,9 @@ test('the first scroll into step 1 cuts to the flat white plane under its shot',
 	const look = await story(page, 'look');
 	expect(look.mode).toBe('white');
 	expect(look.wireframe).toBe(true);
-	// A tenth of the way toward step 2's 1.5-stud sine: the height has only begun to lerp in.
+	// A tenth of the way through the section the step still holds its own flat plane: step 2's
+	// sine only lerps in over the second half.
+	expect((await story(page, 'state')).progress).toBe(0);
 	expect((await story(page, 'surface')).maxAbsY).toBeLessThan(0.25);
 	await expectAtShot(page);
 	expect(errors).toEqual([]);
@@ -184,10 +191,11 @@ test('from a deck shot no drag sinks the camera into the crests', async ({ page 
 	await scrollToStep(page, 4, 0.02);
 	await expectAtShot(page);
 	const before = await story(page, 'pose');
-	// A long drag up tips the camera toward level, lowering it toward the water.
+	// A long drag up tips the camera toward level, lowering it toward the water; the drag also turns
+	// it sideways, so it moves the camera and frees it even with the tilt pinned at the floor.
 	await page.mouse.move(1000, 740);
 	await page.mouse.down();
-	await page.mouse.move(1000, 40, { steps: 10 });
+	await page.mouse.move(1150, 40, { steps: 10 });
 	await page.mouse.up();
 	await waitFrames(page, 3);
 	expect(await story(page, 'shotMode')).toBe('free');
@@ -217,31 +225,121 @@ test('the wheel over the ocean scrolls the page instead of zooming (Review Focus
 
 test("the camera stays continuous across the snap into the finale's drift", async ({ page }) => {
 	await oceanRunning(page);
-	await scrollToStep(page, 12, 0.4);
+	// Before the snap: the blend toward the finale is under half (smoothstep(0.5, 1, 0.6) = 0.1).
+	await scrollToStep(page, 12, 0.6);
 	await expectAtShot(page);
 	// By now a drift measured from the page's start would have turned the camera well round
 	// (20 s is 30 degrees, tens of studs at the finale's radius).
 	await page.waitForFunction(() => window.__ocean.status().t > 20, null, { timeout: 60_000 });
-	await page.evaluate(() => {
-		window.__cameraTrail = [];
-		const sample = () => {
-			const { progress, step } = window.__ocean.story.state();
-			window.__cameraTrail.push({ step, progress, position: window.__ocean.camera.position.toArray() });
-			if (window.__cameraTrail.length < 150) requestAnimationFrame(sample);
-		};
-		requestAnimationFrame(sample);
-	});
-	await scrollToStep(page, 12, 0.6);
+	await recordCamera(page, 150);
+	await page.waitForFunction(() => window.__cameraTrail.length >= 10, null, { timeout: 30_000 });
+	// Past it: smoothstep(0.5, 1, 0.9) = 0.9, the director snaps to the finale's drift at 0.5.
+	await scrollToStep(page, 12, 0.9);
 	await page.waitForFunction(() => window.__cameraTrail.length >= 150, null, { timeout: 60_000 });
 	const trail = await page.evaluate(() => window.__cameraTrail);
 	expect(trail.some((sample) => sample.step === 12 && sample.progress < 0.5)).toBe(true);
 	expect(trail.some((sample) => sample.step === 12 && sample.progress >= 0.5)).toBe(true);
 	expect((await story(page, 'recipe')).shot.move).toBe('drift');
+	expect(largestStep(trail)).toBeLessThan(8);
+});
+
+// Records the camera every frame from now until `frames` frames have passed.
+async function recordCamera(page, frames) {
+	await page.evaluate((count) => {
+		window.__cameraTrail = [];
+		const sample = () => {
+			const { progress, step } = window.__ocean.story.state();
+			window.__cameraTrail.push({ step, progress, position: window.__ocean.camera.position.toArray() });
+			if (window.__cameraTrail.length < count) requestAnimationFrame(sample);
+		};
+		requestAnimationFrame(sample);
+	}, frames);
+}
+
+function largestStep(trail) {
 	let largest = 0;
 	for (let i = 1; i < trail.length; i++) {
 		largest = Math.max(largest, length(sub(trail[i].position, trail[i - 1].position)));
 	}
-	expect(largest).toBeLessThan(8);
+	return largest;
+}
+
+test('scrolling back up out of the finale eases the camera off the drift, never jumping', async ({ page }) => {
+	await oceanRunning(page);
+	await scrollToStep(page, 13, 0.1);
+	await page.waitForFunction(() => window.__ocean.story.state().step === 13, null, { timeout: 60_000 });
+	const entered = await page.evaluate(() => window.__ocean.status().t);
+	// Over 20 s of the drift: a third of a turn's worth of degrees, tens of studs round the circle.
+	await page.waitForFunction((t0) => window.__ocean.status().t > t0 + 21, entered, { timeout: 90_000 });
+	const drifted = await camera(page);
+	expect(length(sub(drifted, recipeFor(13).shot.position))).toBeGreaterThan(40);
+	await recordCamera(page, 240);
+	// A few frames on the drift first, so the trail holds the pose the scroll leaves from.
+	await page.waitForFunction(() => window.__cameraTrail.length >= 10, null, { timeout: 30_000 });
+	await scrollToStep(page, 12, 0.6);
+	await page.waitForFunction(() => window.__cameraTrail.length >= 240, null, { timeout: 60_000 });
+	const trail = await page.evaluate(() => window.__cameraTrail);
+	expect(trail[0].step).toBe(13);
+	expect(trail.some((sample) => sample.step === 12)).toBe(true);
+	const largest = largestStep(trail);
+	expect(largest, `the largest move in one frame: ${largest.toFixed(2)} studs`).toBeLessThan(8);
+	// And it arrives on the blended shot.
+	await page.waitForFunction(() => window.__ocean.story.shotMode() === 'shot', null, { timeout: 30_000 });
+	await expectAtShot(page);
+});
+
+test("while its panel is read a step stands at its own shot (Cole's hold ruling)", async ({ page }) => {
+	await oceanRunning(page);
+	await scrollToStep(page, 5, 0.4);
+	await expectAtShot(page);
+	expect((await story(page, 'state')).progress).toBe(0);
+	const position = await camera(page);
+	recipeFor(5).shot.position.forEach((value, i) => expect(position[i]).toBeCloseTo(value, 3));
+});
+
+test('a plain click on the ocean leaves the camera on its shot', async ({ page }) => {
+	await oceanRunning(page);
+	await scrollToStep(page, 3, 0.3);
+	await expectAtShot(page);
+	expect(await page.evaluate(() => document.elementFromPoint(1000, 420).id)).toBe('ocean');
+	await page.mouse.click(1000, 420);
+	await waitFrames(page, 3);
+	expect(await story(page, 'shotMode')).toBe('shot');
+	// The shot still follows the scroll.
+	await scrollToStep(page, 3, 0.8);
+	await expectAtShot(page);
+});
+
+test('with the scroll settled the camera is not set again every frame', async ({ page }) => {
+	await oceanRunning(page);
+	await scrollToStep(page, 5, 0.3);
+	await expectAtShot(page);
+	await waitFrames(page, 5);
+	const before = await story(page, 'applied');
+	await waitFrames(page, 20);
+	expect(await story(page, 'applied')).toBe(before);
+	// A new scroll applies the moving shot again.
+	await scrollToStep(page, 5, 0.8);
+	await waitFrames(page, 10);
+	expect(await story(page, 'applied')).toBeGreaterThan(before);
+});
+
+test('a resize limits the tilt again for the new frame', async ({ page }) => {
+	await oceanRunning(page);
+	await scrollToStep(page, 10, 0.02);
+	await expectAtShot(page);
+	const wide = await story(page, 'tilt');
+	await page.setViewportSize({ width: 1840, height: 767 });
+	await page.waitForFunction(() => Math.abs(window.__ocean.camera.aspect - 1840 / 767) < 1e-3, null, { timeout: 30_000 });
+	await waitFrames(page, 5);
+	const pose = await story(page, 'pose');
+	const tier = await page.evaluate(() => window.__ocean.status().tier);
+	const fov = await page.evaluate(() => window.__ocean.camera.fov);
+	const expected = polarRange(pose, { aspect: 1840 / 767, fovDegrees: fov, reach: movingReach(Tier.presets[tier].rings) });
+	const tilt = await story(page, 'tilt');
+	expect(tilt.max).toBeCloseTo(expected.max, 6);
+	expect(tilt.min).toBeCloseTo(expected.min, 6);
+	expect(Math.abs(tilt.max - wide.max)).toBeGreaterThan(1e-3);
 });
 
 test('scrolling back to the opening shows the finished sea under the opening camera', async ({ page }) => {
@@ -268,11 +366,48 @@ test.describe('under reduced motion', () => {
 	});
 });
 
+// A real touch swipe over the canvas (Chromium's synthetic scroll gesture honours touch-action).
+async function swipeUp(page, x, y) {
+	const client = await page.context().newCDPSession(page);
+	await client.send('Input.synthesizeScrollGesture', { x, y, yDistance: -300, speed: 800, gestureSourceType: 'touch' });
+	await client.detach();
+}
+
 test.describe('on a touch-first phone', () => {
 	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
 	test('a touch-first screen gets no orbit, so a swipe over the ocean scrolls (Review Focus 2)', async ({ page }) => {
 		await oceanRunning(page);
 		expect(await page.evaluate(() => document.getElementById('ocean').style.touchAction)).toBe('pan-y');
+		expect(await story(page, 'orbitEnabled')).toBe(false);
+		const [x, y] = [195, 300];
+		expect(await page.evaluate(([px, py]) => document.elementFromPoint(px, py).id, [x, y])).toBe('ocean');
+		await swipeUp(page, x, y);
+		await page.waitForFunction(() => window.scrollY > 100, null, { timeout: 10_000 });
+	});
+});
+
+// A touch laptop: the mouse is the primary pointer, the touch screen another. Chromium cannot
+// emulate that mix, so the page is told it through matchMedia.
+test.describe('on a touch laptop', () => {
+	test.use({ hasTouch: true });
+
+	test('the mouse keeps its orbit, and a vertical swipe over the ocean still scrolls', async ({ page }) => {
+		await page.addInitScript(() => {
+			const native = window.matchMedia.bind(window);
+			const forced = { '(pointer: coarse)': false, '(any-pointer: coarse)': true };
+			window.matchMedia = (query) => {
+				if (!(query in forced)) return native(query);
+				const quiet = () => {};
+				return { matches: forced[query], media: query, onchange: null, addEventListener: quiet, removeEventListener: quiet, addListener: quiet, removeListener: quiet };
+			};
+		});
+		await oceanRunning(page);
+		expect(await page.evaluate(() => document.getElementById('ocean').style.touchAction)).toBe('pan-y');
+		expect(await story(page, 'orbitEnabled')).toBe(true);
+		const [x, y] = [1000, 640];
+		expect(await page.evaluate(([px, py]) => document.elementFromPoint(px, py).id, [x, y])).toBe('ocean');
+		await swipeUp(page, x, y);
+		await page.waitForFunction(() => window.scrollY > 100, null, { timeout: 10_000 });
 	});
 });
