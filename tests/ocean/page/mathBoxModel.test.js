@@ -2,7 +2,7 @@
 // collapse kept in storage that may refuse (a private window throws on every access).
 import { test } from 'node:test';
 import * as expect from '../expect.js';
-import { COLLAPSE_KEY, entryFor, freshCount, readCollapsed, termsIn, writeCollapsed } from '../../../content/ocean/js/page/mathBoxModel.js';
+import { COLLAPSE_KEY, entryFor, freshCount, readCollapsed, readableTex, termsIn, writeCollapsed } from '../../../content/ocean/js/page/mathBoxModel.js';
 import { mathFor } from '../../../content/ocean/js/page/mathSteps.js';
 import { stepOf } from '../../../content/ocean/js/stages/steps.js';
 
@@ -37,4 +37,15 @@ test('fresh highlights and term colours are read from the TeX', () => {
 	const tex = String.raw`y = \htmlClass{fresh}{\htmlClass{t-amp}{A}} + \htmlClass{fresh}{B} + \htmlClass{t-len}{k}`;
 	expect.equal(freshCount(tex), 2, 'two highlights');
 	expect.equal([...termsIn(tex)].sort().join(','), 't-amp,t-len', 'two terms');
+});
+
+// Final review Minor 7: without KaTeX the box shows the TeX itself, and the colour wrappers
+// (\htmlClass{fresh}{...}, \htmlClass{t-h}{h}) only get in a reader's way there. They go; the
+// wrapped symbol stays in its braces, so the TeX still means the same.
+test('the TeX shown without KaTeX drops the colour wrappers and keeps what they wrap', () => {
+	expect.equal(readableTex('y = \\htmlClass{t-amp}{A} \\sin(\\htmlClass{fresh}{k x})'), 'y = {A} \\sin({k x})', 'stripped');
+	for (const id of ['sine', 'slopes', 'foam']) {
+		const shown = readableTex(mathFor(id).tex);
+		expect.truthy(!shown.includes('htmlClass'), `${id}: no wrapper left`);
+	}
 });

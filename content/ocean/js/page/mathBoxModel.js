@@ -39,3 +39,6 @@ export function writeCollapsed(storage, collapsed) {
 
 export const freshCount = (tex) => (tex.match(/\\htmlClass\{fresh\}/g) ?? []).length;
 export const termsIn = (tex) => new Set([...tex.matchAll(/\\htmlClass\{(t-[a-z]+)\}/g)].map((m) => m[1]));
+// Final review Minor 7: the TeX the box shows when KaTeX can't typeset it, without the colour
+// wrappers (\htmlClass{name}); the wrapped symbol keeps its braces, so the TeX means the same.
+export const readableTex = (tex) => tex.replace(/\\htmlClass\{[^}]*\}/g, '');

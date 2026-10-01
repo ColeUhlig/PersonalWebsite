@@ -15,7 +15,7 @@
 // call), so the page before the first scroll is A2's.
 import { loadKatex } from './math.js';
 import { KATEX_OPTIONS, stackEquations } from '../page/mathTrust.js';
-import { FRESH_SECONDS, PROMPT, entryFor, readCollapsed, writeCollapsed } from '../page/mathBoxModel.js';
+import { FRESH_SECONDS, PROMPT, entryFor, readCollapsed, readableTex, writeCollapsed } from '../page/mathBoxModel.js';
 import { mathFor } from '../page/mathSteps.js';
 import { NARROW_QUERY } from '../page/scrollMap.js';
 import { stepOf } from '../stages/steps.js';
@@ -109,7 +109,8 @@ export function mountMathBox({ root, watchReading, reducedMotion = false, load =
 				}
 			}
 		}
-		code.textContent = bar ? entry.bar : entry.tex;
+		// For display only: the colour wrappers would only get in a reader's way in raw TeX.
+		code.textContent = readableTex(bar ? entry.bar : entry.tex);
 		eq.replaceChildren(code);
 	}
 

@@ -4,7 +4,7 @@
 // TeX when KaTeX never arrives (Review Focus 2), and out of the way of the finale's full-width
 // blocks (pre-flight R14).
 import { test, expect } from '@playwright/test';
-import { freshCount } from '../../../content/ocean/js/page/mathBoxModel.js';
+import { freshCount, readableTex } from '../../../content/ocean/js/page/mathBoxModel.js';
 import { mathFor } from '../../../content/ocean/js/page/mathSteps.js';
 import { TERM_BY_SLIDER } from '../../../content/ocean/js/page/sliderModel.js';
 import { RECIPES } from '../../../content/ocean/js/stages/recipes.js';
@@ -91,9 +91,9 @@ test('the box reads as TeX source when KaTeX is blocked, and still follows the s
 	await page.goto('/ocean/');
 	await scrollToId(page, 'sine', 0.1);
 	await page.waitForFunction(() => window.__mathbox.state() === 'failed', null, { timeout: 30_000 });
-	await expect(page.locator('#mathbox .mathbox-eq code')).toHaveText(mathFor('sine').tex);
+	await expect(page.locator('#mathbox .mathbox-eq code')).toHaveText(readableTex(mathFor('sine').tex));
 	await scrollToId(page, 'slopes', 0.1);
-	await expect(page.locator('#mathbox .mathbox-eq code')).toHaveText(mathFor('slopes').tex);
+	await expect(page.locator('#mathbox .mathbox-eq code')).toHaveText(readableTex(mathFor('slopes').tex));
 	await expect(page.locator('#mathbox .mathbox-sentence')).toHaveText(mathFor('slopes').changed);
 });
 
