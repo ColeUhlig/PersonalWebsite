@@ -65,8 +65,12 @@ test('step 11: the highlight and Fresnel each change the sea when switched off',
 
 // At 0.45 of the blend from the tiling step into the flat graph the camera is still high and the
 // band is about 70 studs either side of x = 0, narrower than the ground in view: the frame's sides
-// must show the pale, flat backdrop and no sea (fix round 1: a shader that ignored the clip planes
-// passed the old left-against-middle check on the sun's glitter alone).
+// must show the flat backdrop and no sea (fix round 1: a shader that ignored the clip planes
+// passed the old left-against-middle check on the sun's glitter alone). Task 14: since lane B's
+// backdrop (the page's dark body colour, drawn over the scene as it fades in) the sides are no
+// longer pale: 145 and 136 of 255 at this blend, against a fixed 150 chosen for Task 0's pale backdrop. The
+// check now holds the sides flat and far brighter than the sea in the band's middle (about 48 here;
+// unclipped sea at the sides would read as dark as that, and vary).
 test('the terms material clips with the graph band (the blend from the tiling step into the graph)', async ({ page }) => {
 	await load(page, 'step=tiling&progress=0.45&freeze=12', 20);
 	const look = await stage(page, 'look');
@@ -81,9 +85,10 @@ test('the terms material clips with the graph band (the blend from the tiling st
 		for (let row = 0; row < 36; row++) for (let x = from; x < to; x++) values.push(cells[row * 64 + x]);
 		return values;
 	};
+	const sea = mean(columns(28, 36));
 	for (const [name, from] of [['left', 0], ['right', 56]]) {
 		const side = columns(from, from + 8);
-		expect(mean(side), `the ${name} eighth is pale`).toBeGreaterThan(150);
+		expect(mean(side), `the ${name} eighth is the backdrop, far brighter than the sea (${sea.toFixed(1)})`).toBeGreaterThan(sea + 60);
 		expect(spread(side), `the ${name} eighth is flat`).toBeLessThan(10);
 	}
 });
