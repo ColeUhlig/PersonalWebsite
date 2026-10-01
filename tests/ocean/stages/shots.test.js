@@ -203,3 +203,21 @@ test('the teaching crests run across the view in the deck-like 3D teaching steps
 		expect.truthy(along > 0.9, `${id}: the waves travel ${Math.round((Math.acos(Math.min(along, 1)) * 180) / Math.PI)} degrees off the line of sight`);
 	}
 });
+
+// Task 15 (the walk): step 11 is about the highlight, and on a wide screen the step's panel covers
+// the frame's left third (from 2.5vw to about 35vw at 1366 px, NDC x below about -0.3). The glint
+// runs down the water under the sun, so the sun's column is the glint's: it must sit right of the
+// panel's column at 16:9 and inside a phone's frame (the ocean's top half at 390 x 844, aspect 0.9).
+test("step 11's highlight lands in the open frame, clear of the wide layout's panel", async () => {
+	const { sunDirection } = await import('../../../content/ocean/js/stages/sun.js');
+	const recipe = recipeFor(stepOf('highlights'));
+	const sun = sunDirection(recipe.look.sun);
+	const { forward, right } = basis(recipe.shot);
+	const flat = (v) => [v[0], 0, v[2]];
+	const ndcX = (aspect) => dot(flat(sun), right) / dot(flat(sun), flat(forward)) / (TAN_HALF * aspect);
+	expect.truthy(dot(flat(sun), flat(forward)) > 0, 'the sun is ahead of the camera');
+	const wide = ndcX(16 / 9);
+	expect.truthy(wide >= 0.05 && wide <= 0.5, `16:9: the glint's column at NDC x ${wide.toFixed(2)}, want 0.05 to 0.5`);
+	const phone = ndcX(0.9);
+	expect.truthy(Math.abs(phone) <= 0.7, `phone: the glint's column at NDC x ${phone.toFixed(2)}, want within 0.7 of the centre`);
+});

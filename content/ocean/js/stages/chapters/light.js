@@ -4,10 +4,11 @@
 import { DECK, TEACHING, TEACHING_SUN, range, toggle } from '../recipeKit.js';
 
 const BANK = { ...TEACHING, source: 'bank', bank: { count: 16, fan: 1 } };
-// The deck shot turned 25 degrees towards the teaching sun (azimuth 215, 55 degrees left of the
-// deck's -z), so the sun sits 30 degrees left of the view and its highlight lands on the water in
-// the frame's left third; from DECK itself the glint falls just outside the left edge.
-const SUNWARD = Object.freeze({ position: DECK.position, target: [-67.6, 2, -105] });
+// The deck shot turned 65 degrees towards the teaching sun (azimuth 215, 55 degrees left of the
+// deck's -z), so the sun sits 10 degrees right of the view and its highlight runs down the water just
+// right of the frame's middle: clear of the step's panel, which covers the left third on a wide
+// screen (Task 15's walk: at 25 degrees the glint sat under it), and inside a phone's frame.
+const SUNWARD = Object.freeze({ position: DECK.position, target: [-145, 2, -27.6] });
 
 export const LIGHT = Object.freeze({
 	unlit: {
