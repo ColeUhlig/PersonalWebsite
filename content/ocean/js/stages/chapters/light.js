@@ -10,6 +10,14 @@ const BANK = { ...TEACHING, source: 'bank', bank: { count: 16, fan: 1 } };
 // screen (Task 15's walk: at 25 degrees the glint sat under it), and inside a phone's frame.
 const SUNWARD = Object.freeze({ position: DECK.position, target: [-145, 2, -27.6] });
 
+// Task 15: step 10's own sun, ahead of the deck and 15 degrees right of its line of sight (azimuth
+// 285; the deck looks along -z), so the sun's glow sits in the open sky right of the panel and the
+// crests' sunward faces are lit while the faces turned to the view stay dark: the bank's crests run
+// across the view, so a sun along the waves' travel separates their two faces, where one straight to
+// the side lights both alike. At the teaching sun (215, ahead and well to the left) the hold was an
+// even teal; tests/ocean/e2e/lightTerms.spec.js holds the spread.
+const DIFFUSE_SUN = Object.freeze({ ...TEACHING_SUN, azimuth: 285 });
+
 export const LIGHT = Object.freeze({
 	unlit: {
 		title: "Shape isn't enough",
@@ -21,9 +29,9 @@ export const LIGHT = Object.freeze({
 	diffuse: {
 		title: 'Sunlight',
 		engine: BANK,
-		look: { material: 'terms', terms: { diffuse: true, specular: false, fresnel: false }, sun: TEACHING_SUN },
+		look: { material: 'terms', terms: { diffuse: true, specular: false, fresnel: false }, sun: DIFFUSE_SUN },
 		shot: DECK,
-		sliders: [range('sunAzimuth', 'Sun direction', 'look.sun.azimuth', { min: 0, max: 360, step: 1, value: TEACHING_SUN.azimuth, unit: '°' })],
+		sliders: [range('sunAzimuth', 'Sun direction', 'look.sun.azimuth', { min: 0, max: 360, step: 1, value: DIFFUSE_SUN.azimuth, unit: '°' })],
 	},
 	highlights: {
 		title: 'Highlights, Fresnel and the sky',

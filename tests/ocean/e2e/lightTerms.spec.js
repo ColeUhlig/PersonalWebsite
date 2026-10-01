@@ -159,3 +159,32 @@ test('the shader is page/lightTerms.js, term by term', async ({ page }) => {
 		got.forEach((value, i) => expect(Math.abs(value - expected[i]), `${label} channel ${i}: ${value} against ${expected[i]}`).toBeLessThan(2e-3));
 	}
 });
+
+// Task 15 polish (the walk: step 10 at rest was an even dark teal, so "as bright as it faces the
+// sun" needed the slider). With the recipe's own sun, the lit and shadowed faces differ clearly on the
+// hold: the water's brightness spread, right of the panel's column and below the horizon, is at least
+// 18 (of 255). A survey of sun directions on this sea (1366 x 767, frozen at 12 s) measured 14.1 at
+// the old 215 degrees (behind the view, to the left), 7.5 to 7.7 with the sun straight to either side
+// (the crests run across the view, so both their faces turn equally from a side sun), and 21 to 23.4
+// with the sun along the waves' travel (60 to 120 degrees, behind the camera, or 240 to 300).
+for (const { width, height } of [{ width: 1366, height: 767 }, { width: 390, height: 844 }]) {
+	test(`step 10's own sun lights some faces and leaves others dark on the hold (${width} × ${height})`, async ({ page }) => {
+		await page.setViewportSize({ width, height });
+		await load(page, 'step=diffuse&freeze=12', 40);
+		const spread = await page.evaluate((narrow) => new Promise((resolve) => requestAnimationFrame(() => {
+			const s = document.getElementById('ocean');
+			const c = document.createElement('canvas');
+			c.width = 200;
+			c.height = 100;
+			const x = c.getContext('2d');
+			const left = narrow ? 0 : 0.35;
+			x.drawImage(s, s.width * left, s.height * 0.55, s.width * (1 - left), s.height * 0.45, 0, 0, 200, 100);
+			const d = x.getImageData(0, 0, 200, 100).data;
+			const L = [];
+			for (let i = 0; i < d.length; i += 4) L.push(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
+			const m = L.reduce((a, b) => a + b) / L.length;
+			resolve(Math.sqrt(L.reduce((a, b) => a + (b - m) ** 2, 0) / L.length));
+		})), width < 900);
+		expect(spread).toBeGreaterThanOrEqual(18);
+	});
+}
