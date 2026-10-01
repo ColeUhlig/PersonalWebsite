@@ -11,6 +11,12 @@ const INK = '#e8eef2'; // style.css --ink
 const DIM = '#a9bcc8'; // --ink-dim
 const HALO = '#0b1a24'; // --body-bg, the backdrop's colour: words stay legible where a curve crosses them
 const HALO_PX = 3;
+// Task 15: each word also sits on a plate of the backdrop's colour (its padding box, rounded), drawn
+// over the curve, so a curve that runs through a word or number (a phone's height numbers, the
+// "A = ..." word beside a crest's flank) shows only faintly behind it. On the backdrop itself the
+// plate doesn't show.
+const PLATE_ALPHA = 0.85;
+const PLATE_RADIUS_PX = 4;
 const FONT_PX = 13;
 const SCALE = 2; // canvas pixels per CSS pixel, for crisp text
 const AXIS_OPACITY = 0.8;
@@ -91,6 +97,12 @@ export function createLabel({ colour = INK, order = 14 } = {}) {
 			} else {
 				context.clearRect(0, 0, canvas.width, canvas.height);
 			}
+			context.globalAlpha = PLATE_ALPHA;
+			context.fillStyle = HALO;
+			context.beginPath();
+			context.roundRect(0, 0, canvas.width, canvas.height, PLATE_RADIUS_PX * SCALE);
+			context.fill();
+			context.globalAlpha = 1;
 			context.font = `${FONT_PX * SCALE}px system-ui, sans-serif`;
 			context.textBaseline = 'middle';
 			context.lineJoin = 'round';

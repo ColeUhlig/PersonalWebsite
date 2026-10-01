@@ -324,6 +324,47 @@ test.describe('on a phone', () => {
 	});
 });
 
+// Task 15 (the walk; the Task 14 review's item 5): on a phone at 390 px the curve ran through the
+// "+2" and "+1" height numbers and the "A = 2.5 studs" word. Every graph word and number is readable
+// where the curve crosses it: no pixel inside a word's text box is the curve's own accent colour.
+for (const { width, height } of [{ width: 390, height: 844 }, { width: 1366, height: 767 }]) {
+	test.describe(`the curve under the words on a ${width} × ${height} screen`, () => {
+		test.use({ viewport: { width, height }, isMobile: width < 900, hasTouch: width < 900 });
+
+		test('no word or number shows the curve through it', async ({ page }) => {
+			test.setTimeout(180_000);
+			for (const query of ['step=sine&freeze=12', 'step=sine&freeze=3', 'step=sine&freeze=12&s.amplitude=4', 'step=sine&freeze=12&s.amplitude=1', 'step=sum-of-sines&freeze=12']) {
+				await load(page, query, 30);
+				await waitFrames(page, 5);
+				const crossed = await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => {
+					const source = document.getElementById('ocean');
+					const scale = source.width / source.clientWidth;
+					const copy = document.createElement('canvas');
+					copy.width = source.width;
+					copy.height = source.height;
+					const context = copy.getContext('2d');
+					context.drawImage(source, 0, 0);
+					const out = [];
+					for (const r of window.__ocean.stage.graph().labelRects) {
+						const x0 = Math.max(0, Math.floor(r.x0 * scale));
+						const y0 = Math.max(0, Math.floor(r.y0 * scale));
+						const w = Math.min(copy.width, Math.ceil(r.x1 * scale)) - x0;
+						const h = Math.min(copy.height, Math.ceil(r.y1 * scale)) - y0;
+						if (w <= 0 || h <= 0) continue;
+						const data = context.getImageData(x0, y0, w, h).data;
+						let accent = 0;
+						// The accent is #5fd4c4; the words are near white or grey, the halo and plate dark.
+						for (let i = 0; i < data.length; i += 4) if (data[i + 1] > 150 && data[i + 1] - data[i] > 50) accent += 1;
+						if (accent > 0) out.push(`"${r.text}": ${accent} px`);
+					}
+					resolve(out);
+				})));
+				expect(crossed, query).toEqual([]);
+			}
+		});
+	});
+}
+
 // Task 14 (lane B's note): the page's chrome sits over the canvas, the pills at the bottom right and
 // the home link at the top right. At the tallest sine (A = 4) the distance word and the last tick
 // numbers ran under the "Pause the ocean" pill. No graph word or number sits under either, on a phone
