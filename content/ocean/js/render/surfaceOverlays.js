@@ -176,7 +176,14 @@ export function createSurfaceOverlays({ view, ocean }) {
 			const shown = Math.min(count, 2);
 			const colours = Array.from({ length: shown }, (_, i) => hex(shafts, i));
 			const headColours = Array.from({ length: shown }, (_, i) => hex(heads, i));
-			return { kind, arrows: count, spacing, girth, meanAngle, finite, tiles: tiles.probe(), first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, headColours, colourUploads };
+			// The first arrow's shaft as its instance matrix holds it: its girth (x scale) and drawn length.
+			let firstShaft = null;
+			if (count > 0) {
+				shafts.getMatrixAt(0, matrix);
+				size.setFromMatrixScale(matrix);
+				firstShaft = { width: size.x, length: size.y };
+			}
+			return { kind, arrows: count, spacing, girth, firstShaft, meanAngle, finite, tiles: tiles.probe(), first: count > 0 ? Array.from(arrows.subarray(0, 6)) : null, colours, headColours, colourUploads };
 		},
 	};
 }

@@ -78,8 +78,13 @@ export async function scrollToFigure(page, id, selector = 'figure') {
 // moves (fix round 2). Wait for the page to rest, which is scrollY unchanged for 10 frames wherever
 // that is; resting short of the foot, scroll to the foot as it now is and wait again.
 export async function restAtFoot(page) {
+	// Each call starts its own count (final review Minor 10): a count left from an earlier call on the
+	// same page could otherwise end this wait at once.
+	await page.evaluate(() => {
+		window.__footRest = { y: -1, still: 0 };
+	});
 	await page.waitForFunction(() => {
-		const state = (window.__footRest ??= { y: -1, still: 0 });
+		const state = window.__footRest;
 		const y = window.scrollY;
 		state.still = y === state.y ? state.still + 1 : 0;
 		state.y = y;
