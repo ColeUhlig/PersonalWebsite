@@ -222,7 +222,7 @@ test('with three blocked the whole story still reads (Review Focus 3)', async ({
 
 test('the home page links to the ocean, and the ocean links home', async ({ page }) => {
 	await page.goto('/');
-	await expect(page.locator('a[href="/ocean/"]')).toHaveText('Building an Ocean in Roblox');
+	await expect(page.locator('a[href="/ocean/"]')).toHaveText('Building an Ocean in Roblox →');
 	await page.goto('/ocean/');
 	await expect(page.locator('header.site a[href="/"]')).toHaveCount(1);
 	await expect(page.locator('footer.site a[href="/"]')).toHaveCount(1);
