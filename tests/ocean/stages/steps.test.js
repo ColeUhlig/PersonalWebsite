@@ -33,7 +33,7 @@ test('stepOf and idOf are inverses, and both refuse what is not a step', () => {
 test('six chapters, in order, each starting where the spec says, every step in one', () => {
 	expect.equal(CHAPTERS.map((c) => c.first).join(','), 'sine,unlit,gerstner,frequency,fields,foam', 'chapter starts');
 	expect.equal(CHAPTERS.map((c) => c.number).join(','), '1,2,3,4,5,6', 'numbers');
-	expect.equal(CHAPTERS.map((c) => c.title).join('|'), 'One wave|Light|Better waves|The real ocean|Textures|The look', 'titles');
+	expect.equal(CHAPTERS.map((c) => c.title).join('|'), 'Wave synthesis|Shading|Wave shape|Spectral synthesis|Surface representation|Appearance', 'titles');
 	expect.equal(chapterOf(stepOf('sine')).number, 1, 'step 1');
 	expect.equal(chapterOf(stepOf('highlights')).number, 2, 'the last of chapter two');
 	expect.equal(chapterOf(stepOf('finale')).number, 6, 'the finale ends chapter six');

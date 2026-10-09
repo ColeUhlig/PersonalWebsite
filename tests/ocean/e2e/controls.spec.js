@@ -106,7 +106,7 @@ test("the many-waves step's wave count shows a live timing of its sum, measured 
 	const vertices = await page.evaluate(() => window.__ocean.status().vertices);
 	const points = vertices.toLocaleString('en-US');
 	const timing = page.locator(`${at('many-waves')} [data-slider="waveCount"] .control-timing[data-copy-skip="live"]`);
-	const reads = (count) => new RegExp(`^${count} wave${count === 1 ? '' : 's'} over ${points} points: \\d+(\\.\\d+)? ms in your browser just now$`);
+	const reads = (count) => new RegExp(`^${count} wave${count === 1 ? '' : 's'} over ${points} points: \\d+(\\.\\d+)? ms in this browser just now$`);
 	const count = sliderOf('many-waves', 'waveCount');
 	await expect(timing).toHaveText(reads(count.default), { timeout: 60_000 });
 	// Filled at load, but not announced until the visitor reaches the step.

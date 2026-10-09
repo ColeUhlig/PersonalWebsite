@@ -24,7 +24,7 @@ function formatMs(ms) {
 }
 
 export function timingText(count, points, ms) {
-	return `${count} wave${count === 1 ? '' : 's'} over ${points.toLocaleString('en-US')} points: ${formatMs(ms)} ms in your browser just now`;
+	return `${count} wave${count === 1 ? '' : 's'} over ${points.toLocaleString('en-US')} points: ${formatMs(ms)} ms in this browser just now`;
 }
 
 /**

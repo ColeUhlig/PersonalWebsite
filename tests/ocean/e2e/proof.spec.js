@@ -283,7 +283,7 @@ test('without WebAssembly on the page the panel says so at once and throws nothi
 	await openPanel(page);
 	await page.locator('[data-proof="run"]').click();
 	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed', { timeout: 5_000 });
-	await expect(page.locator('[data-proof="status"]')).toContainText('WebAssembly switched off');
+	await expect(page.locator('[data-proof="status"]')).toContainText('WebAssembly disabled');
 	expect(await drawn(page, 'js-map')).toBe(true);
 	expect(page.workers().length).toBe(0);
 	expect(errors).toEqual([]);
@@ -303,7 +303,7 @@ test('without WebAssembly in the worker the panel says so quickly and throws not
 	await openPanel(page);
 	await page.locator('[data-proof="run"]').click();
 	await expect(page.locator('.proof')).toHaveAttribute('data-proof-state', 'failed', { timeout: 20_000 });
-	await expect(page.locator('[data-proof="status"]')).toContainText('WebAssembly switched off');
+	await expect(page.locator('[data-proof="status"]')).toContainText('WebAssembly disabled');
 	expect(errors).toEqual([]);
 });
 
@@ -314,7 +314,7 @@ test('the note names the runtime as it is, and names the eight fields', async ({
 	const text = (await notes.allTextContents()).join(' ');
 	expect(text).toContain('luau-web 1.4.0');
 	expect(text).toContain('compiled to WebAssembly');
-	expect(text).toContain("not Roblox's VM");
+	expect(text).toContain('not the Roblox VM');
 	for (const field of ['height', 'dispX', 'dispZ', 'slopeX', 'slopeZ', 'jxx', 'jzz', 'jxz']) {
 		expect(text).toContain(field);
 	}

@@ -60,9 +60,9 @@ test("the notices' numbers are sourced", () => {
 test("the proof panel's fixed text matches runtime.js and proofConfig.js, and its numbers are sourced", () => {
 	const { text, attributes } = proofPanelText();
 	expect.truthy(text.includes('Run both') && text.includes('Luau height') && text.includes('Verdict'), `the button, a caption and a term are read: ${text}`);
-	expect.truthy(text.includes('This is my actual Roblox code, running in your browser.'), `the heading is read: ${text}`);
+	expect.truthy(text.includes("The Roblox game's Luau code, running in this browser."), `the heading is read: ${text}`);
 	expect.truthy(text.includes('one wave cascade, 64 × 64 cells at seed 7.'), `grid and seed: ${text}`);
-	expect.truthy(text.includes('My Luau runs on luau-interop, a fork of Luau 0.711, packaged as luau-web 1.4.0:'), `runtime: ${text}`);
+	expect.truthy(text.includes('The Luau runs on luau-interop, a fork of Luau 0.711, packaged as luau-web 1.4.0:'), `runtime: ${text}`);
 	const missing = [...uncoveredNumbers(text, PHRASES), ...uncoveredNumbers(attributes, PHRASES)];
 	expect.equal(missing.length, 0, `unsourced numbers in the proof panel: ${JSON.stringify(missing)}`);
 });
@@ -74,7 +74,7 @@ test('the proof panel check catches a new number anywhere in its templates', () 
 		['the button', '>Run both</button>', '>Run both 2 ways</button>'],
 		['a term', '<dt>Verdict</dt>', '<dt>Verdict 9</dt>'],
 		['a caption', "'Luau height'", "'Luau height 5'"],
-		['the heading', 'running in your browser.</h2>', 'running in your browser 4 you.</h2>'],
+		['the heading', 'running in this browser.</h2>', 'running in this browser 4 times.</h2>'],
 		['an attribute', '<select data-proof="module">', '<select data-proof="module" aria-label="Module 6 of 9">'],
 	];
 	for (const [where, from, to] of mutations) {

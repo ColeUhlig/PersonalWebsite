@@ -44,7 +44,7 @@ test('exceptions in frame after frame raise the notice, and the loop still runs'
 	await running(page);
 	await page.evaluate(() => window.__ocean.injectFrameErrors(40));
 	await expect(page.locator('#notice')).toBeVisible({ timeout: 120_000 });
-	await expect(page.locator('#notice')).toContainText('hit an error');
+	await expect(page.locator('#notice')).toContainText('encountered an error');
 	await page.waitForFunction(() => window.__ocean.frameFailures() === 40, null, { timeout: 120_000 });
 	const frame = await page.evaluate(() => window.__ocean.status().frame);
 	await page.waitForFunction((f) => window.__ocean.status().frame > f + 3, frame, { timeout: 60_000 });

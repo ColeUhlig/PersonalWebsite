@@ -30,8 +30,8 @@ const PAINTED_TEXELS = 128;
 const PROBE_TEXEL = Object.freeze([20, 10]);
 const PAINTED = Object.freeze([
 	Object.freeze({ name: 'colour', label: 'Colour' }),
-	Object.freeze({ name: 'mask', label: 'Glow mask' }),
-	Object.freeze({ name: 'normal', label: 'Ripples (the normal map)' }),
+	Object.freeze({ name: 'mask', label: 'Emission mask' }),
+	Object.freeze({ name: 'normal', label: 'Normal map' }),
 ]);
 
 const studs = (value) => `${value.toFixed(2)} studs`;
@@ -77,7 +77,7 @@ function fieldsInset(figure, ocean, onLayout) {
 		return { view, canvas, context: canvas.getContext('2d'), range, cell };
 	});
 	const line = element('p', { className: 'inset-line' });
-	const describe = (fields, chop) => `Each image is the engine's ${fields.n} × ${fields.n} grid, one number every ${trim(fields.size / fields.n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and push are in studs; slope has no unit. The push along x is the sideways field times the choppiness, ${chop.toFixed(2)} here.`;
+	const describe = (fields, chop) => `Each image is the engine's ${fields.n} × ${fields.n} grid, one number every ${trim(fields.size / fields.n)} studs across ${trim(fields.size)} studs, blue below zero and amber above. Height and horizontal displacement are in studs; slope has no unit. The displacement along x is the displacement field times the choppiness, ${chop.toFixed(2)} here.`;
 	// Task 15: the line is true at mount too (the grid and the choppiness now), so it is written now
 	// and the inset has its height before it first draws.
 	line.textContent = describe(ocean.store.display[0], ocean.live.chop);
@@ -294,7 +294,7 @@ function paintedInset(figure, materials, config, onLayout) {
 	// The normal image is one painted block the materials' sink tiles across it, except under
 	// ?calibrate=map (render/materials.js uploadMaskOrNormal, NormalTexels.tile).
 	const block = config?.calibrate === 'map' ? NORMAL_IMAGE_TEXELS : NORMAL_BLOCK_TEXELS;
-	const tiled = block < NORMAL_IMAGE_TEXELS ? ` The painter paints one ${block} × ${block} ripple block, and the materials repeat it across the ripple map.` : '';
+	const tiled = block < NORMAL_IMAGE_TEXELS ? ` The painter paints one ${block} × ${block} normal-map block, and the materials repeat it across the normal map.` : '';
 	const line = element('p', { className: 'inset-line', textContent: `Each map is drawn at ${PAINTED_TEXELS} × ${PAINTED_TEXELS} here; the sizes under them are the textures' own.${tiled}` });
 	body.replaceChildren(...cells.map((c) => c.cell), line);
 	onLayout();

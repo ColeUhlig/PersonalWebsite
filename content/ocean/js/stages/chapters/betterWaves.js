@@ -9,14 +9,14 @@ import { CREST, TEACHING, TEACHING_SUN, TILING_WAVES, range } from '../recipeKit
 
 export const BETTER_WAVES = Object.freeze({
 	gerstner: {
-		title: 'Sharper peaks',
+		title: 'Gerstner waves',
 		engine: { ...TEACHING, source: 'bank', bank: { count: 16, fan: 1 }, chop: 1.3 },
 		look: { material: 'terms', sun: TEACHING_SUN },
 		shot: CREST,
 		sliders: [range('chop', 'Choppiness', 'engine.chop', { min: 0, max: 2, step: 0.01, value: 1.3 })],
 	},
 	tiling: {
-		title: 'The tiling problem',
+		title: 'Periodicity and tiling',
 		engine: { ...TEACHING, source: 'bank', bank: { count: TILING_WAVES, fan: 1 }, chop: 0.6 },
 		// Task 15: the tile's edges drawn dashed on the sea, so one square can be matched to the next.
 		look: { material: 'terms', sun: TEACHING_SUN, overlay: { kind: 'tiles', spacing: 4 } },

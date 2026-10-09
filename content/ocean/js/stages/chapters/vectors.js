@@ -12,13 +12,13 @@ const CLOSE = { position: [27, 14, 20], target: [0, 1, 0] };
 
 export const VECTORS = Object.freeze({
 	normals: {
-		title: 'Which way the surface faces',
+		title: 'Surface normals',
 		engine: BANK,
 		look: { material: 'white', wireframe: true, sun: TEACHING_SUN, overlay: { kind: 'normals', spacing: 4 } },
 		shot: CLOSE,
 	},
 	slopes: {
-		title: 'Getting the slope',
+		title: 'Computing the slope',
 		engine: BANK,
 		look: { material: 'white', wireframe: true, sun: TEACHING_SUN, overlay: { kind: 'slopes', spacing: 4 } },
 		shot: CLOSE,

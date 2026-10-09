@@ -9,7 +9,7 @@ import { oceanRunning, waitFrames, watchErrors } from './helpers/story.js';
 
 const INDEX_HTML = readFileSync(new URL('../../../content/ocean/index.html', import.meta.url));
 const SHOWCASE_JS = readFileSync(new URL('../../../content/ocean/js/engine/showcase.js', import.meta.url), 'utf8');
-const PLAY_ANCHOR = '<a id="play" class="play" rel="noopener" target="_blank" hidden>Play it in Roblox</a>';
+const PLAY_ANCHOR = '<a id="play" class="play" rel="noopener" target="_blank" hidden>Open the place in Roblox</a>';
 const CLIP = { shot: 'deck', webm: 'deck.webm', mp4: 'deck.mp4', poster: 'deck.jpg', width: 1280, height: 720, seconds: 20 };
 
 // The surface's vertex statistics (A3's probe): identical from frame to frame only if the waves
@@ -20,11 +20,11 @@ const liveText = (page) => page.locator('#live [data-live]').textContent();
 
 test.describe.configure({ timeout: 240_000 });
 
-test('the live numbers are labelled as measured in your browser, and fill in', async ({ page }) => {
+test('the live numbers are labelled as measured in this browser, and fill in', async ({ page }) => {
 	const errors = watchErrors(page);
 	await oceanRunning(page);
 	await page.locator('#live').scrollIntoViewIfNeeded();
-	await expect(page.locator('#live .dim')).toHaveText('Measured in your browser, right now.');
+	await expect(page.locator('#live .dim')).toHaveText('Measured live in this browser.');
 	await expect(page.locator('#live [data-live]')).toContainText('Frame rate', { timeout: 30_000 });
 	await expect(page.locator('#live [data-live]')).toContainText('fps');
 	// The tier is the probe's on this machine, so read the point count rather than assume High.
@@ -46,7 +46,7 @@ test('the live block is never empty: measuring at first, then the per-stage timi
 	await page.locator('#live').scrollIntoViewIfNeeded();
 	expect((await liveText(page)).trim()).not.toBe('');
 	await page.waitForFunction(() => window.__ocean.report() !== null, null, { timeout: 90_000 });
-	await expect(page.locator('#live [data-live]')).toContainText('Writing the points', { timeout: 5_000 });
+	await expect(page.locator('#live [data-live]')).toContainText('Writing the vertices', { timeout: 5_000 });
 	await expect(page.locator('#live [data-live]')).toContainText('Drawing the frame');
 	await expect(page.locator('#live [data-live]')).not.toContainText('measuring');
 });
@@ -186,7 +186,7 @@ test('Play in Roblox stays hidden while no public place URL is set', async ({ pa
 // The two above hold for the served HTML alone, so these prove the page itself decides: an anchor
 // served visible with an address is hidden and stripped, and a real place URL shows the button.
 test('the page hides a Play anchor and drops its address while placeUrl() gives none', async ({ page }) => {
-	const html = String(INDEX_HTML).replace(PLAY_ANCHOR, '<a id="play" class="play" rel="noopener" target="_blank" href="https://example.com/">Play it in Roblox</a>');
+	const html = String(INDEX_HTML).replace(PLAY_ANCHOR, '<a id="play" class="play" rel="noopener" target="_blank" href="https://example.com/">Open the place in Roblox</a>');
 	expect(html).not.toBe(String(INDEX_HTML));
 	await page.route('**/ocean/', (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }));
 	await page.goto('/ocean/');
@@ -259,7 +259,7 @@ test.describe('on a phone, on the lighter tier by rule', () => {
 		await page.locator('#live').scrollIntoViewIfNeeded();
 		await expect(page.locator('#live [data-live-phone]')).toBeVisible({ timeout: 30_000 });
 		await expect(page.locator('#live [data-live-phone]')).toContainText('by rule');
-		await expect(page.locator('#live [data-live-phone]')).toContainText("haven't measured");
+		await expect(page.locator('#live [data-live-phone]')).toContainText('has not yet been measured');
 		await expect(page.locator('#live [data-live]')).toContainText('phone rule, unmeasured');
 	});
 });

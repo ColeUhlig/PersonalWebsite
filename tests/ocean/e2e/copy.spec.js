@@ -57,7 +57,7 @@ async function checkPage(page) {
 
 test('every number in the page text sits inside a sourced phrase', async ({ page }) => {
 	await page.goto('/ocean/');
-	await expect(page.locator(`#step-${STEP_COUNT}-title`)).toHaveText('The whole thing');
+	await expect(page.locator(`#step-${STEP_COUNT}-title`)).toHaveText('The complete system');
 	await checkPage(page);
 });
 
@@ -80,7 +80,7 @@ test('every live region is empty in the served HTML', async ({ page }) => {
 // box's "what changed" lines (page/mathSteps.js, C2) count as copy the page uses.
 test('every sourced phrase is still used by the page, the notices, the proof panel or the math box', async ({ page }) => {
 	await page.goto('/ocean/');
-	await expect(page.locator(`#step-${STEP_COUNT}-title`)).toHaveText('The whole thing');
+	await expect(page.locator(`#step-${STEP_COUNT}-title`)).toHaveText('The complete system');
 	const panel = proofPanelText();
 	const changed = Object.values(MATH_STEPS).map((entry) => entry.changed);
 	const text = [await pageText(page), ...Object.values(NOTICES), ...changed, panel.text, panel.attributes].map(normalise).join(' | ');
@@ -106,7 +106,7 @@ test('the page works at /ocean without the trailing slash', async ({ page }) => 
 	await page.route('**/ocean', (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: INDEX_HTML }));
 	await page.goto('/ocean');
 	expect(new URL(page.url()).pathname).toBe('/ocean');
-	await expect(page.locator(`#step-${STEP_COUNT}-title`)).toHaveText('The whole thing');
+	await expect(page.locator(`#step-${STEP_COUNT}-title`)).toHaveText('The complete system');
 	expect(await page.locator('.panel').first().evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
 	await page.waitForFunction(() => document.body.dataset.ocean === 'running' && (window.__ocean?.status().frame ?? 0) > 5, null, { timeout: 90_000 });
 	expect(failures).toEqual([]);

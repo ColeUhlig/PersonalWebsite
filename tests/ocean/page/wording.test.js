@@ -41,7 +41,7 @@ test('the tiling step claims the tile only at full spread, and the Gerstner step
 	expect.truthy(!/every wave on this page/i.test(text(html)), 'the page says every wave on it fits the tile');
 	expect.truthy(/spread full/i.test(of('tiling')), 'the tiling step says its waves are at full spread');
 	expect.truthy(/not the lone sine/.test(of('tiling')), 'the tiling step says the lone sine is not on the tile');
-	expect.truthy(/Gerstner/.test(of('gerstner')) && /teaching waves/.test(of('gerstner')) && /prototype/.test(of('gerstner')), 'the Gerstner step names the teaching waves and the prototype');
+	expect.truthy(/Gerstner/.test(of('gerstner')) && /illustrative waves/.test(of('gerstner')) && /prototype/.test(of('gerstner')), 'the Gerstner step names the teaching waves and the prototype');
 });
 
 // Task 14: the recap at the foot of the page lists every "Roblox says no" card, in story order.
@@ -61,7 +61,7 @@ test('the recap has a line for every card, in story order', async () => {
 // chord in the small chart. The paragraph says what the big graph is and how it relates to the chord.
 test("the chord step says what its big graph shows", () => {
 	const words = text(sections.find((s) => s.id === 'fourier').inner);
-	expect.truthy(/big graph/i.test(words) && /last step's waves/i.test(words) && /one curve/i.test(words), `step 15 explains its big graph: "${words.slice(0, 200)}..."`);
+	expect.truthy(/main plot/i.test(words) && /previous section's waves/i.test(words) && /single curve/i.test(words), `step 15 explains its big graph: "${words.slice(0, 200)}..."`);
 });
 
 // Task 15 polish: step 13 draws the tile's edges dashed on the sea; its words say what they are.
@@ -74,5 +74,5 @@ test("the tiling step says what its dashed lines are", () => {
 // to see the push come and go.
 test("the choppiness step says to drag its slider", () => {
 	const words = text(sections.find((s) => s.id === 'choppiness').inner);
-	expect.truthy(/Drag Choppiness/.test(words), `step 20 says to drag the slider: "${words.slice(0, 300)}"`);
+	expect.truthy(/Choppiness slider/.test(words), `step 20 says to drag the slider: "${words.slice(0, 300)}"`);
 });

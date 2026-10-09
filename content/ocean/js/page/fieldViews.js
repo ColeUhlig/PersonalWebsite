@@ -15,7 +15,7 @@ import { mod } from '../core/luau.js';
 export const FIELD_VIEWS = Object.freeze([
 	Object.freeze({ name: 'height', label: 'Height' }),
 	Object.freeze({ name: 'slopeX', label: 'Slope along x' }),
-	Object.freeze({ name: 'dispX', label: 'Push at this choppiness' }),
+	Object.freeze({ name: 'dispX', label: 'Horizontal displacement at this choppiness' }),
 ]);
 export const ZOOM = 6;
 const PALE = [232, 238, 242]; // style.css --ink

@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Building an Ocean in Roblox</title>
-	<meta name="description" content="I built a Sea of Thieves-style ocean in Roblox, and Roblox fought me the whole way. Scroll to build it from nothing, live in your browser.">
+	<meta name="description" content="A real-time FFT ocean for Roblox, constructed step by step from a single sinusoid, with a JavaScript port of the implementation running live in the browser.">
 	<meta name="color-scheme" content="dark">
 	<link rel="canonical" href="https://coleuhlig.com/ocean/">
 	<script src="/js/canonical-host.js"></script>
@@ -35,78 +35,78 @@
 		<button id="tilt" class="tilt" type="button" hidden>Tilt to look around</button>
 		<button id="motion" class="motion" type="button" hidden>Pause the ocean</button>
 	</div>
-	<noscript><p class="noscript">The live ocean needs JavaScript. The story below reads fine without it.</p></noscript>
+	<noscript><p class="noscript">The live simulation requires JavaScript; the text below can be read without it.</p></noscript>
 
 	<main id="story">
 		<section id="opening" class="opening">
 			<div class="opening-inner">
 				<h1>Building an Ocean in Roblox</h1>
-				<p class="lede">I built this in Roblox, and Roblox fought me the whole way. The sea on this page is a port of that ocean, running live in your browser.</p>
-				<p class="cue">Scroll to build it from nothing <span aria-hidden="true">↓</span></p>
+				<p class="lede">A real-time FFT ocean for Roblox, a platform without vertex, pixel or compute shaders. The surface below is a live JavaScript port of the Luau implementation, constructed section by section.</p>
+				<p class="cue">Scroll to begin <span aria-hidden="true">↓</span></p>
 			</div>
 		</section>
 
 		<section class="step" id="step-1" data-step="1" data-step-id="sine" aria-labelledby="step-1-title">
 			<article class="panel">
-				<p class="chapter">Chapter one · One wave</p>
-				<h2 id="step-1-title">One sine wave</h2>
-				<p>Let's start with no ocean at all, just a graph. This is a sine wave: a height that rises and falls as you move along. Two knobs describe it: how tall it gets, and how far it is from one crest to the next. I've drawn the heights four times taller than they really are so you can see them.</p>
+				<p class="chapter">Chapter one · Wave synthesis</p>
+				<h2 id="step-1-title">The sinusoid</h2>
+				<p>We begin with a single sinusoid, plotted as a function of one spatial coordinate. Two parameters define it: the amplitude, the greatest height above the mean level, and the wavelength, the distance between successive crests. Heights in the plot are exaggerated by a factor of four for legibility.</p>
 				<div class="controls" data-controls="1" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin(\htmlClass{t-len}{k}\,x), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
-					<p class="math-note">A is the height and λ the length from crest to crest. k, the wavenumber, turns that length into how quickly the sine cycles as you move along x: once every λ studs.</p>
+					<p class="math-note">A is the amplitude and λ the wavelength. The wavenumber k converts the wavelength into a spatial frequency: the phase advances by one full cycle over each distance λ along x.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-2" data-step="2" data-step-id="moving-sine" aria-labelledby="step-2-title">
 			<article class="panel">
-				<h2 id="step-2-title">Make it move</h2>
-				<p>Now let the clock run. At every moment the curve is drawn a little further along, so the whole wave slides sideways without changing shape. The Speed slider sets how fast.</p>
+				<h2 id="step-2-title">Time dependence</h2>
+				<p>Introducing time into the argument of the sine translates the profile along x without any change of shape. The Speed slider sets the rate of translation.</p>
 				<div class="controls" data-controls="2" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y = \htmlClass{t-amp}{A}\,\sin\!\big(\htmlClass{t-len}{k}\,x - \htmlClass{t-speed}{\omega}\,t\big), \qquad \htmlClass{t-len}{k} = \frac{2\pi}{\htmlClass{t-len}{\lambda}}</code></div>
-					<p class="math-note">ω is how quickly the wave cycles in time, so the crests travel at ω/k studs a second. That speed is what the slider sets.</p>
+					<p class="math-note">ω is the angular frequency, the rate at which the phase advances in time. Crests therefore travel at the phase speed ω/k studs per second, which is the quantity the slider controls.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-3" data-step="3" data-step-id="sum-of-sines" aria-labelledby="step-3-title">
 			<article class="panel">
-				<h2 id="step-3-title">Adding waves together</h2>
-				<p>One wave looks like a machine. Add a few with different heights, lengths and speeds and the sum starts to wander like water. These are the tallest waves of the Roblox ocean I started from, laid along one line for now: each one faint, their sum in bold. The slider adds them one at a time, tallest first.</p>
+				<h2 id="step-3-title">Superposition</h2>
+				<p>A single sinusoid is conspicuously periodic. A sum of sinusoids with differing amplitudes, wavelengths and speeds produces a profile with the irregular appearance of a water surface. The components shown are the largest waves of the Roblox ocean this project started from, here confined to a single line: each component is drawn faintly and their sum in bold. The slider adds the components one at a time, in order of decreasing amplitude.</p>
 				<div class="controls" data-controls="3" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin(k_i x - \omega_i t + \varphi_i)</code></div>
-					<p class="math-note">N waves, each with its own height A, wavenumber k, frequency ω and starting phase φ, added up point by point.</p>
+					<p class="math-note">N components, each with its own amplitude A, wavenumber k, angular frequency ω and initial phase φ, summed point by point.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-4" data-step="4" data-step-id="into-3d" aria-labelledby="step-4-title">
 			<article class="panel">
-				<h2 id="step-4-title">From a line to a surface</h2>
-				<p>Here's the trick: that curve was never just a line. It's the edge of a surface, seen from the side, and now drawn at its true height. Nothing in the sum depends on the other direction, so the curve is just stretched sideways into a sheet. The lines on it are the triangles the surface is built from, and every corner where they meet is a point the code has to move.</p>
+				<h2 id="step-4-title">Extension to two dimensions</h2>
+				<p>The profile is the cross-section of a surface, viewed edge-on and now drawn at its true height. Because the sum does not depend on the transverse coordinate, the surface is simply the profile extruded sideways. The lines are the edges of the triangles from which the surface is built; each vertex where they meet is a point whose position the code must compute.</p>
 				<div class="controls" data-controls="4" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y(x, x_\perp, t) = \sum_{i=1}^{N} A_i \sin(k_i x - \omega_i t + \varphi_i)</code></div>
-					<p class="math-note">x is how far along the line you are, and x⊥ how far across it. The same sum at every x⊥: the height depends on x and time only.</p>
+					<p class="math-note">x is the coordinate along the profile and x⊥ the coordinate across it. The sum is identical at every x⊥, so the height depends on x and t alone.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>A vertex shader moves every point on the GPU, thousands at a time, almost for free.</dd>
+						<dt>Conventional approach</dt>
+						<dd>A vertex shader displaces every vertex on the GPU, many thousands in parallel, at negligible cost.</dd>
 						<dt>In Roblox</dt>
-						<dd>No vertex shaders. A Luau script has to move every point itself.</dd>
-						<dt>What I did</dt>
-						<dd>Wrote every point from a script, every frame: 18,144 of them on the top tier (the outermost ring every other frame).</dd>
-						<dt>The number</dt>
-						<dd>About 3.5 ms a frame in Studio with Luau's native code generation, 7.7 ms without it. Roblox documents native code for servers, and I haven't measured a player's client yet.</dd>
+						<dd>Roblox provides no vertex shaders. A Luau script must displace every vertex itself.</dd>
+						<dt>Approach taken</dt>
+						<dd>Every vertex is written from a script each frame: 18,144 of them on the top tier (the outermost ring every other frame).</dd>
+						<dt>Measurement</dt>
+						<dd>About 3.5 ms a frame in Studio with Luau's native code generation, 7.7 ms without it. Roblox documents native code generation for servers; its cost on a player's client has not yet been measured.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -114,38 +114,38 @@
 
 		<section class="step" id="step-5" data-step="5" data-step-id="directions" aria-labelledby="step-5-title">
 			<article class="panel">
-				<h2 id="step-5-title">Waves going somewhere</h2>
-				<p>Real waves don't all march the same way. Give each one a heading and they start crossing each other. The arrows show where each wave is going; drag Spread down to zero and they all line up again.</p>
+				<h2 id="step-5-title">Direction of propagation</h2>
+				<p>Ocean waves do not all travel in one direction. Assigning each component a heading causes the components to cross one another. The arrows indicate each component's direction of travel; reducing Spread to zero aligns them again.</p>
 				<div class="controls" data-controls="5" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_i A_i \sin\big(k_i\,{(\htmlClass{t-dir}{\hat{\mathbf{d}}_i}\cdot\mathbf{x})} - \omega_i t + \varphi_i\big)</code></div>
-					<p class="math-note">The bold x is now a point on the sea, with two coordinates. d̂ is an arrow of length one along a wave's heading, so d̂·x (a dot product) is how far along that heading the point sits.</p>
+					<p class="math-note">The bold x now denotes a point on the horizontal plane, with two coordinates. d̂ is the unit vector along a component's heading, so the dot product d̂·x is the distance of the point along that heading.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-6" data-step="6" data-step-id="many-waves" aria-labelledby="step-6-title">
 			<article class="panel">
-				<h2 id="step-6-title">Lots of waves, lots of directions</h2>
-				<p>Add more of them and it stops looking regular, at least from down here. Their headings fan out within 45° either side of one heading, the way waves raised by one wind spread out, and this slider goes on through the whole bank, still adding them tallest first.</p>
+				<h2 id="step-6-title">Directional spreading</h2>
+				<p>With more components the surface loses its apparent regularity, at least when viewed from near the water. The headings lie within 45° either side of one heading, approximating the angular spread of waves raised by a single wind, and the slider continues through the full set, again in order of decreasing amplitude.</p>
 				<div class="controls" data-controls="6" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x}, t) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i \sin\big(k_i\,{(\hat{\mathbf{d}}_i\cdot\mathbf{x})} - \omega_i t + \varphi_i\big)</code></div>
-					<p class="math-note">The same sum as the last step, now with N waves, each with its own height, heading, length and starting phase. The last few add little or nothing: they're tiny, and the very last have almost no height at all.</p>
+					<p class="math-note">The same sum as in the previous section, now over N components, each with its own amplitude, heading, wavelength and initial phase. The final components contribute little: their amplitudes are small, and the very last are close to zero.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>Each extra wave is a few more instructions in a shader, spread across the GPU's thousands of cores.</dd>
+						<dt>Conventional approach</dt>
+						<dd>Each additional component costs a few shader instructions, distributed across the thousands of cores of the GPU.</dd>
 						<dt>In Roblox</dt>
-						<dd>Each extra wave is another trip of a Luau loop over every point, on the CPU, inside the frame.</dd>
-						<dt>What I did</dt>
-						<dd>Kept the count down, and the page keeps fewer still where the small ones wouldn't show.</dd>
-						<dt>The number</dt>
-						<dd>When the ocean is running, the line above is measured live in your browser. In Roblox the same loop runs in Luau, on the CPU, in the same frame as everything else.</dd>
+						<dd>Each additional component is a further pass of a Luau loop over every vertex, on the CPU, within the frame.</dd>
+						<dt>Approach taken</dt>
+						<dd>The component count is kept low, and this page omits further components where they would not be visible.</dd>
+						<dt>Measurement</dt>
+						<dd>While the simulation is running, the line above is measured live in this browser. In Roblox the same loop runs in Luau, on the CPU, within the same frame as all other game work.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -153,77 +153,77 @@
 
 		<section class="step" id="step-7" data-step="7" data-step-id="unlit" aria-labelledby="step-7-title">
 			<article class="panel">
-				<p class="chapter">Chapter two · Light</p>
-				<h2 id="step-7-title">Shape isn't enough</h2>
-				<p>Take the wireframe away and the shape vanishes. Every point is the same flat white, so nothing tells a crest from a trough; flip the switch to bring the lines back and compare. Shape isn't what makes water look like water. Light is.</p>
+				<p class="chapter">Chapter two · Shading</p>
+				<h2 id="step-7-title">Shape without shading</h2>
+				<p>Without the wireframe the shape is no longer visible. Every point receives the same flat white, so nothing distinguishes a crest from a trough; the switch restores the lines for comparison. The appearance of water is determined less by its shape than by its interaction with light.</p>
 				<div class="controls" data-controls="7" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\text{colour} = c_{\text{white}}</code></div>
-					<p class="math-note">Without light every pixel gets the same colour, whatever the surface is doing.</p>
+					<p class="math-note">Without illumination every pixel receives the same colour, whatever the geometry of the surface.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-8" data-step="8" data-step-id="normals" aria-labelledby="step-8-title">
 			<article class="panel">
-				<h2 id="step-8-title">Which way the surface faces</h2>
-				<p>To light a surface you need to know which way each bit of it faces. That direction is called the normal: the arrows sticking straight out of the surface here. At the centre, two more arrows lie along the surface, tipped by its slope: one pointing along x (the tangent, orange) and one along z (the binormal, pink). The arrow at right angles to both of them is the normal; the math calls that a cross product.</p>
+				<h2 id="step-8-title">Surface normals</h2>
+				<p>Shading requires the orientation of the surface at every point, given by the normal vector: the arrows perpendicular to the surface here. At the centre, two further arrows lie in the surface, inclined by its slope: the tangent along x (orange) and the binormal along z (pink). The normal is perpendicular to both and is obtained as their cross product.</p>
 				<div class="controls" data-controls="8" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\mathbf{T} = (1,\ \partial_x y,\ 0), \quad \mathbf{B} = (0,\ \partial_z y,\ 1), \quad \mathbf{n} = \frac{\mathbf{B}\times\mathbf{T}}{\lVert\mathbf{B}\times\mathbf{T}\rVert}</code></div>
-					<p class="math-note">The two ∂ terms are the slopes: how much the height changes per stud along x, and along z. T and B lie in the surface, and their cross product points straight out of it. These arrows come from the engine's own wave sums, not from a picture.</p>
+					<p class="math-note">The two partial derivatives are the slopes: the change in height per stud along x and along z. T and B lie in the surface, and their cross product is normal to it. The arrows are computed from the engine's own wave sums.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-9" data-step="9" data-step-id="slopes" aria-labelledby="step-9-title">
 			<article class="panel">
-				<h2 id="step-9-title">Getting the slope</h2>
-				<p>So where do the slopes come from? You can measure them: read the height a little way either side of a point and divide the difference by the distance between the two. That's a central difference. Or, since every wave is a sine, work the slope out exactly: a sine's slope is a cosine (a sine is steepest where it crosses the middle, which is just where a cosine peaks), and adding waves adds their slopes. Each point here gets two normals, one from the measured slope (orange) and one from the exact slope (teal). The orange one is drawn a little longer so both colours show where they overlap; its extra length means nothing. Widen the spacing and watch them drift apart: the further apart the two samples, the more the measurement smooths over the small waves between them.</p>
+				<h2 id="step-9-title">Computing the slope</h2>
+				<p>The slopes may be obtained in two ways. They may be estimated numerically, by sampling the height a short distance either side of a point and dividing the difference by the separation of the two samples: a central difference. Alternatively, since every component is a sinusoid, they may be computed exactly. The derivative of a sine is a cosine (a sine is steepest where it crosses the mean level, which is where the cosine peaks), and the slope of a sum is the sum of the slopes. Each point here carries two normals, one from the estimated slope (orange) and one from the exact slope (teal). The orange normal is drawn slightly longer so that both remain visible where they coincide; its length carries no meaning. As the sample spacing widens the two diverge, because a wider difference averages over the short waves between its samples.</p>
 				<div class="controls" data-controls="9" data-copy-skip="live"></div>
 				<p class="readout" data-readout="slopes" data-copy-skip="live"></p>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\partial_x y \approx \frac{y(x + \htmlClass{t-h}{h}) - y(x - \htmlClass{t-h}{h})}{2\htmlClass{t-h}{h}}, \qquad \partial_x y = \sum_i A_i k_i\,\hat{d}_{i,x}\cos\theta_i</code></div>
-					<p class="math-note">h is the sample spacing, θ each wave's angle inside its sine, and d̂ₓ the x part of its heading. The measured slope needs extra heights at every point; the exact one falls out of the same loop that adds the waves up, which is what the engine does for these waves.</p>
+					<p class="math-note">h is the sample spacing, θ the phase of each component and d̂ₓ the x component of its heading. The central difference requires additional height evaluations at every point; the exact slope accumulates in the same loop as the height, which is how the engine computes it for these waves.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-10" data-step="10" data-step-id="diffuse" aria-labelledby="step-10-title">
 			<article class="panel">
-				<h2 id="step-10-title">Sunlight</h2>
-				<p>Now light. The simplest rule: a point is as bright as it faces the sun. Facing it head on, full brightness; edge on, none; plus a little light from the sky everywhere so the shadows aren't black. Swing the sun round with the slider.</p>
+				<h2 id="step-10-title">Diffuse illumination</h2>
+				<p>The simplest illumination model makes each point as bright as its orientation toward the sun: full brightness when facing the sun directly and none when edge-on, together with a small ambient term for skylight so that regions facing away from the sun are not black. The slider rotates the sun.</p>
 				<div class="controls" data-controls="10" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\text{colour} = c_{\text{sea}}\,\big(a + {\max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}})}\big)</code></div>
-					<p class="math-note">n is the normal, s points at the sun and a is the soft light from the sky. For two arrows of length one, n·s (a dot product) is the cosine of the angle between them: one facing the sun, zero edge on, below zero facing away; the max keeps those faces from going darker than the sky alone. (The code also tints and brightens the sun, which only scales that term.)</p>
+					<p class="math-note">n is the unit normal, s the unit vector toward the sun and a the ambient skylight. For unit vectors the dot product n·s is the cosine of the angle between them: one when facing the sun, zero edge-on and negative when facing away. The max clamps the last case, so that no face is darker than the ambient term alone. (The implementation also applies a colour and an intensity to the sun, which scale this term.)</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-11" data-step="11" data-step-id="highlights" aria-labelledby="step-11-title">
 			<article class="panel">
-				<h2 id="step-11-title">Highlights, Fresnel and the sky</h2>
-				<p>Sunlight alone makes the sea look matte, like painted clay. Water also reflects: a hot highlight where the sun bounces straight at you, and the sky itself, mirrored more and more as you look across the surface instead of down into it. That 'more and more' is Fresnel, and the highlight follows it too, since it's a reflection of the sun. Switch each one off to see what it was doing.</p>
+				<h2 id="step-11-title">Specular reflection and the Fresnel effect</h2>
+				<p>Diffuse illumination alone gives the surface a matte appearance. Water is also reflective: it shows a specular highlight where the sun is reflected toward the viewer, and a reflection of the sky whose strength increases as the line of sight approaches grazing incidence. That angular dependence is the Fresnel effect, and it governs the highlight as well, since the highlight is a reflection of the sun. Each term can be disabled to isolate its contribution.</p>
 				<div class="controls" data-controls="11" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\text{colour} = {(1 - \htmlClass{t-fresnel}{F})}\,c_{\text{sea}}\big(a + {\max(0,\ \mathbf{n}\cdot\htmlClass{t-sun}{\mathbf{s}})}\big) + {\htmlClass{t-fresnel}{F}\big(\htmlClass{t-spec}{(\mathbf{n}\cdot\mathbf{h})^{p}} + c_{\text{sky}}\big)}, \quad \htmlClass{t-fresnel}{F} = F_0 + (1 - F_0)(1 - \mathbf{n}\cdot\mathbf{v})^5</code></div>
-					<p class="math-note">s points at the sun and v at your eye; h is halfway between them, so the highlight peaks when the sun reflects straight at you, and the power p sets how tight it is. F (Schlick's Fresnel term) is why water turns into a mirror when you look across it: F₀ is the little it reflects looking straight down, and c<sub>sky</sub> is the sky's colour in the reflected direction. The highlight is a reflection too, so F weighs it along with the sky, and the sea's own colour gets what is left.</p>
+					<p class="math-note">s points toward the sun and v toward the viewer; the half vector h lies midway between them, so the highlight peaks when the sun is reflected directly toward the viewer, and the exponent p sets its width. F, Schlick's approximation to the Fresnel term, accounts for water becoming mirror-like at grazing angles: F₀ is the reflectance at normal incidence, and c<sub>sky</sub> is the colour of the sky in the reflected direction. Because the highlight is also a reflection, F weights it together with the sky, and the water's own colour receives the remainder.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>You write this lighting yourself, in a pixel shader, one term at a time.</dd>
+						<dt>Conventional approach</dt>
+						<dd>This lighting model is written directly in a pixel shader, term by term.</dd>
 						<dt>In Roblox</dt>
-						<dd>No pixel shaders, and Roblox staff have said custom shaders aren't on the roadmap. It lights every surface with its own material model; a game hands it a few images to wrap the surface in (its colour, the fine bumps, how rough and how metallic it is, and where it glows), and Roblox does the rest.</dd>
-						<dt>What I did</dt>
-						<dd>Let Roblox do the highlight and the sky reflection, and painted roughness maps so foam looks dull and open water shines. In my Studio captures, Roblox's sky reflection got brighter toward the horizon, the way Fresnel says it should.</dd>
+						<dd>Roblox provides no pixel shaders, and Roblox staff have stated that custom shaders are not on the roadmap. Every surface is lit by Roblox's own material model: a game supplies a few images mapped onto the surface (its colour, fine-scale normals, roughness, metalness and emission), and the engine performs the shading.</dd>
+						<dt>Approach taken</dt>
+						<dd>The highlight and the sky reflection are left to Roblox's lighting, and roughness maps are painted so that foam appears matte and open water glossy. In our Studio captures, Roblox's sky reflection brightened toward the horizon, as the Fresnel term predicts.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -231,142 +231,142 @@
 
 		<section class="step" id="step-12" data-step="12" data-step-id="gerstner" aria-labelledby="step-12-title">
 			<article class="panel">
-				<p class="chapter">Chapter three · Better waves</p>
-				<h2 id="step-12-title">Sharper peaks</h2>
-				<p>Real waves have sharp tops and wide troughs, because the water moves in circles. Slide each point toward the nearest crest as well as up and the tops pinch into points; push too far and they fold over themselves. That's a Gerstner wave, and it's what this page's teaching waves have been all along, with the sideways slide set to zero until now. The original Roblox prototype's waves were Gerstner waves too.</p>
+				<p class="chapter">Chapter three · Wave shape</p>
+				<h2 id="step-12-title">Gerstner waves</h2>
+				<p>Real waves have sharp crests and broad troughs, because the water moves in approximately circular orbits. Displacing each point horizontally toward the nearest crest, as well as vertically, pinches the crests into points; excessive displacement folds the surface over itself. This is the Gerstner wave, and the illustrative waves on this page have been Gerstner waves throughout, with the horizontal displacement set to zero until now. The waves of the original Roblox prototype were Gerstner waves as well.</p>
 				<div class="controls" data-controls="12" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\mathbf{x}' = \mathbf{x} + \htmlClass{t-chop}{c}\sum_i \hat{\mathbf{d}}_i\,A_i\cos\theta_i, \qquad y = \sum_i A_i \sin\theta_i, \qquad \theta_i = k_i\,(\hat{\mathbf{d}}_i\cdot\mathbf{x}) - \omega_i t + \varphi_i</code></div>
-					<p class="math-note">θ is each wave's angle inside its sine. Each point also slides along each wave's heading d̂, by up to the choppiness c times that wave's height A: the most halfway up a slope, none on a crest or in a trough. Points on both sides of a crest slide toward it, so the tops bunch up and the troughs stretch out.</p>
+					<p class="math-note">θ is the phase of each component. Each point is also displaced along each component's heading d̂, by at most the choppiness c times that component's amplitude A: the displacement is greatest midway up a slope and zero at a crest or trough. Points on both sides of a crest move toward it, so the crests sharpen and the troughs broaden.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-13" data-step="13" data-step-id="tiling" aria-labelledby="step-13-title">
 			<article class="panel">
-				<h2 id="step-13-title">The tiling problem</h2>
-				<p>Fly up and the trick falls apart. The page keeps only the few tallest (the small ones would blur at this distance). For this page I nudged each of the Roblox ocean's waves, but not the lone sine from the start, so a whole number of its crests fits across a square tile, both ways. The FFT ocean coming up can only make waves like that, so these follow its rule. With the spread full, as it is here, they fit a 256-stud tile exactly, so the whole sea is one tile copied over and over: hard to spot from the deck, wallpaper from up here. The dashed lines are the tile's edges: the waves in one square are the waves in the next.</p>
+				<h2 id="step-13-title">Periodicity and tiling</h2>
+				<p>Viewed from altitude, the construction becomes apparent. Only the few largest components are retained here, since the smaller ones would not be resolved at this distance. For this page each of the Roblox ocean's components, though not the lone sine of the first section, has been adjusted so that a whole number of its wavelengths fits across a square tile in both directions. The FFT ocean introduced below can represent only waves of this kind, and these follow the same constraint. With the spread full, as here, they fit a 256-stud tile exactly, so the entire surface is a single tile repeated: difficult to detect at deck height, conspicuous from above. The dashed lines mark the tile's edges; the waves within one square are identical to those in the next.</p>
 				<div class="controls" data-controls="13" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_x) = y(\mathbf{x} + \htmlClass{t-tile}{L}\,\mathbf{e}_z) = y(\mathbf{x}) \quad\text{when every}\quad {\mathbf{k}_i = \frac{2\pi}{\htmlClass{t-tile}{L}}\,(m_i,\ n_i)}</code></div>
-					<p class="math-note">e<sub>x</sub> and e<sub>z</sub> are steps of one stud along x and along z, and the bold k<sub>i</sub> is wave i's wavevector: its k, pointed along its heading d̂<sub>i</sub>. Waves whose wavevectors sit on that grid all line up again after L studs. Here L is the 256-stud tile.</p>
+					<p class="math-note">e<sub>x</sub> and e<sub>z</sub> are unit steps along x and along z, and k<sub>i</sub> is the wavevector of component i: its wavenumber, directed along its heading d̂<sub>i</sub>. Waves whose wavevectors lie on this lattice all return to the same configuration after L studs. Here L is the 256-stud tile.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-14" data-step="14" data-step-id="frequency" aria-labelledby="step-14-title">
 			<article class="panel">
-				<p class="chapter">Chapter four · The real ocean</p>
-				<h2 id="step-14-title">Time and frequency</h2>
-				<p>Back to a flat graph for a minute. So far each wave has been a curve: its height along the tile. The same waves can be written another way, as a list of how much of each frequency there is, where a wave's frequency is how many times it repeats across the tile. In that list each wave is a single spike, placed at its number of repeats and as tall as the wave. That's the title: the curve is the time side (here it runs along distance, but the math is the same) and the spikes the frequency side. The chart below turns one into the other with the same transform code the ocean runs on, the FFT, which gets its own step soon; add waves with the slider and a spike appears for each.</p>
+				<p class="chapter">Chapter four · Spectral synthesis</p>
+				<h2 id="step-14-title">Spatial and frequency domains</h2>
+				<p>We return briefly to a one-dimensional plot. Thus far each set of waves has been represented as a curve: height as a function of position across the tile. The same waves can be represented equivalently as the amplitude present at each frequency, where the frequency of a wave is the number of times it repeats across the tile. In that representation each wave is a single spike, located at its number of repetitions and as tall as the wave. The curve is the spatial-domain representation (conventionally the time domain; the mathematics is identical) and the spikes are the frequency-domain representation. The chart converts one into the other with the same transform code that drives the ocean, the FFT, described in a later section; each component added with the slider contributes a further spike.</p>
 				<div class="controls" data-controls="14" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="frequency">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>The waves on the graph over one tile (top) and the same waves as spikes (bottom), worked out with the ocean's own FFT code in your browser.</figcaption>
+					<figcaption>The waves of the plot over one tile (top) and the same waves as spikes (bottom), computed with the ocean's own FFT code in this browser.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y(x) = \sum_{i=1}^{\htmlClass{t-count}{N}} A_i\,{\sin(k_i x + \varphi_i)} \;\Longleftrightarrow\; \hat{y}(k)</code></div>
-					<p class="math-note">On the left of the arrow, the waves as a curve; on the right, the same waves as one spike each, written ŷ.</p>
+					<p class="math-note">Left of the arrow, the waves as a curve; right of it, the same waves as one spike each, denoted ŷ.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-15" data-step="15" data-step-id="fourier" aria-labelledby="step-15-title">
 			<article class="panel">
-				<h2 id="step-15-title">Taking a chord apart</h2>
-				<p>Going from a curve to its spikes and back loses nothing, and that's the useful part. Think of a chord: split it into its notes, drop one, put it back together, and you get the chord without that note. Switch the tones off and on. It works the other way too: write down the spikes you want, run the transform backwards, and out comes the curve. That's the trick the rest of this chapter uses: describe the sea as spikes, then turn them into heights. The big graph still shows the last step's waves, added into one curve; the chord in the chart is the same kind of sum, made of sound.</p>
+				<h2 id="step-15-title">Fourier decomposition</h2>
+				<p>The transform from a curve to its spectrum and back is lossless, and that is the property of interest here. A musical chord illustrates it: decomposed into its notes, with one note removed and the remainder resynthesised, it yields the chord without that note. Each tone in the chart can be switched off and on. The transform also runs in the other direction: specifying the spikes and applying the inverse transform yields the curve. The remainder of this chapter rests on that fact: the sea is described in the frequency domain and transformed into heights. The main plot continues to show the previous section's waves, summed into a single curve; the chord in the chart is a sum of the same kind, composed of audio tones.</p>
 				<div class="controls" data-controls="15" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="fourier">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>Three tones summed into a chord, and the chord rebuilt from the tones still switched on (the bright line over the faint original), with each tone as a spike underneath; a switched-off tone's spike is dashed.</figcaption>
+					<figcaption>Three tones summed into a chord, and the chord resynthesised from the tones still enabled (the bright line over the faint original), with each tone shown as a spike beneath; a disabled tone's spike is dashed.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>y(t) = \sum_{j} \htmlClass{t-note}{a_j}\,{\sin(2\pi f_j t + \varphi_j)}, \qquad \hat{y} = \mathcal{F}\{y\}, \qquad y = \mathcal{F}^{-1}\{\hat{y}\}</code></div>
-					<p class="math-note">a<sub>j</sub>, f<sub>j</sub> and φ<sub>j</sub> are each tone's loudness, pitch and starting point. 𝓕 turns a signal into its frequencies and 𝓕⁻¹ turns them back; a tone switched off is a spike set to zero before going back.</p>
+					<p class="math-note">a<sub>j</sub>, f<sub>j</sub> and φ<sub>j</sub> are the amplitude, frequency and initial phase of tone j. 𝓕 maps a signal to its frequency components and 𝓕⁻¹ maps them back; a disabled tone is a spike set to zero before the inverse transform.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-16" data-step="16" data-step-id="jonswap" aria-labelledby="step-16-title">
 			<article class="panel">
-				<h2 id="step-16-title">Real ocean data</h2>
-				<p>Instead of picking waves by hand, ask oceanographers. The JONSWAP spectrum, fitted to North Sea measurements, gives the energy at each wave frequency for a wind speed and a fetch (how far the wind has blown over open water).</p>
+				<h2 id="step-16-title">The JONSWAP spectrum</h2>
+				<p>Rather than choosing components by hand, we take their distribution from oceanographic measurement. The JONSWAP spectrum, fitted to measurements in the North Sea, gives the energy at each wave frequency for a given wind speed and fetch (the distance over which the wind has blown across open water). The JONSWAP setup follows Mihelich and Tcheblokov, and the formulas, including the directional spreading, follow Horvath.</p>
 				<div class="controls" data-controls="16" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="spectrum">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>The JONSWAP energy at each wave frequency for the wind and fetch of the sea on screen, and which layer of waves carries it.</figcaption>
+					<figcaption>The JONSWAP energy at each wave frequency for the wind speed and fetch of the simulated sea, and the layer of waves that carries each band.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>S(\omega) = \frac{\alpha g^2}{\omega^5}\exp\!\left[-\frac{5}{4}\left(\frac{\omega_p}{\omega}\right)^4\right]\gamma^{\,r}, \quad \omega_p = 22\left(\frac{g^2}{\htmlClass{t-wind}{U}\,\htmlClass{t-fetch}{F}}\right)^{1/3}, \quad \alpha = 0.076\left(\frac{\htmlClass{t-wind}{U}^2}{\htmlClass{t-fetch}{F}\,g}\right)^{0.22}, \quad r = \exp\!\left[-\frac{(\omega - \omega_p)^2}{2\sigma^2\omega_p^2}\right]</code></div>
-					<p class="math-note">U is the wind speed, F the fetch and g gravity; ω<sub>p</sub> is where the energy peaks. γ = 3.3 sharpens the peak: r, the peak-shape exponent, is largest at ω<sub>p</sub> and dies away on either side of it over a width set by σ, so γ<sup>r</sup> lifts only the waves near the peak. A spreading function D(θ) fans each wave's energy out around the wind direction.</p>
+					<p class="math-note">U is the wind speed, F the fetch and g the gravitational acceleration; ω<sub>p</sub> is the frequency at which the energy peaks. The peak enhancement factor γ = 3.3 sharpens the peak: the exponent r is largest at ω<sub>p</sub> and decays on either side of it over a width set by σ, so γ<sup>r</sup> amplifies only the frequencies near the peak. A directional spreading function D(θ) distributes the energy of each frequency about the wind direction.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-17" data-step="17" data-step-id="random-sea" aria-labelledby="step-17-title">
 			<article class="panel">
-				<h2 id="step-17-title">A random ocean</h2>
-				<p>A real sea isn't a neat set of chosen waves. So each wave from the spectrum gets a random height, scattered around the size the spectrum asks for, and a random starting angle; both come from a pair of random numbers drawn from a bell curve. Here they are as arrows, held still: each arrow is one wave, its length half that wave's crest height and its angle where the wave starts. Press New sea for a different roll of the dice.</p>
+				<h2 id="step-17-title">Random amplitudes and phases</h2>
+				<p>A real sea is not a deterministic set of chosen waves. Each component drawn from the spectrum therefore receives a random amplitude, distributed about the value the spectrum prescribes, and a random initial phase; both derive from a pair of independent Gaussian random numbers, following Tessendorf (with a factor of one half in place of his one over root two, so that the variance of the field matches the spectrum). They are shown here as phasors, held stationary: each arrow is one component, its length half that component's crest height and its angle the component's initial phase. New sea draws a new realisation.</p>
 				<div class="controls" data-controls="17" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="phase" data-motion="still">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>The tallest waves in the 256-stud layer as arrows, held at their starting angles.</figcaption>
+					<figcaption>The tallest waves in the 256-stud layer as phasors, held at their initial phases.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,\htmlClass{t-seed}{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}</code></div>
-					<p class="math-note">The ξ are random numbers from a bell curve, picked by the seed (the New sea button). The random numbers come from a documented generator rather than Roblox's own, so this is the same kind of sea as the game's, not the same waves.</p>
+					<p class="math-note">The ξ are independent draws from a standard normal distribution, determined by the seed (the New sea button). The random numbers come from a documented generator rather than Roblox's own, so the result is the same kind of sea as the game's, drawn from the same spectrum, but not the same waves.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-18" data-step="18" data-step-id="time" aria-labelledby="step-18-title">
 			<article class="panel">
-				<h2 id="step-18-title">Setting it moving</h2>
-				<p>Now let the clock run. How fast each arrow turns depends only on its wave's length, a rule called the dispersion. The arrows are real waves from this sea, turning at the speeds the dispersion gives them (short waves turn fastest, though long waves travel fastest), looping every 120 s.</p>
+				<h2 id="step-18-title">Dispersion and time evolution</h2>
+				<p>Time evolution is now enabled. The rate at which each phasor rotates depends only on the wavelength of its component, through the dispersion relation. The phasors are components of this sea, rotating at the rates the dispersion relation assigns (short waves rotate fastest, although long waves travel fastest), looping every 120 s.</p>
 				<div class="controls" data-controls="18" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="phase" data-motion="turning">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>The tallest waves in the 256-stud layer as arrows, turning at the speeds the dispersion gives them, looping every 120 s.</figcaption>
+					<figcaption>The tallest waves in the 256-stud layer as phasors, rotating at the speeds the dispersion gives them, looping every 120 s.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\tilde h_0(\mathbf{k}) = \tfrac{1}{2}\,{(\xi_r + i\,\xi_i)}\sqrt{S(\mathbf{k})\,\Delta k_x\,\Delta k_z}, \quad \tilde h(\mathbf{k}, t) = \tilde h_0(\mathbf{k})\,e^{-i\omega t} + \tilde h_0^{*}(-\mathbf{k})\,e^{i\omega t}, \quad \omega = \Big\lfloor \frac{\sqrt{g k \tanh(k d)}}{\omega_0} \Big\rfloor\,\omega_0, \quad \omega_0 = \frac{2\pi}{120\ \text{s}}, \quad e^{i\theta} = \cos\theta + i\sin\theta</code></div>
-					<p class="math-note">d is the water depth the engine uses, 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves, so ω is close to √(gk) and long waves outrun short ones. ω₀ is one turn per 120 s, and the code rounds each ω down to a whole number of those (the ⌊ ⌋ brackets), so the sea repeats every 120 s. Euler's formula turns each wave into an arrow spinning in the complex plane.</p>
+					<p class="math-note">d is the water depth the engine uses, 60 studs (the engine treats a stud as a metre), deep enough that tanh(kd) is close to 1 for all but the longest waves, so ω is close to √(gk) and long waves outrun short ones. ω₀ is one turn per 120 s, and the code rounds each ω down to a whole number of those (the ⌊ ⌋ brackets), so the sea repeats every 120 s. Euler's formula expresses each component as a phasor rotating in the complex plane.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-19" data-step="19" data-step-id="fft" aria-labelledby="step-19-title">
 			<article class="panel">
-				<h2 id="step-19-title">The FFT</h2>
-				<p>Adding up thousands of waves at every point, one by one, is hopeless. The fast Fourier transform does the same sum for a whole grid at once by reusing work; set the waves per side and this page times both ways, right now, in your browser.</p>
+				<h2 id="step-19-title">The fast Fourier transform</h2>
+				<p>Evaluating the sum over thousands of components separately at every point is prohibitively expensive. The fast Fourier transform computes the same sum for an entire grid at once by reusing intermediate results. The chart times both methods in this browser for the selected number of waves per side.</p>
 				<div class="controls" data-controls="19" data-copy-skip="live"></div>
 				<figure class="chart" data-chart="transforms">
 					<div class="chart-body" data-copy-skip="live"></div>
-					<figcaption>The same sum done wave by wave and by the FFT, timed in your browser.</figcaption>
+					<figcaption>The same sum evaluated component by component and by the FFT, timed in this browser.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>h(\mathbf{x}, t) = \sum_{\mathbf{k}} \tilde h(\mathbf{k}, t)\,e^{i\,\mathbf{k}\cdot\mathbf{x}}, \qquad \underbrace{O(\htmlClass{t-n}{N}^4)}_{\text{wave by wave}} \;\to\; \underbrace{O(\htmlClass{t-n}{N}^2 \log \htmlClass{t-n}{N})}_{\text{FFT}}, \qquad \begin{aligned} X &amp;= E + W^k O \\ Y &amp;= E - W^k O \end{aligned}</code></div>
-					<p class="math-note">For an N × N grid, summing wave by wave costs N⁴ steps. The radix-2 FFT splits the sum in half again and again, and each butterfly (X and Y) gets two answers out of one multiply.</p>
+					<p class="math-note">For an N × N grid, direct summation costs N⁴ operations. The radix-2 FFT halves the sum recursively, and each butterfly (X and Y) produces two outputs from a single complex multiplication.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>The FFT runs on the GPU as a compute shader, alongside everything else.</dd>
+						<dt>Conventional approach</dt>
+						<dd>The FFT runs on the GPU as a compute shader, alongside the rest of the frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>No GPU compute. The FFT is written in Luau and runs on the CPU in Parallel Luau, on one worker Actor per layer (three on the top tier), 64 × 64 per layer.</dd>
-						<dt>What I did</dt>
-						<dd>Kept every layer at 64 × 64, so the whole sea is at most 3 × 64 × 64 = 12,288 wave components on a CPU script. Acerola's GPU ocean runs about 4 million.</dd>
-						<dt>The number</dt>
-						<dd>One 64 × 64 inverse FFT takes 1.00 ms in Studio on my MacBook Air.</dd>
+						<dd>Roblox provides no GPU compute. The FFT is written in Luau and runs on the CPU in Parallel Luau, on one worker Actor per layer (three on the top tier), 64 × 64 per layer.</dd>
+						<dt>Approach taken</dt>
+						<dd>Every layer is kept at 64 × 64, so the whole sea is at most 3 × 64 × 64 = 12,288 wave components on a CPU script. For comparison, Acerola's GPU ocean runs about 4 million.</dd>
+						<dt>Measurement</dt>
+						<dd>One 64 × 64 inverse FFT takes 1.00 ms in Studio on the author's MacBook Air.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -374,38 +374,38 @@
 
 		<section class="step" id="step-20" data-step="20" data-step-id="choppiness" aria-labelledby="step-20-title">
 			<article class="panel">
-				<h2 id="step-20-title">Choppiness</h2>
-				<p>So far the FFT only moves points up and down. Run another set of transforms over the same waves and you get a sideways push for every point, toward the crests, which is what sharpens them. It's the Gerstner idea again, done for the whole spectrum at once. Drag Choppiness down to zero and the crests go soft again; push it up and they sharpen until they start to fold over.</p>
+				<h2 id="step-20-title">Horizontal displacement</h2>
+				<p>Thus far the FFT displaces points only vertically. A further set of transforms over the same spectrum yields a horizontal displacement for every point, directed toward the crests, which sharpens them: the Gerstner construction, applied to the entire spectrum at once. Reducing the Choppiness slider to zero restores the rounded crests; increasing it sharpens them until the surface begins to fold.</p>
 				<div class="controls" data-controls="20" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\mathbf{D}(\mathbf{x}, t) = \sum_{\mathbf{k}} i\,\frac{\mathbf{k}}{\lvert\mathbf{k}\rvert}\,\tilde h(\mathbf{k}, t)\,e^{i\,\mathbf{k}\cdot\mathbf{x}}, \qquad \mathbf{x}' = \mathbf{x} + \htmlClass{t-chop}{c}\,\mathbf{D}</code></div>
-					<p class="math-note">D is the sideways push and c, the choppiness, scales it. Tessendorf's notes write the push with −i; the code uses +i, which moves water toward the crests, the way a Gerstner wave does.</p>
+					<p class="math-note">D is the horizontal displacement and c, the choppiness, scales it. Tessendorf writes the displacement with −i; the implementation uses +i, which moves water toward the crests, as a Gerstner wave does.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-21" data-step="21" data-step-id="layers" aria-labelledby="step-21-title">
 			<article class="panel">
-				<h2 id="step-21-title">Three layers of waves</h2>
-				<p>One 64 × 64 grid can't hold both the long swells and the small ripples, so there are three, tiling patches of 256, 64 and 16 studs. The two smaller layers pile detail on top of the big one, so the 256-stud pattern gets harder to spot: it's still there if you look for it. That's how 12,288 wave components pass for far more.</p>
+				<h2 id="step-21-title">Three layers</h2>
+				<p>A single 64 × 64 grid cannot resolve both the long swell and the short ripples, so three grids, or layers (cascades in the code), are used, tiling patches of 256, 64 and 16 studs. The two smaller layers superimpose detail on the largest, so the 256-stud pattern becomes harder to detect, although it remains present on close inspection. In this way 12,288 wave components pass for far more.</p>
 				<div class="controls" data-controls="21" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>h(\mathbf{x}, t) = \sum_{j=1}^{3} h_j(\mathbf{x}, t), \qquad h_j \text{ keeps only } k_j^{\min} \le \lvert\mathbf{k}\rvert &lt; k_j^{\max}, \qquad \htmlClass{t-layer}{L_j} = 256,\ 64,\ 16</code></div>
-					<p class="math-note">Each layer carries only the wavelengths that suit its patch, so no wave is counted twice.</p>
+					<p class="math-note">Each layer retains only the wavelengths suited to the size of its patch, so no component is counted twice.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>Each layer is a GPU pass, and they all finish together every frame.</dd>
+						<dt>Conventional approach</dt>
+						<dd>Each layer is a GPU pass, and all of them complete within every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>The FFT runs on one worker Actor per layer (three on the top tier), and they take turns: each layer got a fresh result only every third frame.</dd>
-						<dt>What I did</dt>
-						<dd>Fade from each layer's old result to its new one, counted in frames.</dd>
-						<dt>The number</dt>
-						<dd>Before the fade it looked like 20 fps to me: the game ran at about 44 fps, but the waves only moved 15 times a second.</dd>
+						<dd>The FFT runs on one worker Actor per layer (three on the top tier), and the layers are computed in turn: each layer received a fresh result only every third frame.</dd>
+						<dt>Approach taken</dt>
+						<dd>Each layer's previous result is cross-faded to its new one over an interval counted in frames.</dd>
+						<dt>Measurement</dt>
+						<dd>Before the cross-fade, the motion looked like 20 fps: the game ran at about 44 fps, but the waves updated only 15 times a second.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -413,45 +413,45 @@
 
 		<section class="step" id="step-22" data-step="22" data-step-id="fields" aria-labelledby="step-22-title">
 			<article class="panel">
-				<p class="chapter">Chapter five · Textures</p>
-				<h2 id="step-22-title">The answer is a grid of numbers</h2>
-				<p>Here's what the FFT actually hands back: not a surface, but grids of numbers, one number per little square, like the pixels of a picture. Graphics people call a grid like that a texture, and each square a texel. A texture can hold colours, but these hold heights, slopes and sideways pushes, a set for each layer. Here are three of them for the biggest layer, live in your browser, drawn as pictures: blue below zero, pale at zero, amber above.</p>
+				<p class="chapter">Chapter five · Surface representation</p>
+				<h2 id="step-22-title">Output fields</h2>
+				<p>The FFT does not return a surface but grids of values, one per cell, analogous to the pixels of an image. In graphics such a grid is called a texture, and each of its cells a texel. A texture may hold colours, but these hold heights, slopes and horizontal displacements, one set per layer. Three of them are shown for the largest layer, computed live in this browser and rendered as images: blue below zero, pale at zero, amber above.</p>
 				<div class="controls" data-controls="22" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="fields">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>The 256-stud layer's height, slope and sideways push, straight from the engine running in your browser, as they are right now.</figcaption>
+					<figcaption>The 256-stud layer's height, slope and horizontal displacement, computed by the engine running in this browser at the present moment.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>h_{ij},\ \ \partial_x h_{ij},\ \ D_{x,ij}, \quad i, j = 0 \ldots N-1</code></div>
-					<p class="math-note">The height h, the slope along x and the sideways push along x, one value per grid cell: column i, row j of an N × N grid.</p>
+					<p class="math-note">The height h, the slope along x and the horizontal displacement along x, one value per cell: column i, row j of an N × N grid.</p>
 				</details>
 			</article>
 		</section>
 
 		<section class="step" id="step-23" data-step="23" data-step-id="sampling" aria-labelledby="step-23-title">
 			<article class="panel">
-				<h2 id="step-23-title">Reading between the grid points</h2>
-				<p>Reading a value out of a texture is called sampling it. A point the surface is built from (the next step shows them) doesn't have to sit exactly on the grid, and when it doesn't, it blends the four grid values around it, weighted by how close it is. That's bilinear sampling. The FFT's grid also repeats: its last column runs straight on into its first. So a point past the last column wraps round and blends with the first one, and the sea tiles without a seam. The dot swings back and forth across that edge, which is drawn as a dashed line.</p>
+				<h2 id="step-23-title">Bilinear sampling</h2>
+				<p>Reading a value from a texture is called sampling. A mesh vertex (the vertices are shown in the next section) need not coincide with a grid point; where it does not, its value is interpolated from the four surrounding grid values, weighted by proximity. This is bilinear sampling. The FFT grid is also periodic: its last column continues into its first. A point beyond the last column therefore wraps around and interpolates with the first, so the surface tiles without a seam. The marker oscillates across that boundary, which is drawn as a dashed line.</p>
 				<div class="controls" data-controls="23" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="sampling">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>A close-up of the 256-stud layer's height grid, worked out in your browser: one point, the four grid values it blends and how much of each (the amber numbers), the tile's edge dashed, and under it the blend beside the engine's own answer for the same point.</figcaption>
+					<figcaption>A close-up of the 256-stud layer's height grid, computed in this browser: one sample point, the four grid values it interpolates and their weights (the amber numbers), the tile boundary dashed, and beneath it the interpolated value beside the engine's own result for the same point.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>h(u, v) = {(1-f_u)(1-f_v)\,h_{00}} + {f_u(1-f_v)\,h_{10}} + {(1-f_u)f_v\,h_{01}} + {f_u f_v\,h_{11}}, \quad \text{indices} \bmod N</code></div>
-					<p class="math-note">f<sub>u</sub> and f<sub>v</sub> are how far the point sits between its grid neighbours; the indices wrap round at the grid's edge.</p>
+					<p class="math-note">f<sub>u</sub> and f<sub>v</sub> are the fractional position of the point between its grid neighbours; the indices wrap at the boundary of the grid.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>The graphics card's texture hardware does this blend for free, for every vertex and every pixel, wrap-around included.</dd>
+						<dt>Conventional approach</dt>
+						<dd>The texture-filtering hardware of the GPU performs this interpolation at no cost, for every vertex and every pixel, wrap-around addressing included.</dd>
 						<dt>In Roblox</dt>
-						<dd>Roblox's renderer samples the images I hand it (more on those in a moment), but I can't write a shader, so nothing samples my height grids for the mesh's points.</dd>
-						<dt>What I did</dt>
-						<dd>Wrote the blend in Luau and ran it for every point of the water that a finer ring doesn't cover, on screen or off, for each layer that point's ring uses, every frame (the outermost ring every other frame).</dd>
+						<dd>Roblox's renderer samples the images supplied to it (described in the section on surface maps), but without shader access nothing samples the height grids for the vertices of the mesh.</dd>
+						<dt>Approach taken</dt>
+						<dd>The interpolation is written in Luau and evaluated for every vertex not covered by a finer ring, whether on screen or not, for each layer that the vertex's ring uses, every frame (the outermost ring every other frame).</dd>
 					</dl>
 				</aside>
 			</article>
@@ -459,25 +459,25 @@
 
 		<section class="step" id="step-24" data-step="24" data-step-id="mesh" aria-labelledby="step-24-title">
 			<article class="panel">
-				<h2 id="step-24-title">The mesh</h2>
-				<p>All those numbers end up on a mesh: rings of points centred where the camera looks, each ring twice as coarse as the one inside it, so the detail goes where you're looking. The rings snap to a fixed grid as the camera moves, so the waves don't swim (slide about as the points move under them). Here the sea is calmed right down and seen from above so the rings show: nested squares, the finest in the middle.</p>
+				<h2 id="step-24-title">Mesh structure</h2>
+				<p>The sampled values are applied to a mesh: concentric rings of vertices centred on the point the camera views, each ring with twice the vertex spacing of the ring inside it, so that resolution is concentrated where the viewer is looking. The rings snap to a fixed world grid as the camera moves, which prevents the waves from swimming (appearing to slide as the vertices move beneath them). Here the sea is calmed and viewed from above so that the rings are visible: nested squares, finest at the centre.</p>
 				<div class="controls" data-controls="24" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>\Delta_r = 2^r\ \text{studs}, \qquad \mathbf{c}_r = 2\Delta_r\,\operatorname{round}\big(\mathbf{p} / 2\Delta_r\big)</code></div>
-					<p class="math-note">Ring r has its points Δ<sub>r</sub> studs apart, and its centre snaps to the nearest multiple of twice Δ<sub>r</sub> under p, the point the camera looks at. Twice, so the edge of each ring lands on the next ring's points and the two keep meeting.</p>
+					<p class="math-note">Ring r has its vertices Δ<sub>r</sub> studs apart, and its centre snaps to the point of the lattice of spacing twice Δ<sub>r</sub> nearest to p, the point the camera views. The factor of two ensures that the boundary of each ring falls on vertices of the next, so that adjacent rings continue to meet.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>You hand the graphics card a mesh once, and tessellation hardware adds triangles near the camera and drops them far away, on the fly.</dd>
+						<dt>Conventional approach</dt>
+						<dd>A mesh is uploaded to the GPU once, and tessellation hardware adds triangles near the camera and removes them at a distance, dynamically.</dd>
 						<dt>In Roblox</dt>
-						<dd>There's no way to give the GPU your own moving mesh, and no tessellation. The surface has to be built by a script while the game runs, with EditableMesh, and whatever detail it has must already be in the mesh.</dd>
-						<dt>What I did</dt>
-						<dd>Rings of patches around the camera, each ring twice as coarse as the one inside it, snapping to a fixed world grid as the camera moves so nothing swims, plus a horizon that reaches the edge of the world.</dd>
-						<dt>The number</dt>
-						<dd>224 patches in 5 rings on the top tier. Points 2, 4, 8, 16 and 32 studs apart, ring by ring.</dd>
+						<dd>Roblox provides no means of supplying a custom deforming mesh to the GPU, and no tessellation. The surface must be built by a script at run time with EditableMesh, and any detail it has must already be present in the mesh.</dd>
+						<dt>Approach taken</dt>
+						<dd>Rings of patches around the camera, each ring twice as coarse as the one inside it, snapped to a fixed world grid as the camera moves so that nothing swims, together with a horizon that extends to the edge of the world.</dd>
+						<dt>Measurement</dt>
+						<dd>224 patches in 5 rings on the top tier, with vertex spacings of 2, 4, 8, 16 and 32 studs, ring by ring.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -485,29 +485,29 @@
 
 		<section class="step" id="step-25" data-step="25" data-step-id="painted" aria-labelledby="step-25-title">
 			<article class="panel">
-				<h2 id="step-25-title">Painted maps</h2>
-				<p>The grids so far move the mesh. The look comes from a second kind of texture: images Roblox wraps onto the mesh and samples itself, pixel by pixel, on the graphics card, with a blend much like the one in the step above. Three of them are shown here: the colour, a glow mask (how much each spot glows) and the ripples, a normal map, which keeps a direction in every pixel so the light sees bumps far smaller than the mesh's triangles. I can't work those out pixel by pixel in Roblox, so two worker threads paint them into images and hand them over a piece at a time. This page does the same. These are its real maps, live in your browser, as its painters leave them.</p>
+				<h2 id="step-25-title">Surface maps</h2>
+				<p>The grids described so far displace the mesh. The appearance derives from a second kind of texture: images that Roblox maps onto the mesh and samples itself, per pixel, on the GPU, with an interpolation much like that of the section above. Three are shown here: the colour map, an emission mask (the strength of the glow at each point) and the normal map, which stores a direction in every texel so that the lighting responds to detail far finer than the triangles of the mesh. Roblox does not allow these to be computed per pixel, so two worker threads paint them into images and upload them a portion at a time. This page does the same; the maps shown are its own, live in this browser, as its painters produce them.</p>
 				<div class="controls" data-controls="25" data-copy-skip="live"></div>
 				<figure class="inset" data-inset="painted">
 					<div class="inset-body" data-copy-skip="live"></div>
-					<figcaption>The colour map, the glow mask and the ripples (the normal map), as this page's painters are making them right now in your browser, shrunk to fit.</figcaption>
+					<figcaption>The colour map, the emission mask and the normal map, as this page's painter workers are producing them in this browser, reduced to fit.</figcaption>
 				</figure>
 				<details class="math">
-					<summary>The math</summary>
-					<div class="tex" data-copy-skip="math"><code>\text{ripple rgb} = \tfrac{1}{2}(n_x,\ n_z,\ n_y) + \tfrac{1}{2}</code></div>
-					<p class="math-note">Each ripple-map pixel stores the surface's direction as a colour: the normal's x, z and y, each squeezed from between minus one and one into the range a pixel can hold. (z before y because a normal map keeps 'straight up' in its third channel, blue.)</p>
+					<summary>Mathematical detail</summary>
+					<div class="tex" data-copy-skip="math"><code>\text{normal rgb} = \tfrac{1}{2}(n_x,\ n_z,\ n_y) + \tfrac{1}{2}</code></div>
+					<p class="math-note">Each texel of the normal map encodes the surface normal as a colour: its x, z and y components, each remapped from the signed unit interval to the range a texel can store. (z precedes y because a normal map stores the vertical direction in its third, blue, channel.)</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>A pixel shader works out the colour of every pixel on screen, every frame.</dd>
+						<dt>Conventional approach</dt>
+						<dd>A pixel shader computes the colour of every pixel on screen, every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>No pixel shaders. Colour has to be painted into an image and wrapped onto the mesh, and ripples come from a normal map. A game script can't swap a material's images either (only plugins can): every image has to be handed over the moment the material is created, and after that I can only rewrite its pixels. That's also the only way the normal map worked on a mesh built by code; setting it afterwards, as a plugin can, broke the shine.</dd>
-						<dt>What I did</dt>
-						<dd>Paint the colour, glow mask and ripple maps on two worker threads and each frame hand Roblox part of them: one band of the colour map, and the glow mask or the ripple map in turn.</dd>
-						<dt>The number</dt>
-						<dd>Measured before I added foam, back when the game handed Roblox one whole image a frame: 0.037 ms of script time in Studio. Now each frame carries a band of the colour map and the glow mask or the ripple map (and once a lap, the foam's roughness maps), and I haven't timed that on its own.</dd>
+						<dd>Roblox provides no pixel shaders. Colour must be painted into an image and mapped onto the mesh, and fine detail must come from a normal map. A game script also cannot replace the images of a material (only plugins can): every image must be supplied when the material is created, after which only its pixels can be rewritten. That was also the only way the normal map functioned on a script-built mesh; assigning it afterwards, as a plugin can, broke the specular response.</dd>
+						<dt>Approach taken</dt>
+						<dd>The colour map, emission mask and normal map are painted on two worker threads, and each frame a portion is uploaded to Roblox: one band of the colour map, and alternately the emission mask or the normal map.</dd>
+						<dt>Measurement</dt>
+						<dd>Measured before foam was added, when one whole image was uploaded per frame: 0.037 ms of script time in Studio. Each frame now uploads a band of the colour map and either the emission mask or the normal map (and, once per cycle, the roughness maps of the foam); that cost has not been measured separately.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -515,25 +515,25 @@
 
 		<section class="step" id="step-26" data-step="26" data-step-id="foam" aria-labelledby="step-26-title">
 			<article class="panel">
-				<p class="chapter">Chapter six · The look</p>
+				<p class="chapter">Chapter six · Appearance</p>
 				<h2 id="step-26-title">Foam</h2>
-				<p>Where a wave gets steep enough to fold, it breaks, and breaking water turns white. The math can spot exactly where the surface squeezes together; each frame adds foam there and old foam fades a little, so it trails off in streaks.</p>
+				<p>Where a wave steepens enough to fold, it breaks, and breaking water appears white. The Jacobian determinant of the horizontal displacement identifies exactly where the surface is compressed; each frame foam is added there and existing foam decays slightly, so that it trails off in streaks.</p>
 				<div class="controls" data-controls="26" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>J = {(1 + c\,\partial_x D_x)(1 + c\,\partial_z D_z)} - {(c\,\partial_x D_z)^2}, \qquad f \leftarrow \operatorname{clamp}\!\big(\htmlClass{t-fade}{\delta}\,f + \beta\,{\max(0,\ \htmlClass{t-whitecap}{w} - J)},\ 0,\ 1\big)</code></div>
-					<p class="math-note">J (the Jacobian) measures how much the sideways push (c times D, from the choppiness step) squeezes the surface, and drops below the whitecap level w where the water folds. (∂<sub>x</sub>D<sub>z</sub> and ∂<sub>z</sub>D<sub>x</sub> are equal, hence the square.) f is the foam: it grows there by β times how far J is under w, and everywhere it keeps a fraction δ of itself each step.</p>
+					<p class="math-note">J, the Jacobian determinant of the horizontal mapping from x to x + cD, measures how strongly the horizontal displacement (c times D, from the section on horizontal displacement) compresses the surface, and falls below the whitecap threshold w where the surface folds. (∂<sub>x</sub>D<sub>z</sub> and ∂<sub>z</sub>D<sub>x</sub> are equal, hence the square.) f is the foam coverage: it grows by β times the amount by which J falls below w, and everywhere it retains a fraction δ of itself each step.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
-						<dd>Foam lives in a texture the GPU updates in place, every frame.</dd>
+						<dt>Conventional approach</dt>
+						<dd>Foam is held in a texture that the GPU updates in place, every frame.</dd>
 						<dt>In Roblox</dt>
-						<dd>No pixel shaders again: foam has to be painted into the colour map like everything else.</dd>
-						<dt>What I did</dt>
-						<dd>Run the foam on a painter worker and paint it into the colour map a quarter at a time.</dd>
-						<dt>The number</dt>
+						<dd>Without pixel shaders, foam must be painted into the colour map along with everything else.</dd>
+						<dt>Approach taken</dt>
+						<dd>The foam is simulated on a painter worker and painted into the colour map one quarter at a time.</dd>
+						<dt>Measurement</dt>
 						<dd>A 256 × 256 foam field, painted into the 512 × 512 colour map.</dd>
 					</dl>
 				</aside>
@@ -542,25 +542,25 @@
 
 		<section class="step" id="step-27" data-step="27" data-step-id="glow" aria-labelledby="step-27-title">
 			<article class="panel">
-				<h2 id="step-27-title">Glow</h2>
-				<p>The last touch is the one Sea of Thieves is famous for: wave tops glow blue-green when the sun shines through them. It's light scattering inside the water, strongest near the crests when you look toward the sun.</p>
+				<h2 id="step-27-title">Scattered light</h2>
+				<p>The final term is the effect for which Sea of Thieves is known: wave crests glow blue-green when the sun shines through them. It approximates light scattered within the water, and is strongest near the crests when the viewer faces the sun. The term is adapted from the first scattering term of Mihelich and Tcheblokov, with different exponents and a height mask of its own.</p>
 				<div class="controls" data-controls="27" data-copy-skip="live"></div>
 				<details class="math">
-					<summary>The math</summary>
+					<summary>Mathematical detail</summary>
 					<div class="tex" data-copy-skip="math"><code>E = \htmlClass{t-glow}{\kappa}\,\max(0,\ -\mathbf{s}\cdot\mathbf{v})^{3}\,\big(\tfrac{1}{2} - \tfrac{1}{2}\,\htmlClass{t-sun}{s_y}\big), \qquad \text{glow} = E \cdot M(h)</code></div>
-					<p class="math-note">κ is the glow strength. v points from the water to your eye and s toward the sun, so E is largest looking into a low sun. M(h) is a mask from the wave's height above the average surface: crests glow, troughs don't.</p>
+					<p class="math-note">κ is the glow strength. v points from the water toward the viewer and s toward the sun, so E is largest when looking toward a low sun. M(h) is a mask derived from the height of the wave above the mean surface: crests glow and troughs do not.</p>
 				</details>
 				<aside class="card">
-					<h3>Roblox says no</h3>
+					<h3>Platform constraint</h3>
 					<dl>
-						<dt>Normally</dt>
+						<dt>Conventional approach</dt>
 						<dd>A lighting hook or a pixel shader adds the scattered light, pixel by pixel.</dd>
 						<dt>In Roblox</dt>
-						<dd>No lighting hooks. The only thing a script can turn is how strongly each material glows.</dd>
-						<dt>What I did</dt>
-						<dd>An emissive mask painted from the waves, plus one glow strength per patch, set on 232 separate materials on the top tier (224 patches plus 8 horizon pieces) every frame. Sea of Thieves' published mask measured wrong on my waves (it lit their sides, not their crests), so the mask is height above the average surface instead.</dd>
-						<dt>The number</dt>
-						<dd>Those 232 glow writes take 0.062 ms a frame in Studio.</dd>
+						<dd>Roblox provides no lighting hooks. The only relevant quantity a script can vary is the emission strength of each material.</dd>
+						<dt>Approach taken</dt>
+						<dd>An emission mask painted from the waves, combined with one glow strength per patch, set on 232 separate materials on the top tier (224 patches plus 8 horizon pieces) every frame. The mask published for Sea of Thieves performed poorly on these waves when measured (it lit their flanks rather than their crests), so the mask is derived instead from height above the mean surface.</dd>
+						<dt>Measurement</dt>
+						<dd>The 232 glow writes take 0.062 ms a frame in Studio.</dd>
 					</dl>
 				</aside>
 			</article>
@@ -568,8 +568,8 @@
 
 		<section class="step step-finale" id="step-28" data-step="28" data-step-id="finale" aria-labelledby="step-28-title">
 			<article class="panel">
-				<h2 id="step-28-title">The whole thing</h2>
-				<p>That's all of it at once: layers of FFT waves on the CPU, foam, glow and painted maps, with a script moving every point. On the top tier that's three layers, 232 materials and 18,144 points. Scroll back up any time; every step still works.</p>
+				<h2 id="step-28-title">The complete system</h2>
+				<p>All components together: layers of FFT waves computed on the CPU, foam, scattered light and painted surface maps, with a script displacing every vertex. On the top tier this amounts to three layers, 232 materials and 18,144 vertices. Every preceding section remains interactive.</p>
 				<div class="controls" data-controls="28" data-copy-skip="live"></div>
 				<div class="render-mode" data-render-mode hidden>
 					<p class="render-mode-label">Rendering</p>
@@ -577,63 +577,63 @@
 						<button type="button" role="radio" aria-checked="true" data-mode="roblox">Roblox mode</button>
 						<button type="button" role="radio" aria-checked="false" data-mode="unleashed">Unleashed</button>
 					</div>
-					<p>Unleashed runs the same wave math through GPU shaders, the way a normal engine would. The gap between the two is what Roblox costs.</p>
+					<p>Unleashed evaluates the same wave model with GPU shaders, as a conventional engine would; the difference between the two modes is the cost the platform imposes.</p>
 				</div>
 			</article>
 
 			<section class="block" id="live" aria-labelledby="live-title">
-				<h3 id="live-title">How it's running for you</h3>
-				<p class="dim">Measured in your browser, right now.</p>
+				<h3 id="live-title">Performance in this browser</h3>
+				<p class="dim">Measured live in this browser.</p>
 				<dl class="live" data-live data-copy-skip="live"></dl>
-				<p data-live-phone hidden>Your screen looks like a phone's, so the page picked the lighter tier by rule: 6,480 points instead of 18,144, and two layers of waves instead of three. I haven't measured this ocean on a phone myself yet.</p>
-				<p data-live-none hidden>The live ocean isn't running in this browser, so there's nothing to measure.</p>
-				<p>For comparison, in a Roblox Studio playtest on my MacBook Air, on the top tier, the ocean just before I added foam held 60 fps: a 16.65 ms median frame with 2.81 ms of script time. That's with native code on, and I haven't measured a live Roblox client yet.</p>
-				<p>I matched this page's look to Studio captures over three rounds of lighting changes. My verdict: looks pretty good. It isn't pixel for pixel the same, and can't be: a browser doesn't light things the way Roblox does.</p>
+				<p data-live-phone hidden>This screen resembles a phone's, so the page selected the lighter tier by rule: 6,480 vertices instead of 18,144, and two layers of waves instead of three. The ocean has not yet been measured on a phone.</p>
+				<p data-live-none hidden>The live simulation is not running in this browser, so there is nothing to measure.</p>
+				<p>For comparison, in a Roblox Studio playtest on the author's MacBook Air at the top tier, the ocean as it stood before foam was added held 60 fps: a 16.65 ms median frame with 2.81 ms of script time. These figures are with native code generation enabled; a live Roblox client has not yet been measured.</p>
+				<p>The appearance of this page was matched to Studio captures over three rounds of lighting adjustment. Judged by eye, the match is close but not exact, and cannot be exact: a browser does not shade surfaces as Roblox does.</p>
 			</section>
 
 			<section class="block" id="footage" aria-labelledby="footage-title" hidden>
-				<h3 id="footage-title">The real thing, in Roblox Studio</h3>
-				<p>Recorded in Studio, with the camera flown along fixed paths.</p>
+				<h3 id="footage-title">Recordings in Roblox Studio</h3>
+				<p>Recorded in Studio, with the camera following fixed paths.</p>
 				<div class="clips" data-clips></div>
 			</section>
 
 			<section class="block" id="proof-block" aria-labelledby="proof-title">
-				<h3 id="proof-title">This is my actual Roblox code</h3>
-				<p>The panel below runs the ocean's real Luau modules in your browser, on a Luau interpreter compiled to WebAssembly, next to this page's JavaScript version of the same code, and compares what they produce. The Luau takes well under a second on my laptop once it has loaded; the JavaScript takes milliseconds.</p>
-				<p>When I checked six wave layers (the code calls them cascades) across four seeds, all 196,608 float32 values matched bit for bit, and so did the painted maps.</p>
+				<h3 id="proof-title">Verification against the Luau source</h3>
+				<p>The panel below executes the ocean's Luau modules from the Roblox game in this browser, on a Luau interpreter compiled to WebAssembly, alongside this page's JavaScript port of the same code, and compares their outputs. Once loaded, the Luau run takes well under a second on the author's laptop; the JavaScript run takes milliseconds.</p>
+				<p>When six wave layers (cascades, in the code) were checked across four seeds, all 196,608 float32 values matched bit for bit, and so did the painted maps.</p>
 				<div id="proof" data-copy-skip="live"></div>
 			</section>
 
-			<p class="play-row"><a id="play" class="play" rel="noopener" target="_blank" hidden>Play it in Roblox</a></p>
+			<p class="play-row"><a id="play" class="play" rel="noopener" target="_blank" hidden>Open the place in Roblox</a></p>
 
 			<section class="block" id="recap" aria-labelledby="recap-title">
-				<h3 id="recap-title">Every time Roblox said no</h3>
+				<h3 id="recap-title">Summary of platform constraints</h3>
 				<ul>
-					<li data-card="into-3d">No vertex shaders: a script moves every point, every frame (the farthest ring every other frame).</li>
-					<li data-card="many-waves">No shader to spread the waves over: each extra wave is another pass of a Luau loop over every point, so the count stays down.</li>
-					<li data-card="highlights">No pixel shaders for light: Roblox's own lighting does the highlight and the sky reflection.</li>
-					<li data-card="fft">No GPU compute: the FFT runs in Luau on a worker Actor per layer.</li>
-					<li data-card="layers">Workers take turns: a frame-counted fade hides it.</li>
-					<li data-card="sampling">No texture reads from my own code: the heights are blended in Luau, point by point.</li>
-					<li data-card="mesh">No moving meshes on the GPU and no tessellation: rings of patches built with EditableMesh.</li>
-					<li data-card="painted">No pixel shaders: colour, glow and ripples are painted into images.</li>
-					<li data-card="painted">No texture swaps from game scripts: every image is handed over up front.</li>
-					<li data-card="foam">No pixel shaders for foam either: it's painted into the colour map, a quarter at a time.</li>
-					<li data-card="glow">No lighting hooks: 232 materials on the top tier, each with its own glow.</li>
+					<li data-card="into-3d">No vertex shaders: a script displaces every vertex, every frame (the outermost ring every other frame).</li>
+					<li data-card="many-waves">No GPU parallelism for the wave sum: each additional component is another pass of a Luau loop over every vertex, so the count is kept low.</li>
+					<li data-card="highlights">No pixel shaders for lighting: Roblox's own material model provides the highlight and the sky reflection.</li>
+					<li data-card="fft">No GPU compute: the FFT runs in Luau on one worker Actor per layer.</li>
+					<li data-card="layers">Layers are computed in turn: a cross-fade counted in frames conceals the staggered updates.</li>
+					<li data-card="sampling">No texture sampling from scripts: the heights are interpolated in Luau, vertex by vertex.</li>
+					<li data-card="mesh">No custom deforming meshes on the GPU and no tessellation: rings of patches are built with EditableMesh.</li>
+					<li data-card="painted">No pixel shaders: colour, emission and normals are painted into images.</li>
+					<li data-card="painted">No texture replacement from game scripts: every image is supplied when the material is created.</li>
+					<li data-card="foam">No pixel shaders for foam: it is painted into the colour map, one quarter at a time.</li>
+					<li data-card="glow">No lighting hooks: 232 materials on the top tier, each with its own emission strength.</li>
 				</ul>
 			</section>
 
 			<section class="block" id="believed" aria-labelledby="believed-title">
-				<h3 id="believed-title">Things we believed about Roblox that turned out false</h3>
-				<p>Each of these was treated as fact until a test said otherwise.</p>
+				<h3 id="believed-title">Assumptions refuted by testing</h3>
+				<p>Each of the following was treated as fact until a test showed otherwise.</p>
 				<ul>
-					<li><strong>EditableMesh is capped at 8 meshes per player.</strong> It's a shared memory budget; fixed-size meshes are charged what they really use.</li>
-					<li><strong>A script can give a material an editable image by setting its ColorMapContent.</strong> Only plugins can do that; a game script has to use CreateSurfaceAppearanceAsync.</li>
-					<li><strong>Normal maps don't work on meshes built by code.</strong> They do, if the map is passed in when the material is created.</li>
-					<li><strong>Luau costs about 0.1 microseconds per arithmetic operation.</strong> It's about 0.0026 microseconds, roughly 40 times faster.</li>
-					<li><strong>Texture coordinates stay precise far from the origin.</strong> At texture coordinates of 100,000 the texels tore apart, so the sea re-bases them by whole tiles.</li>
-					<li><strong>Normal maps show at any distance.</strong> It depends on the graphics quality: at level 6 the ripples are gone by 170 studs.</li>
-					<li><strong>A running Studio picks up a newly installed plugin.</strong> It doesn't; restart it.</li>
+					<li><strong>EditableMesh is capped at 8 meshes per player.</strong> It is a shared memory budget; fixed-size meshes are charged for the memory they actually use.</li>
+					<li><strong>A script can assign an editable image to a material by setting its ColorMapContent.</strong> Only plugins can; a game script must use CreateSurfaceAppearanceAsync.</li>
+					<li><strong>Normal maps do not work on script-built meshes.</strong> They do, provided the map is supplied when the material is created.</li>
+					<li><strong>Luau costs about 0.1 microseconds per arithmetic operation.</strong> The measured cost is about 0.0026 microseconds, roughly 40 times faster.</li>
+					<li><strong>Texture coordinates remain precise far from the origin.</strong> At texture coordinates of 100,000 the texels tore apart, so the surface re-bases its coordinates by whole tiles.</li>
+					<li><strong>Normal maps are visible at any distance.</strong> Visibility depends on the graphics quality level: at level 6 the ripples are gone by 170 studs.</li>
+					<li><strong>A running Studio session loads a newly installed plugin.</strong> It does not; Studio must be restarted.</li>
 				</ul>
 			</section>
 
@@ -643,6 +643,7 @@
 					<li><a href="https://www.youtube.com/watch?v=PH9q0HNBjT4">How Games Fake Water</a>, Acerola</li>
 					<li><a href="https://www.youtube.com/watch?v=yPfagLeUa7k">I Tried Simulating The Entire Ocean</a>, Acerola</li>
 					<li><a href="https://jtessen.people.clemson.edu/reports/papers_files/coursenotes2004.pdf">Simulating Ocean Water</a>, Jerry Tessendorf</li>
+					<li><a href="https://doi.org/10.1145/2791261.2791267">Empirical Directional Wave Spectra for Computer Graphics</a>, Christopher J. Horvath</li>
 					<li><a href="https://gpuopen.com/gdc-presentations/2019/gdc-2019-agtd6-interactive-water-simulation-in-atlas.pdf">Wakes, Explosions and Lighting: Interactive Water Simulation in Atlas</a>, Mark Mihelich and Tim Tcheblokov</li>
 					<li><a href="https://history.siggraph.org/wp-content/uploads/2022/09/2018-Talks-Ang_The-Technical-Art-of-Sea-of-Thieves.pdf">The Technical Art of Sea of Thieves</a>, Nigel Ang and Andrew Catling</li>
 					<li><a href="https://github.com/howhow2315/jonswap-ocean">JONSWAP-Ocean</a>, howhow2315</li>

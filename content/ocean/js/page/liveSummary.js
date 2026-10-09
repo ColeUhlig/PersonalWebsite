@@ -24,7 +24,7 @@ function computedOn(status) {
 function timingRows(report, resting) {
 	const fft = ms(report.cascadeMs);
 	return [
-		{ label: 'Writing the points', value: ms(report.writeMs) },
+		{ label: 'Writing the vertices', value: ms(report.writeMs) },
 		{ label: 'Handing the maps to the painters', value: ms(report.paintMs) },
 		{ label: 'Setting the glow', value: ms(report.strengthMs) },
 		{ label: 'Drawing the frame (CPU side)', value: ms(report.renderMs) },
@@ -42,7 +42,7 @@ export function summarizeLive({ status, report, fps, paused = false }) {
 	const rows = [
 		{ label: 'Frame rate', value: fpsText(fps) },
 		{ label: 'Quality tier', value: phoneRule ? `${status.tier} (picked by the phone rule, unmeasured)` : status.tier },
-		{ label: 'Surface points', value: status.vertices.toLocaleString('en-US') },
+		{ label: 'Surface vertices', value: status.vertices.toLocaleString('en-US') },
 		{ label: 'Wave layers', value: Array.isArray(status.layers) ? String(status.layers.filter(Boolean).length) : '-' },
 		{ label: 'Waves computed on', value: computedOn(status) },
 	];

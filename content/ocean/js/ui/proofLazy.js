@@ -6,11 +6,11 @@
 // Once destroy() has run, nothing mounts: not a module import still in flight, not a later
 // mountNow(), not an intersection the observer had already queued.
 const PLACEHOLDER = `
-	<p>My Roblox code, running in your browser and checked against this page's JavaScript.</p>
+	<p>The Roblox game's Luau code, executed in this browser and checked against this page's JavaScript port.</p>
 	<button type="button" data-proof="show">Show the panel</button>`;
 // Short sentences for the page; the detail goes to the console.
-const IMPORT_FAILED = "I couldn't load the proof panel. Reload the page to try again.";
-const MOUNT_FAILED = "I couldn't start the proof panel. Reload the page to try again.";
+const IMPORT_FAILED = 'The verification panel could not be loaded. Reload the page to try again.';
+const MOUNT_FAILED = 'The verification panel could not be started. Reload the page to try again.';
 
 /**
  * @param {HTMLElement} root

@@ -19,7 +19,7 @@ const SNAP_BANK = { count: 3, fan: 0 };
 
 export const WAVES = Object.freeze({
 	sine: {
-		title: 'One sine wave',
+		title: 'The sinusoid',
 		engine: { ...TEACHING, source: 'sine', sine: { ...SINE, speed: 0 }, bank: SNAP_BANK },
 		look: { ...WHITE, graph: GRAPH_FLAT },
 		shot: GRAPH_SHOT,
@@ -29,28 +29,28 @@ export const WAVES = Object.freeze({
 		],
 	},
 	'moving-sine': {
-		title: 'Make it move',
+		title: 'Time dependence',
 		engine: { ...TEACHING, source: 'sine', sine: { ...SINE, speed: 8 }, bank: SNAP_BANK },
 		look: { ...WHITE, graph: GRAPH_FLAT },
 		shot: GRAPH_SHOT,
 		sliders: [range('speed', 'Speed', 'engine.sine.speed', { min: 0, max: 20, step: 0.1, value: 8, unit: 'studs/s' })],
 	},
 	'sum-of-sines': {
-		title: 'Adding waves together',
+		title: 'Superposition',
 		engine: { ...TEACHING, source: 'bank', bank: SNAP_BANK },
 		look: { ...WHITE, graph: { ...GRAPH_FLAT, components: true } },
 		shot: GRAPH_SHOT,
 		sliders: [range('waveCount', 'Waves', 'engine.bank.count', { min: 1, max: 8, step: 1, value: 3 })],
 	},
 	'into-3d': {
-		title: 'From a line to a surface',
+		title: 'Extension to two dimensions',
 		engine: { ...TEACHING, source: 'bank', bank: { count: 3, fan: 0 } },
 		look: { ...WHITE, graph: { opacity: 0, yScale: 1, near: FLAT_BAND, far: 400, components: false } },
 		shot: { position: [-70, 38, 60], target: [60, 0, -20] },
 		sliders: [toggle('wireframe', 'Wireframe', 'look.wireframe', true)],
 	},
 	directions: {
-		title: 'Waves going somewhere',
+		title: 'Direction of propagation',
 		engine: { ...TEACHING, source: 'bank', bank: { count: DIRECTIONS_WAVES, fan: 1 } },
 		look: { ...WHITE, overlay: { kind: 'directions', spacing: 4 } },
 		// High three-quarter from step 4's dry side (x < 0), so headings near +z cross the frame as
@@ -59,7 +59,7 @@ export const WAVES = Object.freeze({
 		sliders: [range('fan', 'Spread', 'engine.bank.fan', { min: 0, max: 1, step: 0.01, value: 1 })],
 	},
 	'many-waves': {
-		title: 'Lots of waves, lots of directions',
+		title: 'Directional spreading',
 		engine: { ...TEACHING, source: 'bank', bank: { count: 16, fan: 1 } },
 		look: WHITE,
 		shot: { position: [0, 18, 55], target: [0, 0, -20] },

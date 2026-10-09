@@ -6,10 +6,10 @@ import { toggle } from '../recipeKit.js';
 const SEA = { source: 'fft', foam: false, glow: false };
 
 export const TEXTURES = Object.freeze({
-	fields: { title: 'The answer is a grid of numbers', engine: SEA, shot: { position: [0, 60, 110], target: [0, 0, -40] } },
-	sampling: { title: 'Reading between the grid points', engine: SEA, shot: { position: [0, 30, 60], target: [0, 0, 0] } },
+	fields: { title: 'Output fields', engine: SEA, shot: { position: [0, 60, 110], target: [0, 0, -40] } },
+	sampling: { title: 'Bilinear sampling', engine: SEA, shot: { position: [0, 30, 60], target: [0, 0, 0] } },
 	mesh: {
-		title: 'The mesh',
+		title: 'Mesh structure',
 		// A still white sea (no chop, no paint) so the wire's rings and their step in spacing read. Task
 		// 14: and a calm one (the jonswap slider's lightest wind over its shortest fetch, under a stud
 		// high), so the rings read as nested flat squares rather than a rough sheet.
@@ -24,5 +24,5 @@ export const TEXTURES = Object.freeze({
 		shot: { position: [0, 260, 190], target: [0, 0, 0] },
 		sliders: [toggle('wireframe', 'Wireframe', 'look.wireframe', true)],
 	},
-	painted: { title: 'Painted maps', engine: SEA, shot: { position: [0, 20, 45], target: [0, 1, -20] } },
+	painted: { title: 'Surface maps', engine: SEA, shot: { position: [0, 20, 45], target: [0, 1, -20] } },
 });

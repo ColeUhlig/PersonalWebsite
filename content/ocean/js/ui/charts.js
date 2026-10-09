@@ -177,11 +177,11 @@ const PHASE_ARROW_COUNT = 8;
 // The words for each motion: the SVG's label and the note under it (both live, in .chart-body).
 const PHASE_WORDS = Object.freeze({
 	still: (count, tallest) => [
-		`The ${count} tallest waves of the 256-stud layer as arrows, held at their starting angles: each wave's random height and phase`,
+		`The ${count} tallest waves of the 256-stud layer as phasors, held at their initial phases: each wave's random height and phase`,
 		`Computed from the sea on screen. Each arrow is one wave: its angle is the wave's starting phase, and its length is half that wave's crest height above the mean level, scaled so the longest arrow (${tallest.toFixed(2)} studs) fills its ring. Labels are wavelengths in studs.`,
 	],
 	turning: (count, tallest) => [
-		`The ${count} tallest waves of the 256-stud layer as arrows, turning at the speeds the dispersion gives them and looping every 120 seconds; the shortest waves' arrows turn fastest`,
+		`The ${count} tallest waves of the 256-stud layer as phasors, turning at the speeds the dispersion gives them and looping every 120 seconds; the shortest waves' arrows turn fastest`,
 		`Computed from the sea on screen. Each arrow is one wave: its angle is the wave's phase now, and its length is half that wave's crest height above the mean level, scaled so the longest arrow (${tallest.toFixed(2)} studs) fills its ring. Labels are wavelengths in studs; short waves' arrows turn fastest.`,
 	],
 });
@@ -330,13 +330,13 @@ function transformChart(figure, story, onLayout) {
 
 	function showWaiting() {
 		const width = chartWidth(figure);
-		const root = canvasFor(figure, width, HEIGHT, 'Both ways are timed in your browser when this chart comes on screen', ['Both ways are timed in your browser when this chart comes on screen.']);
+		const root = canvasFor(figure, width, HEIGHT, 'Both ways are timed in this browser when this chart comes on screen', ['Both ways are timed in this browser when this chart comes on screen.']);
 		bars(root, width, [['Wave by wave', 0, '', 'chart-bar-naive'], ['FFT', 0, '', 'chart-bar-fft']], 1);
 	}
 
 	function showMeasuring(n) {
 		const width = chartWidth(figure);
-		const root = canvasFor(figure, width, HEIGHT, `Timing a ${n} by ${n} grid both ways in your browser`, [`Timing a ${n} × ${n} grid both ways in your browser…`]);
+		const root = canvasFor(figure, width, HEIGHT, `Timing a ${n} by ${n} grid both ways in this browser`, [`Timing a ${n} × ${n} grid both ways in this browser…`]);
 		bars(root, width, [['Wave by wave', 0, '…', 'chart-bar-naive'], ['FFT', 0, '…', 'chart-bar-fft']], 1);
 		onLayout();
 	}
@@ -358,7 +358,7 @@ function transformChart(figure, story, onLayout) {
 		const fewer = roundSpeedup(operationRatio(result)).toLocaleString('en-US');
 		const root = canvasFor(figure, width, HEIGHT, `${n} by ${n} grid: wave by wave ${formatMs(result.naiveMs)}, FFT ${formatMs(result.fftMs)}, about ${faster} times faster`, [
 			`${n} × ${n} grid: the FFT was about ${faster}× faster (it does about ${fewer}× fewer steps), and the two answers agree to within ${formatTiny(result.maxDifference)}.`,
-			'Measured in your browser just now.',
+			'Measured in this browser just now.',
 		]);
 		bars(root, width, [['Wave by wave', result.naiveMs, formatMs(result.naiveMs), 'chart-bar-naive'], ['FFT', result.fftMs, formatMs(result.fftMs), 'chart-bar-fft']], result.naiveMs);
 	}

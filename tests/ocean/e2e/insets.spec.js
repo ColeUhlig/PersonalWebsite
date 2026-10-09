@@ -41,7 +41,7 @@ test("step 22: the 256-stud layer's height, slope and push as live images, with 
 	expect(engine.line).toContain(`${fields.n} × ${fields.n}`);
 	expect(engine.line).toContain(`${fields.size} studs`);
 	// Units, and the push as the surface moves: the sideways field times the live choppiness.
-	expect(engine.line).toContain('Height and push are in studs; slope has no unit');
+	expect(engine.line).toContain('Height and horizontal displacement are in studs; slope has no unit');
 	expect(fields.chop).toBeGreaterThan(0);
 	await expect(page.locator('figure[data-inset="fields"] .inset-field[data-field="dispX"] .inset-label')).toContainText('at this choppiness');
 	// The number the push cell shows is chop times the field's range, read off the page with the hook in one task.

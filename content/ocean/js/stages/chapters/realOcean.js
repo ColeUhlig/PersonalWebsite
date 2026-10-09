@@ -13,14 +13,14 @@ const ARROWS = { position: [0, 30, 60], target: [0, 0, 0] };
 
 export const REAL_OCEAN = Object.freeze({
 	frequency: {
-		title: 'Time and frequency',
+		title: 'Spatial and frequency domains',
 		engine: LINE,
 		look: { ...WHITE, graph: { ...GRAPH_FLAT, near: FREQUENCY_BAND, far: FREQUENCY_BAND, components: true } },
 		shot: GRAPH_SHOT,
 		sliders: [range('waveCount', 'Waves', 'engine.bank.count', { min: 1, max: 8, step: 1, value: 4 })],
 	},
 	fourier: {
-		title: 'Taking a chord apart',
+		title: 'Fourier decomposition',
 		engine: LINE,
 		look: { ...WHITE, graph: GRAPH_FLAT },
 		shot: GRAPH_SHOT,
@@ -28,7 +28,7 @@ export const REAL_OCEAN = Object.freeze({
 		sliders: [toggle('note1', 'Low tone', 'charts.notes.0', true), toggle('note2', 'Middle tone', 'charts.notes.1', true), toggle('note3', 'High tone', 'charts.notes.2', true)],
 	},
 	jonswap: {
-		title: 'Real ocean data',
+		title: 'The JONSWAP spectrum',
 		engine: ROUND,
 		shot: { position: [0, 60, 110], target: [0, 0, -40] },
 		charts: { spectrum: true },
@@ -38,7 +38,7 @@ export const REAL_OCEAN = Object.freeze({
 		],
 	},
 	'random-sea': {
-		title: 'A random ocean',
+		title: 'Random amplitudes and phases',
 		engine: ROUND,
 		shot: ARROWS,
 		charts: { phaseArrows: 'still' },
@@ -46,26 +46,26 @@ export const REAL_OCEAN = Object.freeze({
 		sliders: [counter('seed', 'New sea', 'engine.seed', SEED, 9999)],
 	},
 	time: {
-		title: 'Setting it moving',
+		title: 'Dispersion and time evolution',
 		engine: ROUND,
 		shot: ARROWS,
 		charts: { phaseArrows: 'turning' },
 	},
 	fft: {
-		title: 'The FFT',
+		title: 'The fast Fourier transform',
 		engine: ROUND,
 		shot: HIGH,
 		charts: { transformN: 32 },
 		sliders: [choice('transformN', 'Waves per side', 'charts.transformN', [8, 16, 32, 64], 32)],
 	},
 	choppiness: {
-		title: 'Choppiness',
+		title: 'Horizontal displacement',
 		engine: ONE_LAYER,
 		shot: { position: [-40, 16, -20], target: [30, 0, -20] },
 		sliders: [range('chop', 'Choppiness', 'engine.chop', { min: 0, max: 2, step: 0.01, value: DEFAULT_SETTINGS.chop })],
 	},
 	layers: {
-		title: 'Three layers of waves',
+		title: 'Three layers',
 		engine: { source: 'fft', foam: false, glow: false },
 		shot: { position: [0, 380, 120], target: [0, 0, 0] },
 		sliders: [

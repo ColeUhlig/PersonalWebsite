@@ -41,8 +41,8 @@ test("the title, the opening and the story's steps in order", async ({ page }) =
 	await page.goto('/ocean/');
 	await expect(page).toHaveTitle('Building an Ocean in Roblox');
 	await expect(page.locator('#opening h1')).toHaveText('Building an Ocean in Roblox');
-	await expect(page.locator('#opening .cue')).toContainText('Scroll to build it from nothing');
-	await expect(page.locator('#opening .lede')).toContainText('Roblox fought me the whole way');
+	await expect(page.locator('#opening .cue')).toContainText('Scroll to begin');
+	await expect(page.locator('#opening .lede')).toContainText('a platform without vertex, pixel or compute shaders');
 	const steps = page.locator('section.step[data-step]');
 	await expect(steps).toHaveCount(STEP_COUNT);
 	for (let n = 1; n <= STEP_COUNT; n++) {
@@ -58,16 +58,16 @@ test('every step but the finale has a collapsed math line, and the cards sit whe
 		const math = page.locator(`#step-${n} details.math`);
 		await expect(math).toHaveCount(1);
 		expect(await math.evaluate((d) => d.open)).toBe(false);
-		await expect(math.locator('summary')).toHaveText('The math');
+		await expect(math.locator('summary')).toHaveText('Mathematical detail');
 		expect((await math.locator('.tex code').textContent()).trim().length).toBeGreaterThan(10);
 		const cards = page.locator(`#step-${n} aside.card`);
 		await expect(cards).toHaveCount(CARD_STEPS.includes(n) ? 1 : 0);
 		if (CARD_STEPS.includes(n)) {
-			await expect(cards.locator('h3')).toHaveText('Roblox says no');
+			await expect(cards.locator('h3')).toHaveText('Platform constraint');
 			// A placeholder card (lane G writes it) has no number yet.
 			const terms = await cards.locator('dt').allTextContents();
-			expect(terms.slice(0, 3)).toEqual(['Normally', 'In Roblox', 'What I did']);
-			expect(terms.length === 3 || terms[3] === 'The number').toBe(true);
+			expect(terms.slice(0, 3)).toEqual(['Conventional approach', 'In Roblox', 'Approach taken']);
+			expect(terms.length === 3 || terms[3] === 'Measurement').toBe(true);
 		}
 	}
 	await expect(page.locator(`${at('finale')} aside.card`)).toHaveCount(0);
@@ -86,7 +86,7 @@ test('the finale holds its blocks, with footage, Play and the render toggle hidd
 	await expect(page.locator('#footage')).toBeHidden();
 	await expect(page.locator('#play')).toBeHidden();
 	await expect(page.locator('[data-render-mode]')).toBeHidden();
-	await expect(page.locator('#believed h3')).toHaveText('Things we believed about Roblox that turned out false');
+	await expect(page.locator('#believed h3')).toHaveText('Assumptions refuted by testing');
 	for (const href of [
 		'https://www.youtube.com/watch?v=PH9q0HNBjT4',
 		'https://www.youtube.com/watch?v=yPfagLeUa7k',

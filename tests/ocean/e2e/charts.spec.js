@@ -154,7 +154,7 @@ test('the fft step times both ways in the visitor browser, again for a new grid 
 	await scrollToId(page, 'fft', 0.2);
 	const figure = page.locator(`#step-${TIMING} figure.chart`);
 	await expect(figure).toHaveAttribute('data-state', 'done', { timeout: 60_000 });
-	await expect(figure).toContainText(/Measured in your browser just now|disturbed by other work on this device/);
+	await expect(figure).toContainText(/Measured in this browser just now|disturbed by other work on this device/);
 	await expect(figure).toContainText('32 × 32');
 	const widths = await figure.evaluate((f) => [f.querySelector('.chart-bar-naive').getAttribute('width'), f.querySelector('.chart-bar-fft').getAttribute('width')].map(Number));
 	expect(widths[0]).toBeGreaterThan(widths[1]);
@@ -185,7 +185,7 @@ test('the fft step prints a rounded, believable speedup or says the timing was d
 			const speedup = Number(measured[1].replaceAll(',', ''));
 			expect(speedup, text).toBeLessThanOrEqual(ratio * 1.2 * 1.05);
 			expect(speedup, text).toBeGreaterThanOrEqual((ratio / 4) * 0.95);
-			expect(text).toContain('Measured in your browser just now');
+			expect(text).toContain('Measured in this browser just now');
 		} else {
 			expect(text).toContain('disturbed by other work on this device');
 			expect(text).toMatch(new RegExp(`about ${Math.round(ratio) >= 10 ? '[\\d,]+' : '\\d'}× fewer steps`));

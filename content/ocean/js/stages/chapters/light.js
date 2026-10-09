@@ -20,21 +20,21 @@ const DIFFUSE_SUN = Object.freeze({ ...TEACHING_SUN, azimuth: 285 });
 
 export const LIGHT = Object.freeze({
 	unlit: {
-		title: "Shape isn't enough",
+		title: 'Shape without shading',
 		engine: BANK,
 		look: { material: 'white', wireframe: false, sun: TEACHING_SUN },
 		shot: DECK,
 		sliders: [toggle('wireframe', 'Wireframe', 'look.wireframe', false)],
 	},
 	diffuse: {
-		title: 'Sunlight',
+		title: 'Diffuse illumination',
 		engine: BANK,
 		look: { material: 'terms', terms: { diffuse: true, specular: false, fresnel: false }, sun: DIFFUSE_SUN },
 		shot: DECK,
 		sliders: [range('sunAzimuth', 'Sun direction', 'look.sun.azimuth', { min: 0, max: 360, step: 1, value: DIFFUSE_SUN.azimuth, unit: '°' })],
 	},
 	highlights: {
-		title: 'Highlights, Fresnel and the sky',
+		title: 'Specular reflection and the Fresnel effect',
 		engine: BANK,
 		look: { material: 'terms', terms: { diffuse: true, specular: true, fresnel: true }, sun: TEACHING_SUN },
 		shot: SUNWARD,

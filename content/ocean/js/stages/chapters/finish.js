@@ -15,7 +15,7 @@ export const FINISH = Object.freeze({
 		],
 	},
 	glow: {
-		title: 'Glow',
+		title: 'Scattered light',
 		// Looking towards the sun (azimuth about 173 degrees, towards -x), where the scatter lobe glows.
 		shot: { position: [40, 18, 10], target: [-120, 2, 20] },
 		sliders: [
@@ -24,7 +24,7 @@ export const FINISH = Object.freeze({
 		],
 	},
 	finale: {
-		title: 'The whole thing',
+		title: 'The complete system',
 		shot: { position: [0, FINALE_HEIGHT, DECK.position[2]], target: DECK.target, move: 'drift' },
 	},
 });

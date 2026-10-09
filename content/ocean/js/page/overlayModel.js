@@ -192,5 +192,5 @@ const studsText = (studs) => String(Number(studs.toFixed(1)));
 /** The panel's live line: empty until there is a gap to show. */
 export function readoutText({ meanAngle, spacing }) {
 	if (!Number.isFinite(meanAngle)) return '';
-	return `On this sea, sampling ${studsText(spacing)} studs either side, the two arrows differ by ${angleText(meanAngle)}° on average, measured in your browser just now.`;
+	return `On this sea, sampling ${studsText(spacing)} studs either side, the two arrows differ by ${angleText(meanAngle)}° on average, measured in this browser just now.`;
 }

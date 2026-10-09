@@ -14,12 +14,12 @@ export const STEP_COUNT = STEP_IDS.length;
 
 // Each chapter's first step and its title, in order; the finale belongs to the last chapter.
 export const CHAPTERS = Object.freeze([
-	Object.freeze({ number: 1, first: 'sine', title: 'One wave' }),
-	Object.freeze({ number: 2, first: 'unlit', title: 'Light' }),
-	Object.freeze({ number: 3, first: 'gerstner', title: 'Better waves' }),
-	Object.freeze({ number: 4, first: 'frequency', title: 'The real ocean' }),
-	Object.freeze({ number: 5, first: 'fields', title: 'Textures' }),
-	Object.freeze({ number: 6, first: 'foam', title: 'The look' }),
+	Object.freeze({ number: 1, first: 'sine', title: 'Wave synthesis' }),
+	Object.freeze({ number: 2, first: 'unlit', title: 'Shading' }),
+	Object.freeze({ number: 3, first: 'gerstner', title: 'Wave shape' }),
+	Object.freeze({ number: 4, first: 'frequency', title: 'Spectral synthesis' }),
+	Object.freeze({ number: 5, first: 'fields', title: 'Surface representation' }),
+	Object.freeze({ number: 6, first: 'foam', title: 'Appearance' }),
 ]);
 
 const NUMBERS = new Map(STEP_IDS.map((id, i) => [id, i + 1]));

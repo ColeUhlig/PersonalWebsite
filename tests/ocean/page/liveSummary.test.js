@@ -11,11 +11,11 @@ const value = (summary, label) => summary.rows.find((row) => row.label === label
 test('the rows say what was measured, with units', () => {
 	const summary = summarizeLive({ status: STATUS, report: REPORT, fps: 58 });
 	expect.equal(value(summary, 'Frame rate'), '58 fps', 'fps');
-	expect.equal(value(summary, 'Surface points'), '18,144', 'points');
+	expect.equal(value(summary, 'Surface vertices'), '18,144', 'points');
 	expect.equal(value(summary, 'Quality tier'), 'High', 'tier');
 	expect.equal(value(summary, 'Wave layers'), '3', 'layers');
 	expect.equal(value(summary, 'Waves computed on'), 'worker threads', 'workers');
-	expect.equal(value(summary, 'Writing the points'), '2.35 ms', 'write');
+	expect.equal(value(summary, 'Writing the vertices'), '2.35 ms', 'write');
 	// paintMs is the main thread packing and posting the maps, not the painting (the review's
 	// finding); renderMs is view.render()'s CPU time, the GPU's work is not in it.
 	expect.equal(value(summary, 'Handing the maps to the painters'), '0.50 ms', 'pack and post');
@@ -45,7 +45,7 @@ test('before the first report and the first interval, the rows say they are meas
 	expect.equal(value(summary, 'Frame rate'), MEASURING, 'no interval yet');
 	expect.equal(value(summary, 'Per-stage timings'), MEASURING, 'no report yet');
 	expect.truthy(MEASURING.startsWith('measuring'), MEASURING);
-	expect.equal(value(summary, 'Writing the points'), undefined, 'no timing rows yet');
+	expect.equal(value(summary, 'Writing the vertices'), undefined, 'no timing rows yet');
 	for (const fps of [undefined, Number.NaN, Number.POSITIVE_INFINITY, -1]) {
 		expect.equal(value(summarizeLive({ status: STATUS, report: REPORT, fps }), 'Frame rate'), MEASURING, String(fps));
 	}

@@ -46,6 +46,12 @@ equations, real numbers and real Roblox code, and nothing overstated.
 - Its own cinematic look: full-screen live ocean, the story scrolling over it in dark glass panels. It is
   not styled like the VEX page; it shares only the site-wide header and link back home.
 - Engine approach A: module-by-module hand port, checked against the real Luau.
+- Decided 2026-10-08 (Cole, before the first deploy): the copy reads like a scientific paper, in the
+  register of Tessendorf's "Simulating Ocean Water", not casual: an abstract opens the page, the author
+  is "we", no contractions or second person in the prose, defined terms (phasor, dispersion relation,
+  Jacobian, cascades), and the cards are "Platform constraint" (Conventional approach / In Roblox /
+  Approach taken / Measurement). This replaces the 2026-09-30 "first person and casual" decision below.
+  The finale's Credits became References: each entry is only a linked title and its author.
 - Decided 2026-09-30 (Cole, before the headless build of B, A3, C, A4 and D): the hero sea is the rough
   default (the sea judged in A2); the copy is first person and casual ("I built this in Roblox, and
   Roblox fought me the whole way"); the page title is "Building an Ocean in Roblox"; the footage section
@@ -344,7 +350,7 @@ bunch of shit."
 - The per-panel "The math" details stay, for longer derivations and notes; the box carries the short,
   cumulative form. KaTeX now loads when the story first reaches step 1 (the box needs it at once), not
   only when a details line is opened.
-- The box's sentences follow the copy rules: first person or plain, casual, and no number that is not
+- The box's sentences follow the copy rules: plain and academic (see the 2026-10-08 decision below), and no number that is not
   sourced (in practice, the box's sentences carry no digits at all; numbers live in the equations,
   which are maths).
 

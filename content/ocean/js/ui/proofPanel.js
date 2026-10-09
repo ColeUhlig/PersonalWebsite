@@ -25,15 +25,15 @@ const NOT_COMPARED = 'Not compared';
 // The packed fields measured in studs; the slopes and the Jacobian terms have no unit.
 const LENGTH_FIELDS = new Set(['height', 'dispX', 'dispZ']);
 // The eight packed fields in words, with the names the largest difference uses (FIELD_NAMES).
-const FIELDS_IN_WORDS = 'height, sideways x/z (dispX, dispZ), slopes x/z (slopeX, slopeZ) and the three Jacobian terms (jxx, jzz, jxz)';
+const FIELDS_IN_WORDS = 'height, horizontal displacement x/z (dispX, dispZ), slopes x/z (slopeX, slopeZ) and the three Jacobian terms (jxx, jzz, jxz)';
 // The Luau map's word after a failure: 'No result' once the Luau had started, 'Not run' otherwise.
 const LUAU_STARTED = new Set(['run', 'timeout']);
 
 // The sentence for each failure stage; `detail` is the error's own message, so a missing bundle
 // or a compile error is not passed off as the network.
 const EXPLANATIONS = Object.freeze({
-	wasm: () => "This browser has WebAssembly switched off, so I can't run the Luau here. The JavaScript result is shown alone.",
-	spawn: (detail) => `This browser can't start a Web Worker (${detail}), so the Luau side can't run here. The JavaScript result is shown alone.`,
+	wasm: () => 'This browser has WebAssembly disabled, so the Luau cannot run here. The JavaScript result is shown alone.',
+	spawn: (detail) => `This browser cannot start a Web Worker (${detail}), so the Luau cannot run here. The JavaScript result is shown alone.`,
 	load: (detail) => `The Luau runtime or the Luau bundle could not be loaded (${detail}). The JavaScript result is shown alone; press Run to try again.`,
 	run: (detail) => `The Luau code raised an error (${detail}). The JavaScript result is shown alone.`,
 	crash: (detail) => `The Luau runtime stopped (${detail}): it ran out of memory or hit a fault. The JavaScript result is shown alone; press Run to start a fresh one.`,
@@ -96,8 +96,8 @@ function map(name, caption, n) {
 
 // The heading and lede, left out when embedded: the host page supplies its own.
 const INTRO = `
-		<h2 class="proof-title">This is my actual Roblox code, running in your browser.</h2>
-		<p class="proof-lede">I run the same wave cascade twice: through my actual Luau modules from the Roblox game, and through the JavaScript port that drives this page. Then I compare what they produce.</p>`;
+		<h2 class="proof-title">The Roblox game's Luau code, running in this browser.</h2>
+		<p class="proof-lede">The same wave cascade is computed twice, once by the Luau modules from the Roblox game and once by the JavaScript port that drives this page, and the two outputs are compared.</p>`;
 
 function markup(o, embedded) {
 	return `${embedded ? '' : INTRO}
@@ -118,7 +118,7 @@ function markup(o, embedded) {
 					<div><dt>JavaScript time</dt><dd data-proof="js-ms">–</dd></div>
 				</dl>
 				<p class="proof-note">Each run is one wave cascade, ${o.n} × ${o.n} cells at seed ${o.seed}. Both times cover building, evolving and transforming it.</p>
-				<p class="proof-note">My Luau runs on ${LUAU_FORK}, a fork of Luau ${LUAU_RELEASE}, packaged as luau-web ${LUAU_WEB_VERSION}: an interpreter compiled to WebAssembly, not Roblox's VM, so the Luau time isn't Roblox's.</p>
+				<p class="proof-note">The Luau runs on ${LUAU_FORK}, a fork of Luau ${LUAU_RELEASE}, packaged as luau-web ${LUAU_WEB_VERSION}: an interpreter compiled to WebAssembly, not the Roblox VM, so the Luau time is not representative of Roblox.</p>
 				<p class="proof-note">The comparison covers all eight fields: ${FIELDS_IN_WORDS}. Black in the height difference means the two agree to the bit. Both sides draw their random numbers from the same documented generator, not Roblox's.</p>
 			</div>
 			<div class="proof-source">

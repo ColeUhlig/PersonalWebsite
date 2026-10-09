@@ -49,7 +49,7 @@ test('a panel module that fails to load leaves a short message, logs the detail 
 	await page.goto('/ocean/proof.html');
 	await page.locator('[data-proof="show"]').click();
 	await expect(page.locator('.proof-placeholder')).toHaveAttribute('data-proof-state', 'failed');
-	await expect(page.locator('.proof-placeholder p')).toHaveText("I couldn't load the proof panel. Reload the page to try again.");
+	await expect(page.locator('.proof-placeholder p')).toHaveText('The verification panel could not be loaded. Reload the page to try again.');
 	await expect(page.locator('[data-proof="show"]')).toBeHidden();
 	await expect.poll(() => logged.some((text) => text.includes('proof panel'))).toBe(true);
 	expect(errors).toEqual([]);
@@ -57,7 +57,7 @@ test('a panel module that fails to load leaves a short message, logs the detail 
 
 test('the placeholder speaks in the first person', async ({ page }) => {
 	await page.goto('/ocean/proof.html');
-	await expect(page.locator('.proof-placeholder p')).toHaveText("My Roblox code, running in your browser and checked against this page's JavaScript.");
+	await expect(page.locator('.proof-placeholder p')).toHaveText("The Roblox game's Luau code, executed in this browser and checked against this page's JavaScript port.");
 });
 
 // The page's panel spot sits below a 300vh spacer; the observer's margin is 600 px.
@@ -172,7 +172,7 @@ test('a panel that throws while mounting says so apart from a failed import, and
 			buttonHidden: placeholder?.querySelector('[data-proof="show"]').hidden,
 		};
 	});
-	expect(result).toEqual({ panel: null, state: 'failed', text: "I couldn't start the proof panel. Reload the page to try again.", buttonHidden: true });
+	expect(result).toEqual({ panel: null, state: 'failed', text: 'The verification panel could not be started. Reload the page to try again.', buttonHidden: true });
 	await expect.poll(() => logged.some((text) => text.includes('injected mount failure') || text.includes('failed to start'))).toBe(true);
 	expect(errors).toEqual([]);
 });
