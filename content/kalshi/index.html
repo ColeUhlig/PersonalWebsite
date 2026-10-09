@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Containing the Optimizer</title>
+  <meta name="description" content="A working paper on augur, a multi-agent LLM system for strategy discovery in Kalshi's 15-minute Bitcoin contracts: adversarial containment, a differential point-in-time audit, and injection–recovery calibration.">
+  <link rel="canonical" href="https://coleuhlig.com/kalshi/">
+  <script src="/js/canonical-host.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.9/dist/katex.min.css">
+  <link rel="stylesheet" href="/kalshi/style.css">
+  <script type="importmap">
+    { "imports": { "katex": "https://cdn.jsdelivr.net/npm/katex@0.18.9/dist/katex.mjs" } }
+  </script>
+</head>
+<body>
+<article class="paper">
+
+  <header class="front">
+    <p class="venue">Working paper · October 2026</p>
+    <h1>Containing the Optimizer: Leak-Resistant, Calibrated Multi-Agent Strategy Discovery for Short-Horizon Event Contracts</h1>
+    <p class="byline">Cole Uhlig</p>
+    <p class="affil">Independent research</p>
+    <p class="dateline">Research conducted April–June 2026 · Market data January–May 2026</p>
+  </header>
+
+  <section class="abstract" id="abstract">
+    <h2>Abstract</h2>
+    <p>Language-model agents can now propose, implement and evaluate trading hypotheses far faster than a human researcher. Two problems limit what such a system can conclude. An agent rewarded for a good backtest is an optimizer, and it will exploit any path to future information that the evaluation leaves open. A search that finds nothing is uninformative unless its sensitivity is known. This paper describes <em>augur</em>, a four-role multi-agent system (director, associate, critic and implementer, built on Claude Opus and Sonnet) that searches for directional strategies in Kalshi's 15-minute Bitcoin event contracts, together with two mechanisms that address these problems. A <em>differential point-in-time audit</em> tests a feature for causality by its behaviour rather than its syntax: it destroys the future of the input in five ways at up to sixteen checkpoints and requires the past output to stay exactly equal. <em>Injection–recovery calibration</em>, adapted from transit and gravitational-wave searches, plants features of known discriminative power into real market data and measures the weakest edge the evaluation stage recovers. Under the exchange's actual fee schedule the detection floor is an AUC of 0.70; under the flat placeholder cost used for most of the loop's evaluations it is 0.85. Across 99 research directives, 740 hypotheses, 669 implemented strategies and 489 walk-forward evaluations, no strategy met the acceptance criteria fixed in advance. Several effects are present before fees: a favourite–longshot tilt of +0.51¢ per contract (<span class="m">t = 11.6</span>), a residual underreaction to spot moves of about 1.0¢, and short-horizon momentum of +1.03¢. Each is smaller than the fee plus the spread. Because Kalshi rounds its fee up per order, the net value of the strongest effect depends on order size: it changes sign between one and five contracts per order.</p>
+  </section>
+  <p class="keywords"><strong>Keywords:</strong> LLM agents; automated strategy discovery; look-ahead bias; metamorphic testing; injection–recovery; prediction markets; favourite–longshot bias; transaction costs.</p>
+
+  <section class="statement" id="ai-statement">
+    <h2>Statement on AI assistance</h2>
+    <p>This work was carried out by one person directing AI coding agents. I specified the systems, wrote the acceptance criteria, designed the guardrails and the calibration protocol, and reviewed and validated the output. Claude Code (Anthropic) wrote most of the code, across roughly 1,500 commits in seven repositories. The agents inside augur are also Claude models. The paper was drafted with AI assistance. Every reported figure was checked against the run databases, logs, analysis scripts and source code in a separate AI-assisted review pass; the favourite-tilt analysis and the lint census were re-computed for this paper.</p>
+  </section>
+
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#sec-introduction">Introduction</a></li>
+      <li><a href="#sec-related">Related work</a></li>
+      <li><a href="#sec-market">Market and data</a></li>
+      <li><a href="#sec-system">System architecture</a></li>
+      <li><a href="#sec-guardrails">Leakage guardrails</a></li>
+      <li><a href="#sec-calibration">Injection–recovery calibration</a></li>
+      <li><a href="#sec-results">Empirical results</a></li>
+      <li><a href="#sec-infrastructure">Supporting systems</a></li>
+      <li><a href="#sec-discussion">Discussion</a></li>
+      <li><a href="#sec-conclusion">Conclusion</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 1 -->
+    <section class="numbered" id="sec-introduction">
+      <h2><span class="secno">1</span>Introduction</h2>
+      <p>Systems that use large language models to generate and test quantitative trading ideas are an active area of research <a class="cite" href="#ref-alphagpt">[1]</a>, <a class="cite" href="#ref-alphaagent">[2]</a>, <a class="cite" href="#ref-rdagentq">[3]</a>. In the typical design, a model proposes a factor or a rule, code is generated to compute it, and a backtest scores the result, which feeds the next round of proposals. Generating and implementing hypotheses has become cheap. The open problem is whether the evaluation can be trusted, and that is the subject of this paper.</p>
+      <p>The first difficulty is that the generator is an optimizer. Leakage, where a model uses information that would not be available at prediction time, is a well-known failure in data mining <a class="cite" href="#ref-kaufman">[4]</a>. When humans write the features, leakage is accidental and rare. When a model writes thousands of features and is selected on backtest performance, every leakage path the harness leaves open attracts it. Frontier models have been observed exploiting weaknesses in the evaluations that score them <a class="cite" href="#ref-metr">[5]</a>. The usual defence is a list of forbidden patterns (negative shifts, centred windows, whole-sample statistics), and it has a structural weakness: an open-ended code generator writes idioms that nobody listed.</p>
+      <p>The second difficulty is the uninterpretable null. The multiple-testing literature in finance controls false discoveries <a class="cite" href="#ref-harvey">[6]</a>, <a class="cite" href="#ref-dsr">[7]</a>, <a class="cite" href="#ref-pbo">[8]</a>. It says much less about false negatives. If an automated search reports that no strategy qualified, that report means little until one knows how strong an edge would have had to be for the search to find it.</p>
+      <p>The setting is Kalshi's 15-minute Bitcoin up/down contracts (series <code>KXBTC15M</code>). A contract settles every fifteen minutes, so there are 96 settlements a day, each with an unambiguous outcome. The exchange charges a fee that is convex in price and rounded up per order, which turns out to matter. This makes the series a useful laboratory: many independent trials, exact ground truth, and a cost structure that is easy to state and easy to get wrong.</p>
+      <p>This paper makes the following contributions:</p>
+      <ol class="contributions">
+        <li><strong>A containment architecture that treats the generating agents as untrusted</strong> (§<a class="xref-sec" href="#sec-system">4</a>). Each agent call is stateless and has no tools. It runs from a working directory with no project files in it, and its only channel to the world is its text output. Settlement labels are never in scope for generated code. Every strategy outcome, including every failure, is recorded as a typed status. Prior LLM alpha-mining systems target equity cross-sections and treat leakage mainly as memorization by the model. augur instead targets binary event contracts and treats its code-writing agents as untrusted optimizers.</li>
+        <li><strong>A differential point-in-time audit</strong> (§<a class="xref-sec" href="#sec-guardrails">5</a>), a metamorphic test of temporal causality <a class="cite" href="#ref-metamorphic">[9]</a> designed as the admission gate for machine-written features. Applied retrospectively to the system's recorded output, it corrects both errors of the syntactic lint the loop actually ran: none of the 59 expressions the lint flagged was a leak, and the lint admitted ten strategies built on a leaking idiom that the audit catches. It was built in May 2026, independently of and before the publication of closely related detectors in July 2026 <a class="cite" href="#ref-luo">[10]</a>, <a class="cite" href="#ref-xalpha">[11]</a>. It differs from them in its adversarial value perturbations, its exact equality and its design as an admission gate.</li>
+        <li><strong>Injection–recovery calibration of an end-to-end discovery pipeline</strong> (§<a class="xref-sec" href="#sec-calibration">6</a>), following the method used to measure completeness in exoplanet transit surveys <a class="cite" href="#ref-petigura">[12]</a> and gravitational-wave searches <a class="cite" href="#ref-ligo">[13]</a>. Under the real fee the evaluation stage detects planted edges of AUC 0.70 and above; under the flat placeholder cost used for most of the loop's evaluations the floor is 0.85. Statistical significance is reached even at AUC 0.52, so the binding constraint is economic, and the cost model is part of the instrument. To my knowledge, no published LLM strategy-discovery system reports such a calibration.</li>
+        <li><strong>An empirical account of a short-horizon event market</strong> (§<a class="xref-sec" href="#sec-results">7</a>). It reports effect sizes before and after fees for a favourite–longshot tilt, short-horizon momentum, underreaction to the underlying, and passive market making. It also measures a fill-model bias of 8.9¢ per trade and states a tape-proven fill criterion that removes it. To my knowledge, this is the first documented analysis of Kalshi's 15-minute crypto contracts, which the principal empirical study of the exchange excludes <a class="cite" href="#ref-burgi">[14]</a>.</li>
+        <li><strong>An analysis of fee rounding</strong> (§<a class="xref-sec" href="#sec-fees">7.4</a>). Because Kalshi rounds the fee up per order, a single contract at extreme prices pays up to 14 times the nominal fee. As a result, the net sign of the strongest effect found depends on order size, not on the signal.</li>
+      </ol>
+      <p>§<a class="xref-sec" href="#sec-infrastructure">8</a> describes the platform the system runs on: an event-driven engine with 5.24 billion order-book events, an accelerated backtester and a correlated-parlay pricer.</p>
+    </section>
+
+    <!-- 2 -->
+    <section class="numbered" id="sec-related">
+      <h2><span class="secno">2</span>Related work</h2>
+      <p>This section places the work against four literatures. <a class="xref" href="#tab-prior">Table 1</a> summarizes the closest systems along the dimensions this paper addresses.</p>
+
+      <h3><span class="secno">2.1</span>Language-model agents for alpha research</h3>
+      <p>Alpha-GPT <a class="cite" href="#ref-alphagpt">[1]</a> and QuantAgent <a class="cite" href="#ref-quantagent">[15]</a> introduced interactive and self-improving language-model loops for generating formulaic alphas. AlphaAgent <a class="cite" href="#ref-alphaagent">[2]</a> adds regularization against alpha decay. Kou et al. <a class="cite" href="#ref-kou">[16]</a> build a multi-agent pipeline that mines and combines alphas. R&amp;D-Agent(Q) <a class="cite" href="#ref-rdagentq">[3]</a> splits factor research and model development into cooperating research and development agents. CogAlpha <a class="cite" href="#ref-cogalpha">[17]</a> evolves alpha code with language models. All of these target equity cross-sections. Where they address leakage at all, they mostly treat it as <em>memorization</em>: the risk that the model already knows the test period. R&amp;D-Agent(Q), for instance, places the model's training cutoff before the test period and never shows it raw data, a concern also studied directly for GPT-based return prediction <a class="cite" href="#ref-glasserman">[18]</a>. Leakage introduced by the code the agent writes is a different threat. CogAlpha includes a temporal-leakage check. Two systems published in July 2026 execute behavioural tests: Luo et al. <a class="cite" href="#ref-luo">[10]</a> recompute LLM-written factors after perturbing every row past a cutoff and truncating at several endpoints, and XALPHA <a class="cite" href="#ref-xalpha">[11]</a> applies truncation and future-noise perturbation tests. Open-source research tools contain related causality assertions <a class="cite" href="#ref-fynance">[19]</a>. The audit in §<a class="xref-sec" href="#sec-guardrails">5</a> was implemented in May 2026, independently of these systems and before they were published. It differs in perturbing values adversarially (missing values, <span class="m">10^{12}</span>, permutation), in requiring exact equality rather than a numerical tolerance, and in its design as the admission gate to a sealed store. None of the systems above targets event contracts or reports a calibrated detection floor.</p>
+
+      <div class="table-wrap" id="tab-prior">
+        <table>
+          <caption><b>Table 1.</b> Closest prior and concurrent systems. Entries reflect the published papers; “—” means the paper reviewed does not report the feature.</caption>
+          <thead><tr><th>System</th><th>Market</th><th>Leakage treated as</th><th>Executed causality test</th><th>Detection floor</th></tr></thead>
+          <tbody>
+            <tr><td>AlphaAgent <a class="cite" href="#ref-alphaagent">[2]</a></td><td>Equities</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>Kou et al. <a class="cite" href="#ref-kou">[16]</a></td><td>Equities</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>R&amp;D-Agent(Q) <a class="cite" href="#ref-rdagentq">[3]</a></td><td>Equities</td><td>Model memorization</td><td>—</td><td>—</td></tr>
+            <tr><td>CogAlpha <a class="cite" href="#ref-cogalpha">[17]</a></td><td>Equities</td><td>Temporal leakage check</td><td>Unclear</td><td>—</td></tr>
+            <tr><td>Luo et al., Jul 2026 <a class="cite" href="#ref-luo">[10]</a></td><td>Equity factors</td><td>Factor-code errors</td><td>Perturbation and truncation, with tolerance</td><td>—</td></tr>
+            <tr><td>XALPHA, Jul 2026 <a class="cite" href="#ref-xalpha">[11]</a></td><td>Equities</td><td>Factor-code leakage</td><td>Truncation and future noise</td><td>—</td></tr>
+            <tr><td><strong>augur</strong> (this work, May 2026)</td><td>Binary event contracts</td><td>Untrusted optimizer</td><td>Five perturbations, exact equality (retrospective on loop output)</td><td>Injection–recovery: AUC 0.70 (real fee), 0.85 (flat cost)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3><span class="secno">2.2</span>Leakage and metamorphic testing</h3>
+      <p>Kaufman et al. <a class="cite" href="#ref-kaufman">[4]</a> formalized leakage in data mining, and Kapoor and Narayanan <a class="cite" href="#ref-kapoor">[20]</a> documented its role in irreproducible machine-learning science. Metamorphic testing <a class="cite" href="#ref-mt98">[21]</a>, <a class="cite" href="#ref-metamorphic">[9]</a> checks a program against relations between outputs on related inputs when the correct output is unknown. Equation (2) is such a relation, and the audit is a metamorphic test of temporal causality.</p>
+
+      <h3><span class="secno">2.3</span>Calibration by injection and recovery</h3>
+      <p>Transit surveys measure pipeline completeness by injecting synthetic transits into real light curves <a class="cite" href="#ref-christiansen">[22]</a>, <a class="cite" href="#ref-petigura">[12]</a>. Gravitational-wave observatories inject signals into the detectors themselves <a class="cite" href="#ref-ligo">[13]</a>. In finance, synthetic markets with known ground truth have been used to compare out-of-sample testing methods <a class="cite" href="#ref-arian">[23]</a>. To my knowledge, no published language-model strategy-discovery system reports an injection–recovery calibration of its evaluation stage under its real cost model.</p>
+
+      <h3><span class="secno">2.4</span>Prediction markets</h3>
+      <p>Prediction markets aggregate information efficiently but not perfectly <a class="cite" href="#ref-wolfers">[24]</a>. The favourite–longshot bias, where longshots are overpriced and favourites underpriced, is among the most robust regularities in betting markets <a class="cite" href="#ref-thaler">[25]</a>, <a class="cite" href="#ref-snowberg">[26]</a>. Bürgi, Deng and Whelan <a class="cite" href="#ref-burgi">[14]</a> study about 46,000 Kalshi contracts from 2021 to April 2025. They find a clear favourite–longshot bias and describe the fee schedule, but they explicitly exclude markets that reset every hour, such as cryptocurrencies and stock indices. Gebele and Matthes <a class="cite" href="#ref-gebele">[27]</a> attribute discounts on near-certain contracts to the cost of locking up capital. Young <a class="cite" href="#ref-young">[28]</a> finds that quotes in Polymarket's 15-minute Bitcoin markets respond to large Binance moves after a median of 347 ms. That market is the nearest analogue of the one studied here.</p>
+
+      <h3><span class="secno">2.5</span>Maximum-entropy models of correlated outcomes</h3>
+      <p>The pairwise maximum-entropy distribution <a class="cite" href="#ref-jaynes">[29]</a> is the least-structured model consistent with given means and pairwise correlations. Schneidman et al. <a class="cite" href="#ref-schneidman">[30]</a> showed that it captures strongly correlated network states from weak pairwise correlations. Rana et al. <a class="cite" href="#ref-rana">[31]</a> use a shared pairwise model of dependencies to make markets in parlay-style joint contracts, learning it from trading. §<a class="xref-sec" href="#sec-parlay">8.4</a> fits couplings offline from box scores for same-game legs.</p>
+    </section>
+
+    <!-- 3 -->
+    <section class="numbered" id="sec-market">
+      <h2><span class="secno">3</span>Market and data</h2>
+
+      <h3><span class="secno">3.1</span>The contract</h3>
+      <p>Each <code>KXBTC15M</code> contract refers to one fifteen-minute window. The YES side pays $1 if the CF Benchmarks Bitcoin Real-Time Index at the end of the window is above its value at the start, and nothing otherwise. Prices are quoted in whole cents from 1¢ to 99¢. I checked the settlement rule against an independent 1-second spot series: on decisive windows (a move of more than 20 basis points), labels derived from spot agree with the terminal state of the order book 97.1% of the time. The disagreements concentrate in near-ties, where the proxy exchange and the index differ.</p>
+
+      <h3><span class="secno">3.2</span>The fee</h3>
+      <p>Kalshi charges a taker fee on each order of <span class="m">C</span> contracts at price <span class="m">P</span> (in dollars, so <span class="m">0 &lt; P &lt; 1</span>) of</p>
+      <div class="eq-row" id="eq-fee"><div class="eq">F(C,P) = \big\lceil 7\, C\, P\,(1-P) \big\rceil \ \text{cents},</div><span class="eqno">(1)</span></div>
+      <p>that is, 7% of the variance of a $1 binary payoff per contract, rounded up to the next cent for the whole order <a class="cite" href="#ref-kalshifees">[32]</a>. The fee peaks at <span class="m">P = 0.5</span> (1.75¢ per contract before rounding) and vanishes at the extremes. Rounding per order makes the fee per contract depend on order size (§<a class="xref-sec" href="#sec-fees">7.4</a>).</p>
+
+      <h3><span class="secno">3.3</span>Data</h3>
+      <p><em>Order books and trades.</em> Historical Kalshi data from Predexon were converted into the native catalog of an event-driven trading engine (§<a class="xref-sec" href="#sec-infrastructure">8</a>): 5.24 billion level-2 order-book deltas (covering 9,991 contracts) and 64.6 million trades (21,670 contracts), from a registry of 28,006 instruments. The agent loop works on 5-second bars derived from this record. <em>Spot.</em> Binance BTCUSDT 1-second klines for 1 January to 5 May 2026 (10.8 million seconds), plus Coinbase 1-minute bars. The evaluation windows for each analysis are stated with its results. The data are licensed and are not redistributed.</p>
+    </section>
+
+    <!-- 4 -->
+    <section class="numbered" id="sec-system">
+      <h2><span class="secno">4</span>System architecture</h2>
+
+      <h3><span class="secno">4.1</span>Roles</h3>
+      <p>augur divides research into four model roles and a deterministic harness (<a class="xref" href="#tab-roles">Table 2</a>). The roles are modelled on the division of labour in a research group. One agent decides where to look, one proposes, one rejects, and one implements, so that no single model both generates and judges its own ideas.</p>
+      <div class="table-wrap" id="tab-roles">
+        <table>
+          <caption><b>Table 2.</b> Agent roles. Effort is the reasoning-effort setting passed to the model; the command-line interface does not expose sampling temperature.</caption>
+          <thead><tr><th>Role</th><th>Model</th><th>Effort</th><th>Input</th><th>Output</th></tr></thead>
+          <tbody>
+            <tr><td>Director</td><td>Claude Opus</td><td>High</td><td>Ledger of findings and a digest of results</td><td>Directives: family, direction, rationale, what to avoid</td></tr>
+            <tr><td>Associate</td><td>Claude Sonnet</td><td>Low</td><td>One directive and the results digest</td><td><span class="m">N</span> testable hypotheses, each hashed for de-duplication</td></tr>
+            <tr><td>Critic</td><td>Claude Sonnet</td><td>Low</td><td>Hypotheses</td><td>Accept, or reject as too similar, too loose, no market cell, or unimplementable</td></tr>
+            <tr><td>Implementer</td><td>Claude Sonnet</td><td>Low</td><td>One accepted hypothesis</td><td>A written plan and a Python <code>strategy(data, feat)</code></td></tr>
+            <tr><td>Harness</td><td>Deterministic</td><td>—</td><td>Strategy code</td><td>Lint, sandbox and walk-forward verdict, written to the ledger</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The loop closes through the ledger. Before each directive the director reads the ledger of established findings and a digest of results (the ten best, the fifteen most recent and aggregate outcome counts), and its prompt rewards novelty explicitly: <em>“Your job is NOT to write strategies. It is to decide WHERE to dig … rewarded for directions that are genuinely NEW TO THIS MARKET.”</em> Hypotheses and code are hashed, so a repeated idea is detected rather than re-run. The critic acts as a cheap filter in front of expensive evaluation: <em>“Be strict. The point is to not waste compute. Default to reject if you're unsure.”</em> It accepted about 70% of the hypotheses it graded.</p>
+
+      <h3><span class="secno">4.2</span>Invocation as containment</h3>
+      <p>Every agent call is a headless <code>claude -p</code> process launched with an empty tool list, no session persistence, a system prompt, and structured output. It runs from the system temporary directory, which contains no project files, and calls are throttled to 100 per minute. An agent cannot read data, previous code, the evaluation harness or its own past conversations. It sees exactly what the harness passes in and influences the system only through the text it returns. This isolation is the precondition for every later guardrail. An agent that could read the evaluation code could optimize against it.</p>
+
+      <h3><span class="secno">4.3</span>The implementation contract</h3>
+      <p>The implementer writes one function, <code>strategy(data, feat)</code>, against a small library of primitives that are point-in-time-safe by construction (rolling windows, positive shifts, true range, within-window quantiles). Before writing code it must produce a plan that includes a sanity check on how often the strategy will fire: <em>“If your sanity check estimates &gt;500 fires/day, stop and reconsider.”</em> When the code fails, the harness returns a remediation specific to the failure rather than a bare error code. This was a deliberate change. Early runs showed that a bare lint code <em>“told the coder LLM nothing it could act on — it re-emitted the same violation across all 3 retries.”</em></p>
+
+      <h3 id="sec-protocol"><span class="secno">4.4</span>Evaluation protocol</h3>
+      <p>Strategies are evaluated walk-forward over four rolling windows: one week of training followed by three days of testing, advancing three days at a time. Fills occur no earlier than the bar after the signal. The engine enforces this as an invariant and raises an error if it is configured otherwise. Costs follow equation <a class="xref-sec" href="#eq-fee">(1)</a> from 27 May 2026. The large searches ran on 24–25 May with a flat placeholder of $0.10 per trade, and 472 of the 489 evaluations in §<a class="xref-sec" href="#sec-results">7</a> used it; §<a class="xref-sec" href="#sec-calibration">6</a> measures what that choice cost in sensitivity. A strategy qualifies only if it meets all four criteria, which were fixed before the searches were run: net profit of at least $0.15 per trade, at least 200 trades, at least 75% of test windows positive, and no test window worse than −$0.05 per trade. An <em>implausibility check</em>, added on 26 May, flags results that are too good to be credible (a hit rate above 0.90, an absolute net above $0.40 per trade, or every window positive with a net above $0.25) as suspected leaks for review.</p>
+
+      <h3><span class="secno">4.5</span>Fail-closed accounting</h3>
+      <p>Every strategy attempt becomes a typed row in SQLite: success, lint rejection, runtime error, timeout, malformed output, missing code block, engine error, or unrecoverable. No attempt is dropped silently. If the critic call itself fails, all hypotheses are accepted and the failure is logged, so a failure costs compute but never narrows what is tested. The schema runs from directives to hypotheses to attempts to walk-forward runs, so any number in §<a class="xref-sec" href="#sec-results">7</a> can be traced back to the directive that produced it.</p>
+    </section>
+
+    <!-- 5 -->
+    <section class="numbered" id="sec-guardrails">
+      <h2><span class="secno">5</span>Leakage guardrails</h2>
+
+      <h3><span class="secno">5.1</span>Threat model</h3>
+      <p>The adversary is the implementer. It is not malicious, but it is selected on outcomes, and that is enough. Four channels could inflate a backtest. <em>(i) Label access:</em> reading settlement outcomes directly. <em>(ii) Temporal leakage:</em> negative shifts, centred windows, statistics over the whole sample, or per-contract aggregates that include rows after the decision time. <em>(iii) Evaluation escape:</em> using dynamic evaluation, imports or attribute traversal to reach harness internals. <em>(iv) Execution optimism:</em> filling on the bar that generated the signal. Channel (i) is closed by never injecting labels into the sandbox namespace and (iv) by the fill-lag invariant; channel (iii) is narrowed, not closed, by the lint and sandbox. Channel (ii) is the hard one, because temporal leakage has no fixed syntax.</p>
+
+      <h3><span class="secno">5.2</span>Syntactic lint and sandbox</h3>
+      <p>Before execution, a static pass walks the syntax tree and checks seven rules: negative shifts, label references, whole-series aggregates, 25 forbidden modules, dynamic <code>eval</code>, dynamic attribute access, and dunder traversal. The sandbox then compiles and executes the code with labels absent from scope, a hard timeout and a check on the return type. This layer is cheap and catches the obvious cases. As §<a class="xref-sec" href="#sec-audit-eval">5.4</a> shows, it is also both over- and under-inclusive for channel (ii).</p>
+
+      <h3><span class="secno">5.3</span>The differential point-in-time audit</h3>
+      <p>Let a feature <span class="m">f</span> map a bar sequence <span class="m">x_{0:T}</span> to an output sequence <span class="m">y_{0:T}</span>. The feature is <em>point-in-time safe</em> if its past cannot depend on its future:</p>
+      <div class="eq-row" id="eq-causal"><div class="eq">\begin{gathered} \forall\, t,\ \forall\, x':\ \ x'_{0:t} = x_{0:t} \\ \Longrightarrow\ f(x')_{0:t} = f(x)_{0:t}. \end{gathered}</div><span class="eqno">(2)</span></div>
+      <p>The audit tests this property by its consequences rather than by inspecting the code. It first runs <span class="m">f</span> twice on the same input and rejects it as non-deterministic if the outputs differ, since a non-deterministic feature cannot be audited by comparison. It then chooses up to <span class="m">K = 16</span> checkpoints <span class="m">t_k</span>: the dyadic positions 1, 2, 4, 8, … (because leaks often appear near the start of a series) and seeded random positions after that. At each checkpoint it builds a variant input <span class="m">x'</span> that matches <span class="m">x</span> up to <span class="m">t_k</span> and is altered after it by one of five perturbations:</p>
+      <ul>
+        <li><em>truncate</em>: delete every row after <span class="m">t_k</span>;</li>
+        <li><em>NaN-poison</em>: replace future values with missing values;</li>
+        <li><em>random</em>: replace future values with noise;</li>
+        <li><em>extreme</em>: replace future values with <span class="m">10^{12}</span>;</li>
+        <li><em>shuffle</em>: permute the future rows.</li>
+      </ul>
+      <p>If any output at or before <span class="m">t_k</span> changes at all (under exact, missing-value-aware equality), the feature is rejected as a point-in-time leak, and the checkpoint and perturbation are reported. Each perturbation targets a different way of evading the others. Truncation alone misses code that pads or forward-fills. Missing values expose backward propagation of missingness. Extreme values expose normalization by a global statistic. Shuffling exposes reads that depend on the order of future rows but not on their distribution. The audit costs at most <span class="m">5K = 80</span> perturbed evaluations plus the two determinism runs, and stops at the first violation.</p>
+      <p>The audit is one-sided by design. A rejection is a <em>witness</em>: two concrete inputs that agree on the past and produce different pasts, which is a constructive counterexample to (2). A pass is evidence, not proof. A leak confined between checkpoints, or one that is invariant to all five perturbations, could escape, and the test suite keeps such a case as a documented expected failure. In augur the audit was built as the admission gate for a <em>sealed feature store</em>, from which strategies would compose features rather than compute their own. In the runs reported here the store was not yet connected to the implementer, so strategies computed their own features under the lint alone, and the audit's performance on their code (§<a class="xref-sec" href="#sec-audit-eval">5.4</a>) is measured retrospectively.</p>
+
+      <h3 id="sec-audit-eval"><span class="secno">5.4</span>Behavioural versus syntactic detection</h3>
+      <p>The system's recorded output allows a direct comparison of the two approaches (<a class="xref" href="#tab-lint">Table 3</a>). Across eight run databases the lint rejected 59 strategy attempts, every one under the whole-series-aggregate rule. I inspected the flagged expression in all 59, and every one is causal, although nine of the rejected attempts also contained, elsewhere, the leaking idiom described next. They are row-wise reductions across columns (<code>max(axis=1)</code> over open and close, for candle bodies, wicks and true range), prefix sums used as run identifiers, and statistics computed inside rolling-window callbacks, where the “whole series” is the window. Meanwhile, ten strategies that passed the lint computed a per-contract total bar count with <code>groupby(...).transform("count")</code> to measure time remaining to expiry. That quantity depends on bars that have not yet occurred.</p>
+      <div class="table-wrap" id="tab-lint">
+        <table>
+          <caption><b>Table 3.</b> Syntactic lint versus differential audit on augur's recorded strategies. Lint results are as logged; audit results are a retrospective re-run on the shared idioms, not part of the logged runs.</caption>
+          <thead><tr><th>Case</th><th class="n">Count</th><th>Lint</th><th>Audit</th></tr></thead>
+          <tbody>
+            <tr><td>Expressions flagged as whole-series aggregates (row-wise <code>max</code>, prefix sums, window-local statistics)</td><td class="n">59</td><td>Rejected; every flagged expression causal</td><td>Flagged expressions clean</td></tr>
+            <tr><td>Per-contract total bar count via <code>transform("count")</code>, in attempts the lint admitted</td><td class="n">10</td><td>Admitted (false negative)</td><td>Leak, caught by <em>truncate</em> at checkpoint 1</td></tr>
+            <tr><td>The same idiom, in attempts the lint rejected for an unrelated causal line</td><td class="n">9</td><td>Rejected for the wrong reason</td><td>Leak (same idiom)</td></tr>
+            <tr><td>Leaky idioms in the audit's test suite</td><td class="n">8</td><td>—</td><td>All flagged</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>On this corpus none of the lint's flags pointed at a leak, and it missed the one leaking idiom that recurred; where it did reject leaky code, it did so for the wrong reason. Each false flag cost a retry, and each miss admitted a leak into evaluation. Applied to the same idioms, the behavioural test made neither error. The admitted strategies happened to perform poorly, for example 60 trades at −11.7¢ per trade with no positive week, so no spurious finding reached the ledger. That was luck, not design. The comparison is the empirical case for moving leakage control from patterns to behaviour.</p>
+
+      <h3><span class="secno">5.5</span>Result-level gates</h3>
+      <p>Two further checks act on outcomes rather than code. The implausibility check (§<a class="xref-sec" href="#sec-protocol">4.4</a>) flags results that are too good to be credible. A later predictor-training stage raises an error, and fails closed, when cross-validated AUC exceeds a threshold; after a settlement model reached an AUC of 0.908, that model was re-specified as lift over a baseline that knows only the price (§<a class="xref-sec" href="#sec-efficiency">7.2</a>). That stage also reserves April 2026 as a lockbox with an irreversible reveal flag. The earlier loop runs and the calibration had already used April data, so the lockbox protects only work that came after it.</p>
+    </section>
+
+    <!-- 6 -->
+    <section class="numbered" id="sec-calibration">
+      <h2><span class="secno">6</span>Injection–recovery calibration</h2>
+
+      <h3><span class="secno">6.1</span>Method</h3>
+      <p>Astronomical surveys measure their completeness by injecting synthetic signals of known amplitude into real data and counting how many the pipeline recovers <a class="cite" href="#ref-petigura">[12]</a>, <a class="cite" href="#ref-ligo">[13]</a>. augur applies the same procedure to strategy discovery. For each contract <span class="m">c</span> with outcome <span class="m">y_c \in \{0,1\}</span>, it plants a feature</p>
+      <div class="eq-row" id="eq-plant"><div class="eq">\begin{gathered} z_c = y_c + \varepsilon_c,\qquad \varepsilon_c \sim \mathcal{N}(0,\sigma^2), \\ \mathrm{AUC}(\sigma) = \Phi\!\left(\frac{1}{\sigma\sqrt{2}}\right), \end{gathered}</div><span class="eqno">(3)</span></div>
+      <p>which follows from the equal-variance binormal model. Inverting (3) gives the <span class="m">\sigma</span> for any target AUC. The feature takes one draw per contract and is constant within it, so it carries information about the outcome without being a timing leak. The planter measures the AUC it actually achieved and raises an error if that misses the target by more than 0.03, so a mis-calibrated plant can never be used silently. A fixed entry rule trades on the planted feature through the evaluation stage (the engine, the cost model and the strict criteria of §<a class="xref-sec" href="#sec-protocol">4.4</a>); the agents, lint and sandbox are bypassed. The sweep used the engine's default protocol of four weeks of training and one week of testing, over 8 March to 22 April 2026. Significance comes from a permutation null that shuffles settlement values across contracts (<span class="m">n = 300</span>), which keeps the dependence between bars within a contract intact.</p>
+
+      <h3><span class="secno">6.2</span>Results</h3>
+      <div class="table-wrap" id="tab-floor">
+        <table>
+          <caption><b>Table 4.</b> Recovery of planted edges, 8 March – 22 April 2026, about 677 test trades per row. “Pass” means all four acceptance criteria are met. The smallest attainable permutation <span class="m">p</span> is <span class="m">1/301 \approx 0.0033</span>.</caption>
+          <thead><tr><th class="n">Planted AUC</th><th class="n"><span class="m">p</span></th><th class="n">Net/trade, real fee</th><th>Pass</th><th class="n">Net/trade, flat $0.10</th><th>Pass</th></tr></thead>
+          <tbody>
+            <tr><td class="n">0.52</td><td class="n">0.0133</td><td class="n">$0.033</td><td>no</td><td class="n">−$0.048</td><td>no</td></tr>
+            <tr><td class="n">0.55</td><td class="n">0.0033</td><td class="n">$0.052</td><td>no</td><td class="n">−$0.028</td><td>no</td></tr>
+            <tr><td class="n">0.60</td><td class="n">0.0033</td><td class="n">$0.086</td><td>no</td><td class="n">$0.006</td><td>no</td></tr>
+            <tr><td class="n">0.65</td><td class="n">0.0033</td><td class="n">$0.121</td><td>no</td><td class="n">$0.041</td><td>no</td></tr>
+            <tr><td class="n">0.70</td><td class="n">0.0033</td><td class="n">$0.152</td><td class="pass">yes</td><td class="n">$0.072</td><td>no</td></tr>
+            <tr><td class="n">0.75</td><td class="n">0.0033</td><td class="n">$0.187</td><td class="pass">yes</td><td class="n">$0.107</td><td>no</td></tr>
+            <tr><td class="n">0.80</td><td class="n">0.0033</td><td class="n">$0.213</td><td class="pass">yes</td><td class="n">$0.133</td><td>no</td></tr>
+            <tr><td class="n">0.85</td><td class="n">0.0033</td><td class="n">$0.251</td><td class="pass">yes</td><td class="n">$0.171</td><td class="pass">yes</td></tr>
+            <tr><td class="n">0.90</td><td class="n">0.0033</td><td class="n">$0.294</td><td class="pass">yes</td><td class="n">$0.214</td><td class="pass">yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Three conclusions follow from <a class="xref" href="#tab-floor">Table 4</a>. <em>First</em>, statistical significance is not the bottleneck. Every planted strength from 0.55 upward reaches the smallest attainable <span class="m">p</span>, and even 0.52 is significant at 5%. What screens out weak edges is the economic criterion. <em>Second</em>, the cost model is a first-order determinant of sensitivity. Under the real, price-dependent fee the detection floor is AUC 0.70. Under a flat $0.10 cost, roughly three to five times too high for this market, it would be 0.85, and any edge in between would have been invisible. <em>Third</em>, the floor turns the null result of §<a class="xref-sec" href="#sec-results">7</a> into an approximately bounded statement. Most loop evaluations ran under the flat cost, so the relevant floor for them is 0.85: within the hypothesis families explored, no strategy evaluated that way carried an edge the calibration would have detected at AUC 0.85. The bound is approximate because the loop used a shorter protocol (one week of training, three days of testing) than the calibration. The comparison in this table is what established that the placeholder cost was hiding edges between AUC 0.70 and 0.85, and the real schedule became the default the next day.</p>
+    </section>
+
+    <!-- 7 -->
+    <section class="numbered" id="sec-results">
+      <h2><span class="secno">7</span>Empirical results</h2>
+
+      <h3><span class="secno">7.1</span>Search outcomes</h3>
+      <p>Over its lifetime the loop produced the volumes in <a class="xref" href="#tab-volume">Table 5</a>. No strategy met all four criteria. Iterations are fast: in one recorded iteration, the director issued a directive on volatility term structure near expiry, the associate wrote five hypotheses, the critic accepted all five, and the implementer's first attempt was rejected by the lint. Its second attempt, 33 seconds later, was sandboxed in 0.34 s and scored walk-forward on 1,979 contracts. The time from directive to verdict was 2 minutes 36 seconds, with no human involved. The marginal model cost was zero, since the Claude calls ran on a flat-rate subscription rather than metered API usage.</p>
+      <div class="table-wrap" id="tab-volume">
+        <table>
+          <caption><b>Table 5.</b> augur's lifetime volumes across eight run databases. Nine directives were written or seeded by me; a few early hypotheses came from open-weight models during provider testing.</caption>
+          <thead><tr><th>Stage</th><th class="n">Count</th></tr></thead>
+          <tbody>
+            <tr><td>Research directives (90 from the director)</td><td class="n">99</td></tr>
+            <tr><td>Hypotheses (associate)</td><td class="n">740</td></tr>
+            <tr><td>Hypotheses accepted by the critic</td><td class="n">≈ 512 of 734 graded</td></tr>
+            <tr><td>Strategy implementations (implementer)</td><td class="n">669</td></tr>
+            <tr><td>Lint rejections</td><td class="n">59</td></tr>
+            <tr><td>Walk-forward evaluations completed (472 at the flat $0.10 cost)</td><td class="n">489</td></tr>
+            <tr><td>Strategies meeting all acceptance criteria</td><td class="n">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Non-agentic searches ran on the same data alongside the loop: an enumerative scan of 100,456 rule candidates and grid scans over thousands of price-by-time-to-expiry cells. None of the cell scans produced a cell that met the strict criteria.</p>
+
+      <h3 id="sec-efficiency"><span class="secno">7.2</span>Efficiency of the price</h3>
+      <p>A gradient-boosted model trained on March 2026 to predict settlement from seven features reaches a cross-validated AUC of 0.908 over eight expanding folds. Nearly all of that is the price itself: in a feature-selection study on an earlier codebase, the price level accounted for 97.5% of cumulative importance. Across the cell scans, the in-sample upper envelope of edge after fees was about +5¢ for cells that traded at least ten times a day, and the few cells above +15¢ traded one to three times a day. Even before any correction for selection, the edge available after fees is bounded at about 5¢ per trade at useful trading frequencies.</p>
+
+      <h3><span class="secno">7.3</span>Effects before fees</h3>
+      <p><a class="xref" href="#tab-effects">Table 6</a> reports every effect that survived point-in-time reconstruction. Larger effects (above about 2¢) that appeared in exploratory work did not survive that reconstruction and are not reported.</p>
+      <div class="table-wrap" id="tab-effects">
+        <table>
+          <caption><b>Table 6.</b> Effects before and after costs, in cents per contract. Fees are from equation (1) at one contract per order unless noted.</caption>
+          <thead><tr><th>Effect</th><th>Sample</th><th class="n">Gross</th><th class="n">Net</th><th>Evidence</th></tr></thead>
+          <tbody>
+            <tr><td>Favourite tilt: buy the side priced ≥ 99¢ one minute before settlement</td><td>7,581 windows, 118 days (7 Jan – 4 May)</td><td class="n">+0.51</td><td class="n">−0.15</td><td><span class="m">t = 11.6</span> gross; <span class="m">t = -3.3</span> net</td></tr>
+            <tr><td>60-second momentum, long</td><td>24,967 trades (8 Mar – 22 Apr)</td><td class="n">+1.03</td><td class="n">−0.96</td><td>Mean fee 1.99¢; 1 of 2 test weeks positive</td></tr>
+            <tr><td>Underreaction to spot jumps (residual after a 2 s reaction)</td><td>15.7k events ≥ 4 bp (Jan – Feb)</td><td class="n">≈ +1.0</td><td class="n">−0.8</td><td>Taker, ≥ 8 bp events, Jan – May; tape-proven passive fills −3.9</td></tr>
+            <tr><td>Passive two-sided market making</td><td>1,484 test contracts</td><td class="n">−0.29 to −1.56</td><td class="n">—</td><td>Fee-free, front of queue; across quoting horizons of 30–300 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><em>Favourite tilt.</em> The favourite at 99¢ wins slightly more often than its price implies. This is the familiar favourite–longshot pattern <a class="cite" href="#ref-thaler">[25]</a>, <a class="cite" href="#ref-snowberg">[26]</a>, which Bürgi et al. document on Kalshi in the series they study <a class="cite" href="#ref-burgi">[14]</a>. Over fifteen minutes the cost of locking up capital is negligible, so the explanation through capital costs <a class="cite" href="#ref-gebele">[27]</a> cannot account for it, which favours a pricing bias. It holds out of sample: in three later time folds (5,755 windows) after a first in-sample fold, the gross effect remains, and its net value depends on order size (§<a class="xref-sec" href="#sec-fees">7.4</a>). <em>Underreaction.</em> The cross-correlation between changes in Kalshi's mid-price and 1-second spot returns peaks one second later (0.30). After a spot move, 59% of the repricing happens within the same second, 79% by one second, 93% by ten seconds, and the rest by about sixty seconds. Spot itself does not drift after these events (−0.7 bp to settlement), so the residual is a Kalshi repricing lag rather than Bitcoin momentum. Most repricing is as fast as on Polymarket's equivalent markets <a class="cite" href="#ref-young">[28]</a>, but a slow tail lasts about a minute. It is real, and it is smaller than the spread plus the taker fee. <em>Market making.</em> Even with front-of-queue priority, which is optimistic, and no fees, adverse selection outweighs spread capture, so this figure is an upper bound.</p>
+
+      <h3 id="sec-fees"><span class="secno">7.4</span>Fee rounding makes the sign depend on order size</h3>
+      <p>Write the nominal fee as <span class="m">\kappa(P) = 7P(1-P)</span> cents per contract. From (1), the fee per contract on an order of <span class="m">C</span> contracts is</p>
+      <div class="eq-row" id="eq-round"><div class="eq">\begin{gathered} f(C,P) = \frac{\lceil \kappa(P)\, C \rceil}{C}, \\ \frac{f(1,P)}{\kappa(P)} = \frac{\lceil \kappa(P) \rceil}{\kappa(P)}. \end{gathered}</div><span class="eqno">(4)</span></div>
+      <p>At <span class="m">P = 0.50</span>, <span class="m">\kappa = 1.75</span>¢, and rounding adds 14%. At <span class="m">P = 0.99</span>, <span class="m">\kappa = 0.0693</span>¢, and a single contract pays 1¢, which is <strong>14.4 times</strong> the nominal fee. Any order of up to 14 contracts at that price pays the same 1¢ in total. The overhead is largest where <span class="m">\kappa</span> is smallest, at extreme prices, which is exactly where the favourite–longshot effect lives. <a class="xref" href="#tab-orders">Table 7</a> shows the consequence for the 99¢ favourite out of sample.</p>
+      <div class="table-wrap" id="tab-orders">
+        <table>
+          <caption><b>Table 7.</b> Out-of-sample net edge of the ≥ 99¢ favourite by order size. Three time folds, <span class="m">n = 5{,}755</span>; the fee is rounded up per order and divided by <span class="m">C</span>.</caption>
+          <thead><tr><th class="n">Contracts per order <span class="m">C</span></th><th class="n">Net, ¢/contract</th><th class="n"><span class="m">t</span></th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td class="n">−0.05</td><td class="n">−1.7</td></tr>
+            <tr><td class="n">5</td><td class="n">+0.39</td><td class="n">12.6</td></tr>
+            <tr><td class="n">10</td><td class="n">+0.44</td><td class="n">14.3</td></tr>
+            <tr><td class="n">50</td><td class="n">+0.45</td><td class="n">14.7</td></tr>
+            <tr><td class="n">100</td><td class="n">+0.46</td><td class="n">14.9</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The same signal is negative at one contract and statistically positive at five. The fee schedule, not the signal, sets the sign. This also suggests why the tilt persists: at the order sizes a small participant would naturally test, it does not pay. Two methodological points follow. A backtest at one contract overstates costs at extreme prices by up to fourteen times. A backtest at the nominal fee per contract understates them for small orders. This analysis values entries at the last trade rather than the executable ask and does not model depth. It establishes a statistical regularity and its fee arithmetic, not an executable return.</p>
+
+      <h3><span class="secno">7.5</span>Fill-model bias near fast moves</h3>
+      <p>The underreaction effect allows a controlled comparison of fill models, holding the signal fixed (events of at least 8 bp, about seven a day, held to settlement). Filling at the recorded book quote three seconds after the event yields +5.0¢ per trade with 88% of weeks positive. Filling as a taker at the next print with a 1.5¢ penalty yields −0.8¢. Crediting a passive fill only when a later trade prints at or through the quoted level yields −3.9¢. The gap between the first and last models is <strong>8.9¢ per trade</strong> on identical signals. The cause is measurable: about a third of the recorded “stale” quotes after fast spot seconds were never touched by any print within sixty seconds, so they were never actually available. A placebo that enters ten seconds later still “passes” under the quote model, which is the diagnostic. I therefore adopt a <em>tape-proven fill criterion</em>: a fill triggered by an event is credited only if a subsequent trade prints at or through its price. Even then, passive fills carry a winner's curse, because they are filled when the market moves against them.</p>
+    </section>
+
+    <!-- 8 -->
+    <section class="numbered" id="sec-infrastructure">
+      <h2><span class="secno">8</span>Supporting systems</h2>
+
+      <h3><span class="secno">8.1</span>Event-driven platform</h3>
+      <p>The data platform is a fork of NautilusTrader <a class="cite" href="#ref-nautilus">[33]</a>, an open-source event-driven trading engine, extended with a Kalshi historical-data adapter (5.24 billion level-2 deltas, 64.6 million trades and 28,006 contracts in the engine's native catalog) and a live Kalshi execution adapter, over 178 commits. The adapter normalizes timestamp units (seconds and milliseconds) and price units (dollars and cents) across sources. For backtests it synthesizes the settlement events the engine needs to close every position at expiry, inferring the outcome from the terminal trade price.</p>
+
+      <h3><span class="secno">8.2</span>Accelerated backtesting</h3>
+      <p>For parameter search on an earlier strategy family, a tick-level backtester was rewritten as a struct-of-arrays Numba kernel. Amortized over a 45-combination grid on 200 sessions (751,510 ticks), it runs about 57 times faster than the Python reference with identical trade decisions and zero difference in profit and loss (one machine, single measurement). It supported 53,701 Optuna trials across ten studies, mostly with the TPE sampler and NSGA-II for multi-objective runs, all resuming from one storage file. Those studies tuned parameters in-sample and are cited for scale, not as evidence of an edge.</p>
+
+      <h3><span class="secno">8.3</span>Statistical controls</h3>
+      <p>Candidates outside the agent loop faced Benjamini–Hochberg control of the false discovery rate <a class="cite" href="#ref-bh">[34]</a>, the deflated Sharpe ratio <a class="cite" href="#ref-dsr">[7]</a>, and the probability of backtest overfitting by combinatorially symmetric cross-validation <a class="cite" href="#ref-pbo">[8]</a>. That last test uses <span class="m">S = 16</span> blocks, giving <span class="m">\binom{16}{8} = 12{,}870</span> train–test partitions. Model selection used combinatorial purged cross-validation with purging and embargo <a class="cite" href="#ref-lopezdeprado">[35]</a>.</p>
+
+      <h3 id="sec-parlay"><span class="secno">8.4</span>Pricing correlated parlays</h3>
+      <p>Kalshi also offers multi-leg combinations on sports outcomes. Legs from the same game are not independent, so multiplying their probabilities misprices the combination <a class="cite" href="#ref-rana">[31]</a>. I model <span class="m">n</span> legs as spins <span class="m">s_i \in \{-1,+1\}</span> under a pairwise maximum-entropy (Ising) distribution <a class="cite" href="#ref-jaynes">[29]</a>, <a class="cite" href="#ref-schneidman">[30]</a>:</p>
+      <div class="eq-row" id="eq-ising"><div class="eq">\begin{gathered} \Pr(\mathbf{s}) = \frac{1}{Z}\exp\!\Big(\sum_i h_i s_i + \sum_{i&lt;j} J_{ij}\, s_i s_j\Big), \\ J_{ij} = \tfrac14 \ln \frac{(n_{11}+a)(n_{00}+a)}{(n_{10}+a)(n_{01}+a)}, \end{gathered}</div><span class="eqno">(5)</span></div>
+      <p>where <span class="m">n_{11}, n_{10}, n_{01}, n_{00}</span> count joint outcomes across 25,771 historical player box scores (579 players), with smoothing <span class="m">a = \tfrac12</span>, and <span class="m">h_i = \tfrac12 \operatorname{logit} p_i</span>. The coupling is the exact two-spin log-odds ratio. The fair price of a parlay is <span class="m">\Pr(\mathbf{s} = \mathbf{1})</span>. For up to four legs, <span class="m">Z</span> is enumerated exactly over <span class="m">2^n</span> states. For five to ten legs, a naive mean-field solver iterates <span class="m">m_i = \tanh(h_i + \sum_j J_{ij} m_j)</span> and bounds <span class="m">\ln Z</span> with the Gibbs–Bogoliubov variational free energy. Two limitations are stated plainly. Setting <span class="m">h_i</span> from marginals is exact only without coupling, and matching marginals exactly requires solving a convex moment-matching problem for <span class="m">h</span>. Measured against exact enumeration, the mean-field approximation overestimates joint probabilities under positive coupling (by 7–27% for weak random couplings, and by a factor of 1.9 for a five-leg case with <span class="m">J = 0.3</span>).</p>
+    </section>
+
+    <!-- 9 -->
+    <section class="numbered" id="sec-discussion">
+      <h2><span class="secno">9</span>Discussion</h2>
+      <p><em>The scarce resource is trustworthy evaluation.</em> In this system, a hypothesis cost nothing at the margin and a full implement-and-test cycle took minutes. Under those conditions the quality of the research is set almost entirely by the evaluator. If the evaluator can be fooled, the generator will find the way, and if its sensitivity is unknown, its silence carries no information. The two mechanisms here address those two failure modes directly. Both should generalize to any automated discovery system that writes code and is scored on data.</p>
+      <p><em>Behaviour, not syntax.</em> A list of forbidden patterns encodes what its authors already know, while a code generator samples from an open space of idioms. On augur's own output, the list was wrong in both directions (<a class="xref" href="#tab-lint">Table 3</a>). The differential audit asks the defining question of causality directly, and every rejection it makes carries a counterexample.</p>
+      <p><em>Calibrated nulls.</em> Planting known edges converts “nothing qualified” into an approximate upper bound on effect size within the explored families. The calibration also exposed a dependency that is easy to miss: the detection floor moved from 0.85 to 0.70 when a placeholder cost was replaced with the exchange's actual schedule. A cost model is part of the instrument, not a detail of accounting, and the right time to calibrate is before the large searches, not after.</p>
+      <p><em>The market.</em> At a fifteen-minute horizon, <code>KXBTC15M</code> is efficient to within its transaction costs. The effects that exist are the size the fee schedule allows to persist. The fee is convex in price and rounded per order, so its arithmetic varies sharply across the price range, and the most robust anomaly sits where rounding makes it uneconomic for small orders.</p>
+      <p><em>Limitations.</em> The evidence comes from one contract series over about four months. Several effects rely on modelled rather than realized fills. Most loop evaluations used a placeholder cost, and the calibration used a different protocol from the loop. The sandbox executes in-process with the full set of built-ins, so it guards against accidental reach rather than forming a security boundary. The audit samples checkpoints and can miss a leak confined between them. Neither the sealed feature store nor a default-deny composition allowlist, both built and tested, was connected to the implementer in the runs reported, so the lint-versus-audit comparison is retrospective, not prospective. Agent behaviour depends on the model versions used.</p>
+    </section>
+
+    <!-- 10 -->
+    <section class="numbered" id="sec-conclusion">
+      <h2><span class="secno">10</span>Conclusion</h2>
+      <p>augur shows that a multi-agent language-model system can run the full research cycle on a live market without supervision: choosing directions, proposing and critiquing hypotheses, implementing them and evaluating them. Its distinguishing feature is that the evaluator is built on the assumption that the agents will exploit it. Agents are contained to a text channel. Machine-written features are tested for causality by their behaviour, with a counterexample for every rejection. The evaluation stage is calibrated by injection and recovery, so its silence has a measured meaning, and the calibration showed that the cost model is part of that meaning. Applied to Kalshi's 15-minute Bitcoin contracts, the system and the analyses around it found real effects, measured them before and after costs, and showed that the exchange's fee arithmetic, down to its per-order rounding, decides whether they are worth anything.</p>
+    </section>
+
+    <section class="appendix" id="appendix-a">
+      <h2>Appendix A. Prompt excerpts</h2>
+      <blockquote>“Convert a hypothesis description into a single Python function <code>strategy(data, feat) -&gt; StrategyOutput</code> that the harness will sandbox-run.”<cite>Implementer system prompt</cite></blockquote>
+      <blockquote>“5. Expected firing rate sanity check … If your sanity check estimates &gt;500 fires/day, stop and reconsider.”<cite>Implementer plan requirements</cite></blockquote>
+      <blockquote>“A bare lint code … told the coder LLM nothing it could act on — it re-emitted the same violation across all 3 retries. Each code maps to the concrete fix.”<cite>Retry remediation table, design note</cite></blockquote>
+      <blockquote>“Be strict. The point is to not waste compute. Default to reject if you're unsure.”<cite>Critic system prompt</cite></blockquote>
+      <blockquote>“Your job is NOT to write strategies. It is to decide WHERE to dig … rewarded for directions that are genuinely NEW TO THIS MARKET.”<cite>Director system prompt</cite></blockquote>
+    </section>
+
+    <section class="appendix" id="appendix-b">
+      <h2>Appendix B. Data and reproducibility</h2>
+      <p>Market data are licensed from Predexon and Kalshi and are not redistributed. The code repositories are private. Every figure in this paper comes from the system's run databases, analysis logs or scripts. The favourite-tilt results (<a class="xref" href="#tab-effects">Table 6</a> and <a class="xref" href="#tab-orders">Table 7</a>) and the lint census (<a class="xref" href="#tab-lint">Table 3</a>) were re-computed from those sources for this paper, and the run databases were re-queried for the cost model used by each evaluation. The detection-floor sweep (<a class="xref" href="#tab-floor">Table 4</a>) is reported as logged. Monetary amounts are per contract unless stated otherwise.</p>
+    </section>
+
+    <section id="references">
+      <h2>References</h2>
+      <ol>
+        <li id="ref-alphagpt">Wang, S., Yuan, H., Zhou, L., Ni, L. M., Shum, H.-Y. and Guo, J. (2025). Alpha-GPT: Human-AI interactive alpha mining for quantitative investment. <em>Proceedings of EMNLP 2025: System Demonstrations</em>. arXiv:2308.00016. <a href="https://arxiv.org/abs/2308.00016">https://arxiv.org/abs/2308.00016</a></li>
+        <li id="ref-alphaagent">Tang, Z. et al. (2025). AlphaAgent: LLM-driven alpha mining with regularized exploration to counteract alpha decay. arXiv:2502.16789. <a href="https://arxiv.org/abs/2502.16789">https://arxiv.org/abs/2502.16789</a></li>
+        <li id="ref-rdagentq">Li, Y., Yang, X., Yang, X., Xu, M., Wang, X., Liu, W. and Bian, J. (2025). R&amp;D-Agent-Quant: A multi-agent framework for data-centric factors and model joint optimization. <em>NeurIPS 2025 Datasets and Benchmarks Track</em>. arXiv:2505.15155. <a href="https://arxiv.org/abs/2505.15155">https://arxiv.org/abs/2505.15155</a></li>
+        <li id="ref-kaufman">Kaufman, S., Rosset, S., Perlich, C. and Stitelman, O. (2012). Leakage in data mining: Formulation, detection, and avoidance. <em>ACM Transactions on Knowledge Discovery from Data</em> 6(4), 15. <a href="https://doi.org/10.1145/2382577.2382579">https://doi.org/10.1145/2382577.2382579</a></li>
+        <li id="ref-metr">METR (2025). Recent frontier models are reward hacking. <a href="https://metr.org/blog/2025-06-05-recent-reward-hacking">https://metr.org/blog/2025-06-05-recent-reward-hacking</a></li>
+        <li id="ref-harvey">Harvey, C. R., Liu, Y. and Zhu, H. (2016). … and the cross-section of expected returns. <em>Review of Financial Studies</em> 29(1), 5–68. <a href="https://doi.org/10.1093/rfs/hhv059">https://doi.org/10.1093/rfs/hhv059</a></li>
+        <li id="ref-dsr">Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: Correcting for selection bias, backtest overfitting, and non-normality. <em>Journal of Portfolio Management</em> 40(5), 94–107. <a href="https://doi.org/10.3905/jpm.2014.40.5.094">https://doi.org/10.3905/jpm.2014.40.5.094</a></li>
+        <li id="ref-pbo">Bailey, D. H., Borwein, J. M., López de Prado, M. and Zhu, Q. J. (2017). The probability of backtest overfitting. <em>Journal of Computational Finance</em> 20(4). <a href="https://doi.org/10.21314/JCF.2016.322">https://doi.org/10.21314/JCF.2016.322</a></li>
+        <li id="ref-metamorphic">Chen, T. Y., Kuo, F.-C., Liu, H., Poon, P.-L., Towey, D., Tse, T. H. and Zhou, Z. Q. (2018). Metamorphic testing: A review of challenges and opportunities. <em>ACM Computing Surveys</em> 51(1), 4. <a href="https://doi.org/10.1145/3143561">https://doi.org/10.1145/3143561</a></li>
+        <li id="ref-luo">Luo, H., Huang, Y., Luo, S., Liu, F., Li, L., Hu, Z., Feng, J. and Liu, Q. (2026). Harness-aware self-evolving: Co-evolving model weights, harness, and task solutions. arXiv:2607.03935. <a href="https://arxiv.org/abs/2607.03935">https://arxiv.org/abs/2607.03935</a></li>
+        <li id="ref-xalpha">Liu, F., Fu, Y., Wang, Y. and Liu, Q. (2026). XALPHA: A memory-driven AI quant researcher for hypothesis-to-code alpha discovery. arXiv:2607.08332. <a href="https://arxiv.org/abs/2607.08332">https://arxiv.org/abs/2607.08332</a></li>
+        <li id="ref-petigura">Petigura, E. A., Marcy, G. W. and Howard, A. W. (2013). A plateau in the planet population below twice the size of Earth. <em>Astrophysical Journal</em> 770, 69. arXiv:1304.0460. <a href="https://arxiv.org/abs/1304.0460">https://arxiv.org/abs/1304.0460</a></li>
+        <li id="ref-ligo">Biwer, C. et al. (2017). Validating gravitational-wave detections: The Advanced LIGO hardware injection system. <em>Physical Review D</em> 95, 062002. arXiv:1612.07864. <a href="https://arxiv.org/abs/1612.07864">https://arxiv.org/abs/1612.07864</a></li>
+        <li id="ref-burgi">Bürgi, C., Deng, W. and Whelan, K. (2026). Makers and takers: The economics of the Kalshi prediction market. CEPR Discussion Paper 20631. <a href="https://www.karlwhelan.com/Papers/Kalshi.pdf">https://www.karlwhelan.com/Papers/Kalshi.pdf</a></li>
+        <li id="ref-quantagent">Wang, S., Yuan, H., Ni, L. M. and Guo, J. (2024). QuantAgent: Seeking holy grail in trading by self-improving large language model. arXiv:2402.03755. <a href="https://arxiv.org/abs/2402.03755">https://arxiv.org/abs/2402.03755</a></li>
+        <li id="ref-kou">Kou, Z. et al. (2025). Automate strategy finding with LLM in quant investment. <em>Findings of EMNLP 2025</em>. arXiv:2409.06289. <a href="https://arxiv.org/abs/2409.06289">https://arxiv.org/abs/2409.06289</a></li>
+        <li id="ref-cogalpha">Liu, F. et al. (2025). Cognitive alpha mining via LLM-driven code-based evolution. arXiv:2511.18850. <a href="https://arxiv.org/abs/2511.18850">https://arxiv.org/abs/2511.18850</a></li>
+        <li id="ref-glasserman">Glasserman, P. and Lin, C. (2023). Assessing look-ahead bias in stock return predictions generated by GPT sentiment analysis. arXiv:2309.17322. <a href="https://arxiv.org/abs/2309.17322">https://arxiv.org/abs/2309.17322</a></li>
+        <li id="ref-fynance">Bernard, A. fynance: <code>assert_causal</code>. Software documentation, accessed October 2026. <a href="https://fynance.readthedocs.io/en/latest/core.html">https://fynance.readthedocs.io/en/latest/core.html</a></li>
+        <li id="ref-kapoor">Kapoor, S. and Narayanan, A. (2023). Leakage and the reproducibility crisis in machine-learning-based science. <em>Patterns</em> 4(9), 100804. <a href="https://doi.org/10.1016/j.patter.2023.100804">https://doi.org/10.1016/j.patter.2023.100804</a></li>
+        <li id="ref-mt98">Chen, T. Y., Cheung, S. C. and Yiu, S. M. (1998). Metamorphic testing: A new approach for generating next test cases. Technical Report HKUST-CS98-01, Hong Kong University of Science and Technology. arXiv:2002.12543. <a href="https://arxiv.org/abs/2002.12543">https://arxiv.org/abs/2002.12543</a></li>
+        <li id="ref-christiansen">Christiansen, J. L. et al. (2013). Measuring transit signal recovery in the Kepler pipeline. I. Individual events. <em>Astrophysical Journal Supplement Series</em> 207, 35. arXiv:1303.0255. <a href="https://arxiv.org/abs/1303.0255">https://arxiv.org/abs/1303.0255</a></li>
+        <li id="ref-arian">Arian, H. R., Norouzi Mobarekeh, D. and Seco, L. A. (2024). Backtest overfitting in the machine learning era: A comparison of out-of-sample testing methods in a synthetic controlled environment. <em>Knowledge-Based Systems</em> 305, 112477. <a href="https://doi.org/10.1016/j.knosys.2024.112477">https://doi.org/10.1016/j.knosys.2024.112477</a></li>
+        <li id="ref-wolfers">Wolfers, J. and Zitzewitz, E. (2004). Prediction markets. <em>Journal of Economic Perspectives</em> 18(2), 107–126. <a href="https://doi.org/10.1257/0895330041371321">https://doi.org/10.1257/0895330041371321</a></li>
+        <li id="ref-thaler">Thaler, R. H. and Ziemba, W. T. (1988). Anomalies: Parimutuel betting markets: Racetracks and lotteries. <em>Journal of Economic Perspectives</em> 2(2), 161–174. <a href="https://doi.org/10.1257/jep.2.2.161">https://doi.org/10.1257/jep.2.2.161</a></li>
+        <li id="ref-snowberg">Snowberg, E. and Wolfers, J. (2010). Explaining the favorite–long shot bias: Is it risk-love or misperceptions? <em>Journal of Political Economy</em> 118(4), 723–746. <a href="https://www.nber.org/papers/w15923">https://www.nber.org/papers/w15923</a></li>
+        <li id="ref-gebele">Gebele, J. and Matthes, F. (2026). When certainty is not worth it. arXiv:2605.31431. <a href="https://arxiv.org/abs/2605.31431">https://arxiv.org/abs/2605.31431</a></li>
+        <li id="ref-young">Young, G. (2026). OpenMarket: A synchronized Polymarket–Binance dataset for high-frequency prediction-market research. arXiv:2607.26245. <a href="https://arxiv.org/abs/2607.26245">https://arxiv.org/abs/2607.26245</a></li>
+        <li id="ref-jaynes">Jaynes, E. T. (1957). Information theory and statistical mechanics. <em>Physical Review</em> 106, 620–630. <a href="https://doi.org/10.1103/PhysRev.106.620">https://doi.org/10.1103/PhysRev.106.620</a></li>
+        <li id="ref-schneidman">Schneidman, E., Berry, M. J., Segev, R. and Bialek, W. (2006). Weak pairwise correlations imply strongly correlated network states in a neural population. <em>Nature</em> 440, 1007–1012. <a href="https://doi.org/10.1038/nature04701">https://doi.org/10.1038/nature04701</a></li>
+        <li id="ref-rana">Rana, R., Nadkarni, V., Moshrefi, N. and Viswanath, P. (2026). ParlayMarket: Automated market making for parlay-style joint contracts. arXiv:2603.22596. <a href="https://arxiv.org/abs/2603.22596">https://arxiv.org/abs/2603.22596</a></li>
+        <li id="ref-kalshifees">Kalshi (2026). Fee schedule. <a href="https://kalshi.com/docs/kalshi-fee-schedule.pdf">https://kalshi.com/docs/kalshi-fee-schedule.pdf</a></li>
+        <li id="ref-nautilus">Nautech Systems. NautilusTrader: an open-source, event-driven algorithmic trading platform (LGPL-3.0). <a href="https://github.com/nautechsystems/nautilus_trader">https://github.com/nautechsystems/nautilus_trader</a></li>
+        <li id="ref-bh">Benjamini, Y. and Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. <em>Journal of the Royal Statistical Society: Series B</em> 57(1), 289–300. <a href="https://doi.org/10.1111/j.2517-6161.1995.tb02031.x">https://doi.org/10.1111/j.2517-6161.1995.tb02031.x</a></li>
+        <li id="ref-lopezdeprado">López de Prado, M. (2018). <em>Advances in Financial Machine Learning</em>. Wiley. ISBN 978-1-119-48208-6.</li>
+      </ol>
+    </section>
+
+    <p class="backlink"><a href="/">← coleuhlig.com</a></p>
+  </main>
+</article>
+<script type="module" src="/kalshi/js/math.js"></script>
+</body>
+</html>

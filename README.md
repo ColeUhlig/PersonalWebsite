@@ -60,3 +60,11 @@ npx playwright install chromium   # once
 npm run test:e2e               # Playwright, desktop + mobile
 npm run serve                  # http://127.0.0.1:8766/vex/
 ```
+
+## Kalshi working paper (`content/kalshi/`)
+
+A static, paper-style write-up of augur, a multi-agent LLM system for strategy discovery on Kalshi, served at
+`/kalshi/`. The only script typesets the mathematics with KaTeX (pinned CDN). The page is generated from a template
+outside this repo (`kalshi-trading-website-mini/paper/build.py`), which numbers citations and tables; edit the
+template and rebuild rather than editing `index.html` by hand. `tests/e2e/kalshi.spec.js` checks structure,
+citations, cross-references, equations and mobile overflow.
