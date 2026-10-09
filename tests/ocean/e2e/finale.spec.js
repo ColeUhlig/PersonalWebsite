@@ -234,7 +234,7 @@ test('the render toggle stays hidden, and appears and switches for a renderer th
 	await expect(page.locator('[data-render-mode] button[data-mode="unleashed"]')).toHaveAttribute('aria-checked', 'true');
 });
 
-test('without WebGL the finale says there is nothing to measure; the proof and credits still show', async ({ page }) => {
+test('without WebGL the finale says there is nothing to measure; the proof and references still show', async ({ page }) => {
 	await page.addInitScript(() => {
 		const original = HTMLCanvasElement.prototype.getContext;
 		HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
@@ -248,7 +248,7 @@ test('without WebGL the finale says there is nothing to measure; the proof and c
 	await expect(page.locator('#motion')).toBeHidden();
 	await page.locator('#proof-block').scrollIntoViewIfNeeded();
 	await expect(page.locator('#proof .proof, #proof .proof-placeholder').first()).toBeVisible({ timeout: 30_000 });
-	await expect(page.locator('#credits')).toBeVisible();
+	await expect(page.locator('#references')).toBeVisible();
 });
 
 test.describe('on a phone, on the lighter tier by rule', () => {

@@ -1,6 +1,6 @@
 // The whole story, walked (piece C2, Task 15; spec 10): every step from the opening to the footer and
 // back, on a laptop and a phone, with no console error, no sideways scroll, the math box on the step
-// being read, and the director on that step too. Piece C's Task 10 adds the foot (the credits and the
+// being read, and the director on that step too. Piece C's Task 10 adds the foot (the references and the
 // footer reached with no sideways scroll and no failed frame) and the dev route beside the story: on
 // each screen ?step=<id>&progress=P still drives the ocean from the URL, with no story attached.
 import { test, expect } from '@playwright/test';
@@ -27,7 +27,7 @@ for (const screen of [{ name: 'a laptop', viewport: { width: 1366, height: 767 }
 			// End scrolls smoothly; a scroll made while it runs only shifts its target, and on a phone it
 			// carried the page from step 19 back down to step 23. Let it land first.
 			await restAtFoot(page);
-			await expect(page.locator('#credits')).toBeVisible();
+			await expect(page.locator('#references')).toBeVisible();
 			await expect(page.locator('footer.site')).toBeInViewport();
 			expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= window.innerWidth)).toBe(true);
 			for (const id of [...STEP_IDS].reverse().filter((_, i) => i % 3 === 0)) {

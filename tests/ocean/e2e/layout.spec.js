@@ -80,7 +80,7 @@ test('every step but the finale has a collapsed math line, and the cards sit whe
 
 test('the finale holds its blocks, with footage, Play and the render toggle hidden', async ({ page }) => {
 	await page.goto('/ocean/');
-	for (const id of ['live', 'proof-block', 'recap', 'believed', 'credits']) {
+	for (const id of ['live', 'proof-block', 'recap', 'believed', 'references']) {
 		await expect(page.locator(`${at('finale')} #${id}`)).toHaveCount(1);
 	}
 	await expect(page.locator('#footage')).toBeHidden();
@@ -95,7 +95,7 @@ test('the finale holds its blocks, with footage, Play and the render toggle hidd
 		'https://history.siggraph.org/wp-content/uploads/2022/09/2018-Talks-Ang_The-Technical-Art-of-Sea-of-Thieves.pdf',
 		'https://github.com/howhow2315/jonswap-ocean',
 	]) {
-		await expect(page.locator(`#credits a[href="${href}"]`)).toHaveCount(1);
+		await expect(page.locator(`#references a[href="${href}"]`)).toHaveCount(1);
 	}
 });
 
@@ -199,7 +199,7 @@ test.describe('on a phone in portrait', () => {
 		const panel = await page.locator(`${at('unlit')} .panel`).boundingBox();
 		expect(panel.x).toBeGreaterThanOrEqual(15);
 		expect(panel.x + panel.width).toBeLessThanOrEqual(375);
-		for (const id of ['opening', `step-${stepOf('into-3d')}`, `step-${STEP_COUNT}`, 'credits']) {
+		for (const id of ['opening', `step-${stepOf('into-3d')}`, `step-${STEP_COUNT}`, 'references']) {
 			await page.locator(`#${id}`).scrollIntoViewIfNeeded();
 			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 		}
