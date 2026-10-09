@@ -1,0 +1,82 @@
+/* The texture insets of steps 22, 23 and 25 (piece C2; lane F owns this file). */
+.inset {
+	margin: 14px 0;
+}
+
+.inset-body {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.inset-body > .inset-line {
+	grid-column: 1 / -1;
+}
+
+/* A label that wraps further than its neighbours' keeps the ranges level: each sits at its cell's foot. */
+.inset-field {
+	display: flex;
+	flex-direction: column;
+}
+
+.inset-field .inset-range {
+	margin-top: auto;
+	padding-top: 4px;
+}
+
+.inset[data-inset="sampling"] .inset-body {
+	grid-template-columns: 1fr;
+	justify-items: start;
+}
+
+.inset canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	box-sizing: border-box;
+	aspect-ratio: 1;
+	border-radius: 6px;
+	border: 1px solid var(--line);
+	image-rendering: pixelated;
+}
+
+.inset[data-inset="sampling"] canvas {
+	width: 240px;
+	max-width: 100%;
+	image-rendering: auto;
+}
+
+.inset-label,
+.inset-range,
+.inset-line {
+	margin: 4px 0 0;
+	font-size: 0.8rem;
+	color: var(--ink-dim);
+}
+
+.inset-range {
+	display: block;
+	font-variant-numeric: tabular-nums;
+}
+
+.inset-line {
+	font-variant-numeric: tabular-nums;
+}
+
+.inset figcaption {
+	margin-top: 8px;
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+}
+
+/* The painted maps are photographs of textures: smooth them as a texture sampler would. */
+.inset[data-inset="painted"] canvas {
+	image-rendering: auto;
+}
+
+/* Task 15: text written at mount only to hold its place (the ranges' and the sampling line's
+   widest usual form), hidden until the first drawing writes the real numbers, so the inset keeps
+   its height when it first draws. */
+.inset .is-reserved {
+	visibility: hidden;
+}

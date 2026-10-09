@@ -1,8 +1,9 @@
 // The two things the showcase page takes from the Roblox side, in one place: the public place's
 // URL (the "Play in Roblox" button) and the footage clips' contract (names, format, manifest).
 // Both start empty, and the page hides what is empty: ROBLOX_PLACE_URL stays '' until Cole makes
-// the place public, and media/footage.json does not exist until the first clip is encoded
-// (scripts/ocean-footage.mjs writes it). How to set the URL: roblox-ocean docs/publishing.md.
+// the place public, and media/footage.json is committed with an empty clip list until the first
+// clip is encoded (scripts/ocean-footage.mjs adds to it), so the page never logs a 404 for it.
+// How to set the URL: roblox-ocean docs/publishing.md.
 
 // Paste the experience page's address here after the place is public, e.g.
 // 'https://www.roblox.com/games/1234567890/Ocean'. Anything else keeps the button hidden, and
@@ -23,7 +24,10 @@ export function placeUrl(raw = ROBLOX_PLACE_URL) {
 	return match ? `https://www.roblox.com/games/${match[1]}` : null;
 }
 
-export const FOOTAGE_MANIFEST = 'media/footage.json';
+// Site-absolute (piece C, after the 2026-09-30 live incident): the page is served at /ocean with
+// no trailing slash too, where a relative 'media/...' would resolve to the site root's /media/.
+export const FOOTAGE_DIR = '/ocean/media/';
+export const FOOTAGE_MANIFEST = `${FOOTAGE_DIR}footage.json`;
 export const FOOTAGE_SHOTS = Object.freeze(['deck', 'flyup', 'crest', 'studio']);
 
 const MAX_SIDE = 8192;

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Luau proof panel</title>
+	<meta name="robots" content="noindex">
+	<meta name="description" content="Development page for the ocean showcase's Luau proof panel.">
+	<script src="/js/canonical-host.js"></script>
+	<link rel="stylesheet" href="proof.css">
+</head>
+<body class="proof-dev">
+	<header>
+		<p>Development page for the Luau proof panel. The finished page places it in the finale; scroll down to it.</p>
+	</header>
+	<div class="proof-dev-spacer"></div>
+	<main>
+		<div id="proof"></div>
+	</main>
+	<script type="module">
+		import { mountProofPanelWhenNear } from './js/ui/proofLazy.js';
+		window.__proof = mountProofPanelWhenNear(document.getElementById('proof'));
+	</script>
+</body>
+</html>
