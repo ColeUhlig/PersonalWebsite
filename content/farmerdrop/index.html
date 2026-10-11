@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Farmerdrop payments</title>
+  <meta name="description" content="How Farmerdrop moves money in step with the produce, and what happens when something breaks.">
+  <link rel="canonical" href="https://coleuhlig.com/farmerdrop/">
+  <script src="/js/canonical-host.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/farmerdrop/style.css">
+</head>
+<body>
+  <main>
+    <header class="intro">
+      <h1>Ten dollars and a crate of tomatoes</h1>
+      <p class="lede">Farmerdrop charges a customer days before their food is picked. I built its payment system so that every cent has exactly one owner at every moment, so that money only moves when the crate does, and so that nothing breaks quietly when Stripe, the network, the server or a person fails.</p>
+    </header>
+
+    <section class="explorer" id="explorer" aria-label="System map">
+      <p class="question" id="question" hidden></p>
+      <ol class="stages" id="stages"></ol>
+
+      <figure class="map-frame" id="map"></figure>
+
+      <div class="readout">
+        <div class="caption" aria-live="polite">
+          <h2 id="step-title"></h2>
+          <p id="step-caption"></p>
+          <p class="outcome" id="outcome" hidden></p>
+        </div>
+        <div class="tape">
+          <h3>Ledger entries</h3>
+          <ul id="step-ledger"></ul>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button type="button" id="prev">Back</button>
+        <button type="button" id="play">Play</button>
+        <button type="button" id="next" class="primary">Next step</button>
+      </div>
+    </section>
+
+    <section class="whatif" aria-labelledby="whatif-title">
+      <h2 id="whatif-title">What if something breaks?</h2>
+      <p class="lede">Pick a failure to replay it on the map: what breaks, how the system notices, and where the money and the crate end up.</p>
+      <div class="picker" id="picker"></div>
+    </section>
+
+    <section class="engines" aria-labelledby="engines-title">
+      <h2 id="engines-title">Four mechanisms do most of the work</h2>
+      <p class="lede">Almost every recovery above leans on one of these.</p>
+      <dl class="engine-list">
+        <div>
+          <dt>One booking door</dt>
+          <dd>The webhook, the browser, the post-payment redirect and the reconciler all call the same booking function. A lock on the order's row lets exactly one of them book; a unique index on the payment entry catches anything that slips past.</dd>
+        </div>
+        <div>
+          <dt>A five-minute sweep</dt>
+          <dd>Every five minutes one job asks Stripe about stuck payments, sends unreported tax, retries failed refunds and tax reversals, matches Stripe's monthly fee bill, settles claims nobody answered, and cancels orders abandoned for 30 minutes, after checking whether they were paid after all.</dd>
+        </div>
+        <div>
+          <dt>Write it down before calling Stripe</dt>
+          <dd>Every charge, refund and tax call is recorded in an outbox table under an idempotency key before Stripe is called, and the same key is sent to Stripe. A retry after any crash finds the same row and gets the same Stripe object back.</dd>
+        </div>
+        <div>
+          <dt>Holding</dt>
+          <dd>Money that nobody has earned yet sits in a ledger account that belongs to the order, not to a person. Refunds and disputed claims can be paid from it immediately, before anyone is blamed, and it drains to exactly zero once everyone is paid.</dd>
+        </div>
+      </dl>
+    </section>
+  </main>
+  <script type="module" src="/farmerdrop/js/main.js"></script>
+</body>
+</html>

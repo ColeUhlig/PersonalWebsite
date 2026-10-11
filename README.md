@@ -68,3 +68,11 @@ A static, paper-style write-up of augur, a multi-agent LLM system for strategy d
 outside this repo (`kalshi-trading-website-mini/paper/build.py`), which numbers citations and tables; edit the
 template and rebuild rather than editing `index.html` by hand. `tests/e2e/kalshi.spec.js` checks structure,
 citations, cross-references, equations and mobile overflow.
+
+## Farmerdrop payments (`content/farmerdrop/`)
+
+An interactive flow map of the Farmerdrop payment system, served at `/farmerdrop/`: goods, system and money on one
+inline-SVG map, one $10.00 order stepped through end to end, and replays of what happens when Stripe, the network,
+the server or a person fails. Vanilla ES modules, no libraries. The scenario data in `js/data.js` and
+`js/scenarios.js` uses synthetic amounts only. Authored in `Farmerdrop-website-mini/site/` and copied here.
+`tests/e2e/farmerdrop.spec.js` walks every track and checks the money always totals $10.00.
