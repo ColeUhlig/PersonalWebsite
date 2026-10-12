@@ -71,8 +71,8 @@ citations, cross-references, equations and mobile overflow.
 
 ## Farmerdrop payments (`content/farmerdrop/`)
 
-An interactive flow map of the Farmerdrop payment system, served at `/farmerdrop/`: goods, system and money on one
-inline-SVG map, one $10.00 order stepped through end to end, and replays of what happens when Stripe, the network,
-the server or a person fails. Vanilla ES modules, no libraries. The scenario data in `js/data.js` and
-`js/scenarios.js` uses synthetic amounts only. Authored in `Farmerdrop-website-mini/site/` and copied here.
-`tests/e2e/farmerdrop.spec.js` walks every track and checks the money always totals $10.00.
+A scroll-driven explainer of the Farmerdrop payment system, served at `/farmerdrop/`. A strip pinned to the top shows
+where the crate is and who owns each cent of one $10.00 order; each chapter pins a sequence diagram (inline SVG,
+`js/sequence.js`) whose messages appear step by step, with "what if" failures shown in the chapter where they occur.
+Vanilla ES modules, no libraries, synthetic amounts only. Authored in `Farmerdrop-website-mini/site/` and copied here.
+`tests/e2e/farmerdrop.spec.js` scrolls every step and checks the strip and diagrams follow.

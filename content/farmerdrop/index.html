@@ -3,74 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Farmerdrop payments</title>
-  <meta name="description" content="How Farmerdrop moves money in step with the produce, and what happens when something breaks.">
+  <title>Following ten dollars</title>
+  <meta name="description" content="How I built Farmerdrop's payment system: where every cent and the crate are at each moment, and what happens when Stripe, the network or the server fails.">
   <link rel="canonical" href="https://coleuhlig.com/farmerdrop/">
   <script src="/js/canonical-host.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/farmerdrop/style.css">
 </head>
 <body>
+  <aside class="strip" id="strip" aria-label="Where the crate and the money are right now"></aside>
+
   <main>
-    <header class="intro">
-      <h1>Ten dollars and a crate of tomatoes</h1>
-      <p class="lede">Farmerdrop charges a customer days before their food is picked. I built its payment system so that every cent has exactly one owner at every moment, so that money only moves when the crate does, and so that nothing breaks quietly when Stripe, the network, the server or a person fails.</p>
+    <header class="intro" data-money="card" data-crate="farm">
+      <h1>Following ten dollars through Farmerdrop</h1>
+      <p class="lede">Farmerdrop customers order produce from local farms and collect it from a neighbour's porch, the <em>drop host</em>. The customer pays on Tuesday. The farmer picks and packs on Thursday, drives the crate to the drop host on Friday, and the customer collects it on Saturday.</p>
+      <p>So for four days Farmerdrop holds money for food that, at first, hasn't been picked. I built the payment system around one question: at every moment, who owns each cent, and where is the crate? The bar pinned to the top of this page answers both as you scroll.</p>
     </header>
 
-    <section class="explorer" id="explorer" aria-label="System map">
-      <p class="question" id="question" hidden></p>
-      <ol class="stages" id="stages"></ol>
+    <section class="chapter" aria-labelledby="split-title">
+      <h2 id="split-title">Where the $10 goes</h2>
+      <p data-money="card" data-crate="farm">Here is one small order, used for the whole page. These are the exact numbers from the test that checks the fee math to the cent.</p>
+      <figure class="split" id="split"></figure>
+      <p>The split isn't calculated in application code. It's a Postgres function, <code>compute_order_financials</code>, and the rates it uses are copied onto the order when it's placed, so changing a fee next month can't change what this order owes anyone. Card and payout fees come out of each payee's share instead of being added to the customer's bill, and Farmerdrop keeps whatever is left, so the five pieces always add up to exactly $10.00.</p>
+    </section>
 
-      <figure class="map-frame" id="map"></figure>
+    <section class="chapter" aria-labelledby="pay-title">
+      <h2 id="pay-title">Taking the payment</h2>
+      <p>Stripe charges the card, but Stripe doesn't know who the money belongs to. That's my ledger's job. The hard part is the moment between the two: the card has been charged and my ledger doesn't know yet.</p>
 
-      <div class="readout">
-        <div class="caption" aria-live="polite">
-          <h2 id="step-title"></h2>
-          <p id="step-caption"></p>
-          <p class="outcome" id="outcome" hidden></p>
-        </div>
-        <div class="tape">
-          <h3>Ledger entries</h3>
-          <ul id="step-ledger"></ul>
+      <div class="scrolly" data-scene="pay">
+        <figure class="seq">
+          <figcaption class="seq-title"></figcaption>
+          <div class="seq-canvas"></div>
+        </figure>
+        <div class="steps">
+          <div class="step" data-step="1" data-money="card" data-crate="farm">
+            <h3>Write it down, then call Stripe</h3>
+            <p>Before my server asks Stripe for anything, it writes a row to an outbox table, <code>stripe_transactions</code>, under an idempotency key made of the order IDs and the amount. The same key goes to Stripe. If anything fails after this, a retry finds the same row and Stripe hands back the same PaymentIntent, so the customer can never be charged twice.</p>
+          </div>
+          <div class="step" data-step="2" data-money="unrecorded" data-crate="farm">
+            <h3>The card is charged, and my books don't know</h3>
+            <p>The browser sends the card straight to Stripe; card numbers never touch my server. Stripe charges $10.00 into Farmerdrop's balance. Look at the bar above: the money exists, but nothing in my ledger says so. This gap is where payment bugs live.</p>
+          </div>
+          <div class="step" data-step="3" data-money="unrecorded" data-crate="farm">
+            <h3>Two messengers, one door</h3>
+            <p>Two messages now head to my server: the browser's <code>mark-paid</code> call and Stripe's <code>payment_intent.succeeded</code> webhook. Neither is taken on trust. The webhook's signature is checked, and <code>mark-paid</code> asks Stripe whether the payment really succeeded. Both then call the same function, <code>applySucceededPaymentIntent</code>.</p>
+          </div>
+          <div class="step" data-step="4" data-money="paid" data-crate="farm">
+            <h3>Book it, exactly once</h3>
+            <p>In one database transaction the function locks the order's row, writes the ledger entries and marks the order paid. Stripe's fee (2.9% + 30¢) is set aside, Farmerdrop keeps 25¢ of the finance fee now, and the other $9.16 goes to <strong>Held for the order</strong>: money that belongs to the order, not to any person yet. Nobody has earned it, because the tomatoes are still on the vine.</p>
+          </div>
         </div>
       </div>
 
-      <div class="controls">
-        <button type="button" id="prev">Back</button>
-        <button type="button" id="play">Play</button>
-        <button type="button" id="next" class="primary">Next step</button>
+      <h3 class="whatif-title">What if the customer closes the tab right after paying?</h3>
+      <div class="scrolly whatif" data-scene="tabClosed">
+        <figure class="seq">
+          <figcaption class="seq-title"></figcaption>
+          <div class="seq-canvas"></div>
+        </figure>
+        <div class="steps">
+          <div class="step" data-step="1" data-money="unrecorded" data-crate="farm">
+            <h3>The card is charged</h3>
+            <p>Same as before: the customer confirms, and Stripe takes $10.00.</p>
+          </div>
+          <div class="step tone-fail" data-step="2" data-money="unrecorded" data-crate="farm">
+            <h3>Neither messenger arrives</h3>
+            <p>The tab closes before the browser can call <code>mark-paid</code>. And say the webhook fails too: my server is mid-deploy, or the endpoint returns an error. Stripe keeps retrying for up to three days, but for now the money is at Stripe, my ledger is empty, and the order still says "processing".</p>
+          </div>
+          <div class="step tone-recover" data-step="3" data-money="unrecorded" data-crate="farm">
+            <h3>A job that doesn't wait to be told</h3>
+            <p>Every five minutes a scheduled job looks for orders stuck in "processing" and asks Stripe directly what happened to each one. It doesn't need the browser or the webhook. Orders left unpaid for 30 minutes get cancelled, but only after this same check, so a slow payment is never cancelled while it's actually paid.</p>
+          </div>
+          <div class="step tone-recover" data-step="4" data-money="paid" data-crate="farm">
+            <h3>Booked through the same door</h3>
+            <p>Stripe says it succeeded, so the job calls the same <code>applySucceededPaymentIntent</code>. The ledger now matches reality, at most about five minutes late.</p>
+          </div>
+          <div class="step" data-step="5" data-money="paid" data-crate="farm">
+            <h3>The late webhook changes nothing</h3>
+            <p>When Stripe's retry finally lands, the order is already paid, so the function does nothing. Four doors lead to the booking (the browser, the webhook, the app's redirect and this job), and whichever arrives first wins.</p>
+          </div>
+        </div>
       </div>
-    </section>
 
-    <section class="whatif" aria-labelledby="whatif-title">
-      <h2 id="whatif-title">What if something breaks?</h2>
-      <p class="lede">Pick a failure to replay it on the map: what breaks, how the system notices, and where the money and the crate end up.</p>
-      <div class="picker" id="picker"></div>
-    </section>
-
-    <section class="engines" aria-labelledby="engines-title">
-      <h2 id="engines-title">Four mechanisms do most of the work</h2>
-      <p class="lede">Almost every recovery above leans on one of these.</p>
-      <dl class="engine-list">
-        <div>
-          <dt>One booking door</dt>
-          <dd>The webhook, the browser, the post-payment redirect and the reconciler all call the same booking function. A lock on the order's row lets exactly one of them book; a unique index on the payment entry catches anything that slips past.</dd>
+      <h3 class="whatif-title">What if the webhook and the browser arrive at the same moment?</h3>
+      <div class="scrolly whatif" data-scene="race">
+        <figure class="seq">
+          <figcaption class="seq-title"></figcaption>
+          <div class="seq-canvas"></div>
+        </figure>
+        <div class="steps">
+          <div class="step" data-step="1" data-money="unrecorded" data-crate="farm">
+            <h3>Two requests, milliseconds apart</h3>
+            <p>This is the normal case, not an edge case. The browser usually wins, but the webhook is often close behind.</p>
+          </div>
+          <div class="step" data-step="2" data-money="unrecorded" data-crate="farm">
+            <h3>Both ask for the same lock</h3>
+            <p>Each request opens a transaction and runs <code>SELECT … FOR UPDATE</code> on the order's row. Postgres gives the row to one of them; the other waits.</p>
+          </div>
+          <div class="step tone-recover" data-step="3" data-money="paid" data-crate="farm">
+            <h3>One books, one walks away</h3>
+            <p>A writes the ledger, marks the order paid and commits. Only then does B get the row, see "paid", and return without touching anything.</p>
+          </div>
+          <div class="step" data-step="4" data-money="paid" data-crate="farm">
+            <h3>A backstop, and the bug behind it</h3>
+            <p>A partial unique index allows one payment row per order, so even a path that skipped the lock couldn't book twice. I built all this after finding that the normal desktop flow booked <em>nothing</em>: <code>mark-paid</code> used to flip the order to paid without writing the ledger, and the webhook then skipped it as already paid. All 760 tests passed, because every test entered money through the webhook.</p>
+          </div>
         </div>
-        <div>
-          <dt>A five-minute sweep</dt>
-          <dd>Every five minutes one job asks Stripe about stuck payments, sends unreported tax, retries failed refunds and tax reversals, matches Stripe's monthly fee bill, settles claims nobody answered, and cancels orders abandoned for 30 minutes, after checking whether they were paid after all.</dd>
-        </div>
-        <div>
-          <dt>Write it down before calling Stripe</dt>
-          <dd>Every charge, refund and tax call is recorded in an outbox table under an idempotency key before Stripe is called, and the same key is sent to Stripe. A retry after any crash finds the same row and gets the same Stripe object back.</dd>
-        </div>
-        <div>
-          <dt>Holding</dt>
-          <dd>Money that nobody has earned yet sits in a ledger account that belongs to the order, not to a person. Refunds and disputed claims can be paid from it immediately, before anyone is blamed, and it drains to exactly zero once everyone is paid.</dd>
-        </div>
-      </dl>
+      </div>
     </section>
   </main>
   <script type="module" src="/farmerdrop/js/main.js"></script>
