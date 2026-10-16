@@ -1,0 +1,84 @@
+:root {
+  --bg: #fbfbf9;
+  --ink: #1a1a1a;
+  --muted: #6b6b6b;
+  --line: #e2e2de;
+  --well: #efefeb;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141414;
+    --ink: #e8e8e6;
+    --muted: #9a9a96;
+    --line: #2c2c2c;
+    --well: #1e1e1e;
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+main, footer {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+header { padding: clamp(56px, 11vw, 136px) 0 clamp(40px, 6vw, 72px); }
+h1 {
+  margin: 0;
+  font-size: clamp(40px, 6.5vw, 72px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+header p { margin: 14px 0 0; color: var(--muted); font-size: clamp(17px, 1.8vw, 20px); }
+
+.projects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+  gap: clamp(40px, 5vw, 64px) clamp(24px, 3vw, 40px);
+}
+
+.tile { display: block; color: inherit; text-decoration: none; }
+.tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; }
+
+.media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.media img, .media video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+.media video { opacity: 0; transition: opacity 0.2s; }
+.media video.playing { opacity: 1; }
+
+.head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin-top: 16px; }
+.title { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+.tile:hover .title, .tile:focus-visible .title { text-decoration: underline; text-underline-offset: 3px; }
+.date { flex: none; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.summary { margin: 4px 0 0; color: var(--muted); font-size: 15px; max-width: 60ch; }
+.status { color: var(--ink); }
+
+footer { padding-top: 96px; padding-bottom: 48px; color: var(--muted); font-size: 14px; }

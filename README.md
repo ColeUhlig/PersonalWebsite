@@ -48,6 +48,21 @@ deleted from Azure (`--action-on-unmanage deleteResources`).
 
 To tear everything down: `az group delete -n rg-personalwebsite`
 
+## Home page (`content/index.html`)
+
+The home page lists every mini site as a tile (preview, title, summary, date), newest first, built from
+`content/js/projects.js`. To add a mini site:
+
+1. Put it in `content/<slug>/` (served at `/<slug>/`).
+2. Add an entry at the top of `PROJECTS` in `content/js/projects.js`: title, summary, date (`YYYY-MM`) and,
+   optionally, a status such as `'In progress'`.
+3. Take its preview: `node scripts/capture-previews.mjs <slug>` (needs ffmpeg). It writes a still,
+   `content/img/previews/<slug>.jpg`, and a six-second clip of the page scrolling, `<slug>.mp4`, which plays when
+   the tile is hovered. If the page moves by itself and shouldn't scroll, set its distance in `CLIP_SCROLL` in the
+   script. Run it with no slug to refresh every preview after a page changes.
+
+`tests/e2e/home.spec.js` checks that every entry has its folder, still and clip, and that the page shows each one.
+
 ## VEX explainer (`content/vex/`)
 
 An interactive, scroll-driven explanation of VEX robot motion software, served at `/vex/`. Design spec:
