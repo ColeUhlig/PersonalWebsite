@@ -3,118 +3,363 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Following ten dollars</title>
-  <meta name="description" content="How I built Farmerdrop's payment system: where every cent and the crate are at each moment, and what happens when Stripe, the network or the server fails.">
+  <title>Farmerdrop money system</title>
+  <meta name="description" content="How Farmerdrop splits, holds and pays out money: the SQL that computes every cent, the ledger rows each step writes, and what Postgres guarantees when requests race or crash.">
   <link rel="canonical" href="https://coleuhlig.com/farmerdrop/">
   <script src="/js/canonical-host.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/farmerdrop/style.css">
 </head>
 <body>
-  <aside class="strip" id="strip" aria-label="Where the crate and the money are right now"></aside>
+<main>
+  <header class="masthead">
+    <h1>The Farmerdrop money system</h1>
+    <p class="dek">Farmerdrop customers buy from local farms and collect their order from a neighbour's porch, the drop host. The card is charged days before the produce is picked, and the money has to reach three different people as the crate changes hands. This is how I built that on Postgres and Stripe Connect: the SQL that computes every cent, the ledger rows each step writes, and what holds when requests race or the server dies.</p>
+    <dl class="glance">
+      <div><dt>Charge model</dt><dd>Stripe Connect Express, separate charges and transfers. The platform charges the card; farmers and hosts are paid later by transfer.</dd></div>
+      <div><dt>Money math</dt><dd><code>compute_order_financials</code>, <code>compute_refund</code> and <code>compute_reimbursement</code>, all SQL</dd></div>
+      <div><dt>Ledger</dt><dd>One signed amount per row across 8 account types, including an escrow account called holding</dd></div>
+      <div><dt>Exactly-once</dt><dd>Partial unique indexes, row locks, compare-and-set updates, an idempotency-keyed outbox</dd></div>
+      <div><dt>Recovery</dt><dd>A five-minute job with eight passes: unconfirmed payments, unreported tax, failed refunds and tax reversals, Stripe's fees, unanswered claims, abandoned orders</dd></div>
+    </dl>
+  </header>
 
-  <main>
-    <header class="intro" data-money="card" data-crate="farm">
-      <h1>Following ten dollars through Farmerdrop</h1>
-      <p class="lede">Farmerdrop customers order produce from local farms and collect it from a neighbour's porch, the <em>drop host</em>. The customer pays on Tuesday. The farmer picks and packs on Thursday, drives the crate to the drop host on Friday, and the customer collects it on Saturday.</p>
-      <p>So for four days Farmerdrop holds money for food that, at first, hasn't been picked. I built the payment system around one question: at every moment, who owns each cent, and where is the crate? The bar pinned to the top of this page answers both as you scroll.</p>
-    </header>
-
-    <section class="chapter" aria-labelledby="split-title">
-      <h2 id="split-title">Where the $10 goes</h2>
-      <p data-money="card" data-crate="farm">Here is one small order, used for the whole page. These are the exact numbers from the test that checks the fee math to the cent.</p>
-      <figure class="split" id="split"></figure>
-      <p>The split isn't calculated in application code. It's a Postgres function, <code>compute_order_financials</code>, and the rates it uses are copied onto the order when it's placed, so changing a fee next month can't change what this order owes anyone. Card and payout fees come out of each payee's share instead of being added to the customer's bill, and Farmerdrop keeps whatever is left, so the five pieces always add up to exactly $10.00.</p>
-    </section>
-
-    <section class="chapter" aria-labelledby="pay-title">
-      <h2 id="pay-title">Taking the payment</h2>
-      <p>Stripe charges the card, but Stripe doesn't know who the money belongs to. That's my ledger's job. The hard part is the moment between the two: the card has been charged and my ledger doesn't know yet.</p>
-
-      <div class="scrolly" data-scene="pay">
-        <figure class="seq">
-          <figcaption class="seq-title"></figcaption>
-          <div class="seq-canvas"></div>
-        </figure>
-        <div class="steps">
-          <div class="step" data-step="1" data-money="card" data-crate="farm">
-            <h3>Write it down, then call Stripe</h3>
-            <p>Before my server asks Stripe for anything, it writes a row to an outbox table, <code>stripe_transactions</code>, under an idempotency key made of the order IDs and the amount. The same key goes to Stripe. If anything fails after this, a retry finds the same row and Stripe hands back the same PaymentIntent, so the customer can never be charged twice.</p>
-          </div>
-          <div class="step" data-step="2" data-money="unrecorded" data-crate="farm">
-            <h3>The card is charged, and my books don't know</h3>
-            <p>The browser sends the card straight to Stripe; card numbers never touch my server. Stripe charges $10.00 into Farmerdrop's balance. Look at the bar above: the money exists, but nothing in my ledger says so. This gap is where payment bugs live.</p>
-          </div>
-          <div class="step" data-step="3" data-money="unrecorded" data-crate="farm">
-            <h3>Two messengers, one door</h3>
-            <p>Two messages now head to my server: the browser's <code>mark-paid</code> call and Stripe's <code>payment_intent.succeeded</code> webhook. Neither is taken on trust. The webhook's signature is checked, and <code>mark-paid</code> asks Stripe whether the payment really succeeded. Both then call the same function, <code>applySucceededPaymentIntent</code>.</p>
-          </div>
-          <div class="step" data-step="4" data-money="paid" data-crate="farm">
-            <h3>Book it, exactly once</h3>
-            <p>In one database transaction the function locks the order's row, writes the ledger entries and marks the order paid. Stripe's fee (2.9% + 30¢) is set aside, Farmerdrop keeps 25¢ of the finance fee now, and the other $9.16 goes to <strong>Held for the order</strong>: money that belongs to the order, not to any person yet. Nobody has earned it, because the tomatoes are still on the vine.</p>
-          </div>
-        </div>
+  <section id="order" class="sec">
+    <h2><span class="secno">1</span>The $10.00 fixture</h2>
+    <div class="cols">
+      <div class="prose">
+        <p>Every number below is from one fixture: a single taxable item at $8.71, taxed at 8.5%, with the seeded fee schedule. LocalHarvest's <code>fees-ten-dollar-protocol</code> test walks this order through payment, receipt, pickup and payout, and asserts every account to the cent at each step.</p>
+        <p>The customer pays goods, tax and a flat finance fee. Stripe Tax computes the tax inside the same database transaction that creates the order, so if Stripe Tax fails the order is never created.</p>
       </div>
-
-      <h3 class="whatif-title">What if the customer closes the tab right after paying?</h3>
-      <div class="scrolly whatif" data-scene="tabClosed">
-        <figure class="seq">
-          <figcaption class="seq-title"></figcaption>
-          <div class="seq-canvas"></div>
-        </figure>
-        <div class="steps">
-          <div class="step" data-step="1" data-money="unrecorded" data-crate="farm">
-            <h3>The card is charged</h3>
-            <p>Same as before: the customer confirms, and Stripe takes $10.00.</p>
-          </div>
-          <div class="step tone-fail" data-step="2" data-money="unrecorded" data-crate="farm">
-            <h3>Neither messenger arrives</h3>
-            <p>The tab closes before the browser can call <code>mark-paid</code>. And say the webhook fails too: my server is mid-deploy, or the endpoint returns an error. Stripe keeps retrying for up to three days, but for now the money is at Stripe, my ledger is empty, and the order still says "processing".</p>
-          </div>
-          <div class="step tone-recover" data-step="3" data-money="unrecorded" data-crate="farm">
-            <h3>A job that doesn't wait to be told</h3>
-            <p>Every five minutes a scheduled job looks for orders stuck in "processing" and asks Stripe directly what happened to each one. It doesn't need the browser or the webhook. Orders left unpaid for 30 minutes get cancelled, but only after this same check, so a slow payment is never cancelled while it's actually paid.</p>
-          </div>
-          <div class="step tone-recover" data-step="4" data-money="paid" data-crate="farm">
-            <h3>Booked through the same door</h3>
-            <p>Stripe says it succeeded, so the job calls the same <code>applySucceededPaymentIntent</code>. The ledger now matches reality, at most about five minutes late.</p>
-          </div>
-          <div class="step" data-step="5" data-money="paid" data-crate="farm">
-            <h3>The late webhook changes nothing</h3>
-            <p>When Stripe's retry finally lands, the order is already paid, so the function does nothing. Four doors lead to the booking (the browser, the webhook, the app's redirect and this job), and whichever arrives first wins.</p>
-          </div>
+      <div class="figure">
+        <table class="sheet mono">
+          <caption>Charged to the card</caption>
+          <tbody>
+            <tr><td>goods subtotal <em>S</em></td><td class="num">8.71</td></tr>
+            <tr><td>sales tax <em>T</em>, Stripe Tax</td><td class="num">0.74</td></tr>
+            <tr><td>finance fee <em>F</em>, once per checkout</td><td class="num">0.55</td></tr>
+            <tr class="total"><td>PaymentIntent amount</td><td class="num">10.00</td></tr>
+          </tbody>
+        </table>
+        <table class="sheet mono">
+          <caption>Where it ends up after both payouts</caption>
+          <tbody>
+            <tr><td><span class="sw sw-farmer"></span>farmer</td><td class="calc">697 − 22 − 2</td><td class="num">6.73</td></tr>
+            <tr><td><span class="sw sw-host"></span>drop host</td><td class="calc">87 − 3 − 0</td><td class="num">0.84</td></tr>
+            <tr><td><span class="sw sw-tax"></span>tax_authority</td><td class="calc">T</td><td class="num">0.74</td></tr>
+            <tr><td><span class="sw sw-stripe"></span>stripe_fee</td><td class="calc">29 + 30</td><td class="num">0.59</td></tr>
+            <tr><td><span class="sw sw-platform"></span>platform</td><td class="calc">25 + 83 + 2</td><td class="num">1.10</td></tr>
+            <tr class="total"><td>total</td><td></td><td class="num">10.00</td></tr>
+          </tbody>
+        </table>
+        <div class="bar" aria-hidden="true">
+          <span class="sw-farmer" style="flex-grow:673"></span><span class="sw-host" style="flex-grow:84"></span><span class="sw-tax" style="flex-grow:74"></span><span class="sw-stripe" style="flex-grow:59"></span><span class="sw-platform" style="flex-grow:110"></span>
         </div>
+        <p class="fineprint">Platform's 1.10 is before Stripe's Connect payout fees, which are accrued as pending rows at payout (section 5). The 0.59 is Stripe's fee as modelled from the order's rates.</p>
       </div>
+    </div>
+  </section>
 
-      <h3 class="whatif-title">What if the webhook and the browser arrive at the same moment?</h3>
-      <div class="scrolly whatif" data-scene="race">
-        <figure class="seq">
-          <figcaption class="seq-title"></figcaption>
-          <div class="seq-canvas"></div>
-        </figure>
-        <div class="steps">
-          <div class="step" data-step="1" data-money="unrecorded" data-crate="farm">
-            <h3>Two requests, milliseconds apart</h3>
-            <p>This is the normal case, not an edge case. The browser usually wins, but the webhook is often close behind.</p>
-          </div>
-          <div class="step" data-step="2" data-money="unrecorded" data-crate="farm">
-            <h3>Both ask for the same lock</h3>
-            <p>Each request opens a transaction and runs <code>SELECT … FOR UPDATE</code> on the order's row. Postgres gives the row to one of them; the other waits.</p>
-          </div>
-          <div class="step tone-recover" data-step="3" data-money="paid" data-crate="farm">
-            <h3>One books, one walks away</h3>
-            <p>A writes the ledger, marks the order paid and commits. Only then does B get the row, see "paid", and return without touching anything.</p>
-          </div>
-          <div class="step" data-step="4" data-money="paid" data-crate="farm">
-            <h3>A backstop, and the bug behind it</h3>
-            <p>A partial unique index allows one payment row per order, so even a path that skipped the lock couldn't book twice. I built all this after finding that the normal desktop flow booked <em>nothing</em>: <code>mark-paid</code> used to flip the order to paid without writing the ledger, and the webhook then skipped it as already paid. All 760 tests passed, because every test entered money through the webhook.</p>
-          </div>
-        </div>
+  <section id="split" class="sec">
+    <h2><span class="secno">2</span><code>compute_order_financials</code></h2>
+    <div class="prose wide">
+      <p><code>compute_order_financials</code> takes the goods, the tax and four rates, and returns every party's share. It is <code>LANGUAGE sql IMMUTABLE</code> and calls nothing but <code>round</code>. Each leg is computed and rounded once, directly from the inputs; the payouts are differences of rounded legs, so they are exact cents. The platform's total is not computed at all. It is whatever remains after the farmer, the host and the tax, so the parts always sum to the order total and the platform absorbs every rounding remainder.</p>
+      <p>The table runs a BigInt port of the function in your browser, with Postgres's half-away-from-zero rounding. Edit any input. Hover a row to find its line in the SQL.</p>
+    </div>
+    <div class="cols split-cols">
+      <div class="figure">
+        <div class="code-head mono">migrations/0018_fees_taxes.sql:102 <span>reflowed for reading; identifiers and expressions unchanged</span></div>
+        <pre class="code" id="sql-split"><code data-lang="sql">CREATE FUNCTION compute_order_financials(
+  subtotal numeric, tax numeric, card_pct numeric,
+  transfer_pct numeric, platform_pct numeric, drophost_pct numeric)
+RETURNS TABLE (order_total numeric, farmer_gross numeric, farmer_card numeric,
+  farmer_transfer numeric, farmer_payout numeric, drophost_gross numeric,
+  drophost_card numeric, drophost_transfer numeric, drophost_payout numeric,
+  platform_card_pct numeric, platform_total numeric)
+LANGUAGE sql IMMUTABLE AS $$
+SELECT g.ot,
+       g.fg, g.fc, g.ft, g.fg - g.fc - g.ft,   -- farmer_payout
+       g.dg, g.dc, g.dt, g.dg - g.dc - g.dt,   -- drophost_payout
+       g.pcp,
+       g.ot - tax - (g.fg - g.fc - g.ft) - (g.dg - g.dc - g.dt)   -- platform_total
+FROM (SELECT subtotal + tax                                                    AS ot,
+             round((1 - platform_pct - drophost_pct) * subtotal, 2)            AS fg,
+             round(card_pct * (1 - platform_pct - drophost_pct) * (subtotal + tax), 2) AS fc,
+             round(transfer_pct * (1 - platform_pct - drophost_pct) * subtotal, 2)     AS ft,
+             round(drophost_pct * subtotal, 2)                                 AS dg,
+             round(card_pct * drophost_pct * (subtotal + tax), 2)              AS dc,
+             round(transfer_pct * drophost_pct * subtotal, 2)                  AS dt,
+             round(card_pct * platform_pct * (subtotal + tax), 2)              AS pcp) g
+$$;</code></pre>
       </div>
-    </section>
-  </main>
-  <script type="module" src="/farmerdrop/js/main.js"></script>
+      <div class="figure calc" id="calc"></div>
+    </div>
+  </section>
+
+  <section id="percentages" class="sec">
+    <h2><span class="secno">3</span>Card and transfer fees</h2>
+    <div class="cols">
+      <div class="prose">
+        <p>The customer never sees a card fee. Stripe takes 2.9% of the whole $10.00 plus 30¢, and the cost is split by rule. The flat 30¢ comes out of the finance fee, and the remaining 25¢ of that fee is platform margin from the moment of payment. The 2.9% is charged to each payee in proportion to their share of goods and tax, inside the SQL above (<code>fc</code>, <code>dc</code>), and the platform covers the rest out of its pot.</p>
+        <p>Stripe also charges for every Connect payout. The function withholds 0.25% of each payee's goods share (<code>ft</code>, <code>dt</code>) and leaves it in holding; at payout it moves to the platform, which pays Stripe's real payout bill. Its estimate is booked as pending rows when each transfer goes out and trued up against Stripe's month-end bill.</p>
+      </div>
+      <div class="figure">
+        <p class="fig-title">Stripe's 59¢ on this order, by who pays for it</p>
+        <div class="fund">
+          <div style="flex-grow:30" class="f-fee"><b>30</b><span>finance fee</span></div>
+          <div style="flex-grow:22" class="f-farmer"><b>22</b><span>farmer</span></div>
+          <div style="flex-grow:3" class="f-host"><b>3</b><span>host</span></div>
+          <div style="flex-grow:4" class="f-platform"><b>4</b><span>platform</span></div>
+        </div>
+        <table class="sheet mono rates">
+          <thead><tr><th>rate</th><th>applied to</th><th class="num">¢</th><th>borne by</th></tr></thead>
+          <tbody>
+            <tr><td>1 − p − d = 0.80</td><td>goods 871</td><td class="num">697</td><td>farmer gross</td></tr>
+            <tr><td>d = 0.10</td><td>goods 871</td><td class="num">87</td><td>drop host gross</td></tr>
+            <tr><td>p = 0.10</td><td>goods 871</td><td class="num">87</td><td>platform, as the residual</td></tr>
+            <tr><td>card 0.029 × 0.80</td><td>goods + tax 945</td><td class="num">22</td><td>farmer</td></tr>
+            <tr><td>card 0.029 × 0.10</td><td>goods + tax 945</td><td class="num">3</td><td>drop host</td></tr>
+            <tr><td>card 0.029</td><td>charge 1000</td><td class="num">29</td><td>Stripe's variable fee</td></tr>
+            <tr><td>card fixed</td><td>per PaymentIntent</td><td class="num">30</td><td>finance fee</td></tr>
+            <tr><td>finance fee − card fixed</td><td>per checkout</td><td class="num">25</td><td>platform margin</td></tr>
+            <tr><td>transfer 0.0025 × 0.80</td><td>goods 871</td><td class="num">2</td><td>farmer, held until payout</td></tr>
+            <tr><td>transfer 0.0025 × 0.10</td><td>goods 871</td><td class="num">0</td><td>drop host, rounds to zero</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="rates" class="sec">
+    <h2><span class="secno">4</span><code>fee_schedules</code> and frozen rates</h2>
+    <div class="cols">
+      <div class="prose">
+        <p>Fees live in <code>fee_schedules</code>, one row per rate change, each with an <code>effective_from</code>. A new rate is a new row; the admin API refuses to edit a schedule once it is in force. When an order is placed, the schedule in force at that instant is copied onto the order's own rate columns inside the placement transaction.</p>
+        <p>Per-party dollar amounts are never stored on the order. The <code>order_financials</code> view derives them on every read by running the split over the order's frozen rates, so raising the platform's share next month cannot change what an existing order owes anyone, and any historical order's split can be recomputed from its own row.</p>
+        <p class="fineprint">The append-only rule for schedules is enforced by the application, not by a trigger, and an order stores the rates themselves rather than a schedule id.</p>
+      </div>
+      <div class="figure">
+        <div class="code-head mono">server/storage.ts:4198, inside the placement transaction</div>
+        <pre class="code"><code data-lang="sql">UPDATE orders AS o
+   SET finance_fee          = fs.finance_fee,
+       card_percentage      = fs.card_percentage,
+       transfer_percentage  = fs.transfer_percentage,
+       card_fixed_fee       = fs.card_fixed_fee,
+       transfer_fixed_fee   = fs.transfer_fixed_fee,
+       platform_percentage  = fs.platform_percentage,
+       drophost_percentage  = fs.drophost_percentage
+  FROM (
+    SELECT finance_fee, card_percentage, transfer_percentage,
+           card_fixed_fee, transfer_fixed_fee, platform_percentage, drophost_percentage
+      FROM fee_schedules
+     WHERE effective_from &lt;= ${now}
+     ORDER BY effective_from DESC
+     LIMIT 1
+  ) fs
+ WHERE o.id IN (${ids})</code></pre>
+        <div class="code-head mono">migrations/0018_fees_taxes.sql:109</div>
+        <pre class="code"><code data-lang="sql">CREATE VIEW "order_financials" AS
+SELECT o.id AS order_id, o.total_amount AS subtotal, o.tax_amount, o.finance_fee,
+       f.order_total, f.farmer_gross, f.farmer_card, f.farmer_transfer, f.farmer_payout,
+       f.drophost_gross, f.drophost_card, f.drophost_transfer, f.drophost_payout,
+       f.platform_card_pct, f.platform_total
+FROM orders o,
+LATERAL compute_order_financials(
+  o.total_amount, o.tax_amount,
+  o.card_percentage, o.transfer_percentage, o.platform_percentage, o.drophost_percentage
+) f;</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="ledger" class="sec">
+    <h2><span class="secno">5</span><code>ledger_entries</code></h2>
+    <div class="cols">
+      <div class="prose">
+        <p>Each row in <code>ledger_entries</code> belongs to an account, the pair <code>(party_type, party_id)</code>, and carries one signed amount: positive means that account gained money. A balance is <code>SUM(amount) WHERE status = 'confirmed'</code>. <code>entry_type</code> records why a row exists and never changes a balance.</p>
+        <p>The books balance as an accounting equation rather than a zero sum: cash at Stripe equals holding plus everything owed to the farmer, the host, the tax authority and the platform. The test suite checks that equation after every phase of every money flow.</p>
+        <p>Step through the order below. Holding fills at payment and drains to zero as the crate moves: the farmer and platform are recognised when the drop host receives the crate, the host and the tax when the customer picks up, and the transfer reserve at payout.</p>
+      </div>
+      <div class="figure">
+        <div class="code-head mono">migrations/0003_ledger.sql, later columns from 0018 to 0028</div>
+        <pre class="code"><code data-lang="sql">CREATE TABLE "ledger_entries" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "party_type" ledger_party_type NOT NULL,   -- member farmer dropspot platform
+                                             -- tax_authority stripe holding stripe_fee
+  "party_id" integer NOT NULL,
+  "order_id" integer,
+  "entry_type" ledger_entry_type NOT NULL,   -- debit payment earning refund reversal
+                                             -- adjustment payout tax
+  "status" ledger_entry_status NOT NULL DEFAULT 'pending',
+  "amount" numeric(10, 2) NOT NULL,
+  "payment_reference_id" text,
+  "reconciliation_id" integer,
+  "idempotency_key" text,
+  ...
+);</code></pre>
+      </div>
+    </div>
+    <div class="figure ledger" id="ledger-stepper"></div>
+  </section>
+
+  <section id="exactly-once" class="sec">
+    <h2><span class="secno">6</span>Exactly-once guarantees</h2>
+    <div class="prose wide">
+      <p>Four different things can report the same payment: the browser, Stripe's webhook, the native app's redirect and the five-minute job. Stripe retries, admins double-click and processes die between a Stripe call and the database write. Every money step has to happen once. The places where a duplicate would cost money are backed by Postgres itself; the rest are one-time transitions done under row locks or compare-and-set updates inside a transaction.</p>
+    </div>
+    <div class="cols">
+      <div class="figure">
+        <p class="fig-title">Enforced by Postgres</p>
+        <div class="code-head mono">migrations/0024_ledger_payment_leg_unique.sql</div>
+        <pre class="code"><code data-lang="sql">-- A payment ledger entry is booked at most ONCE per (order, party, payment
+-- reference): concurrent bookings (webhook + mark-paid racing, duplicate
+-- webhook deliveries) that slip past the app-level row lock cannot
+-- double-book the payment.
+CREATE UNIQUE INDEX "uq_ledger_payment_leg"
+  ON "ledger_entries" ("order_id","party_type","entry_type","payment_reference_id")
+  WHERE entry_type = 'payment' AND payment_reference_id IS NOT NULL;</code></pre>
+        <div class="code-head mono">migrations/0018_fees_taxes.sql:43, the Stripe outbox</div>
+        <pre class="code"><code data-lang="sql">CONSTRAINT "stripe_transactions_idempotency_key_unique" UNIQUE("idempotency_key")</code></pre>
+        <div class="code-head mono">migrations/0028_reimbursement_custody.sql, custody facts and claims</div>
+        <pre class="code"><code data-lang="sql">CONSTRAINT "custody_observations_source_key_unique" UNIQUE("source_key")
+CONSTRAINT "reimbursement_lines_source_key_unique" UNIQUE("source_key")</code></pre>
+      </div>
+      <div class="figure">
+        <p class="fig-title">Enforced in a transaction by the application</p>
+        <div class="code-head mono">server/routes.ts:12783, booking a payment</div>
+        <pre class="code"><code data-lang="ts">const [locked] = await tx
+  .select({ paymentStatus: orders.paymentStatus })
+  .from(orders)
+  .where(eq(orders.id, orderId))
+  .for('update');
+if (!locked || ['paid', 'refunded', 'partially_refunded'].includes(locked.paymentStatus ?? '')) return false;</code></pre>
+        <div class="code-head mono">server/storage.ts:11805, executing a payout</div>
+        <pre class="code"><code data-lang="ts">const [updated] = await tx
+  .update(ledgerEntries)
+  .set({ status: 'confirmed', paymentProvider, paymentReferenceType: 'transfer',
+         paymentReferenceId, updatedAt: new Date() })
+  .where(and(eq(ledgerEntries.id, payoutId), eq(ledgerEntries.status, 'pending')))
+  .returning();
+if (!updated) {
+  throw new Error(`Payout ${payoutId} is no longer pending — already executed concurrently`);
+}</code></pre>
+        <div class="code-head mono">server/routes.ts:2068, one Stripe key per payout</div>
+        <pre class="code"><code data-lang="sql">UPDATE ledger_entries
+SET idempotency_key = COALESCE(idempotency_key, ${candidateKey}), updated_at = now()
+WHERE id = ${payoutId}
+RETURNING idempotency_key</code></pre>
+      </div>
+    </div>
+    <table class="sheet keys mono">
+      <caption>Idempotency keys sent to Stripe and stored in the outbox</caption>
+      <thead><tr><th>call</th><th>key</th></tr></thead>
+      <tbody>
+        <tr><td>charge, web</td><td>charge:&lt;sorted order ids&gt;:&lt;total cents&gt;</td></tr>
+        <tr><td>charge, app</td><td>charge:session:&lt;sorted order ids&gt;:&lt;total cents&gt;</td></tr>
+        <tr><td>tax report</td><td>taxtxn:order:&lt;id&gt;</td></tr>
+        <tr><td>full refund</td><td>refund:order:&lt;id&gt;:full</td></tr>
+        <tr><td>custody refund</td><td>refund:reimbursement:&lt;id&gt;</td></tr>
+        <tr><td>transfer reversal</td><td>transferrev:order:&lt;id&gt;:&lt;transfer&gt;:&lt;cents&gt;</td></tr>
+        <tr><td>payout</td><td>payout:&lt;id&gt;:&lt;uuid&gt;, persisted on the payout row</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="failures" class="sec">
+    <h2><span class="secno">7</span>Failure paths</h2>
+    <div class="prose wide">
+      <p>Each diagram is one failure, drawn from the code that handles it. Step through it with the buttons, the arrow keys, or by clicking a step.</p>
+    </div>
+
+    <figure class="failure" data-scene="race">
+      <figcaption><h3>Webhook and mark-paid race for one order</h3></figcaption>
+      <div class="cols">
+        <ol class="steps">
+          <li data-row="1">The browser's <code>mark-paid</code> and Stripe's webhook arrive within milliseconds. This is the common case, not an edge case.</li>
+          <li data-row="3"><code>mark-paid</code> does not trust the browser. It retrieves the PaymentIntent and requires <code>succeeded</code>. The webhook's signature is verified before any of this.</li>
+          <li data-row="4">Both open a transaction and lock the order row. Postgres serialises them.</li>
+          <li data-row="6">A writes the seven payment rows and flips the order to paid in the same transaction.</li>
+          <li data-row="7">B acquires the row, sees <code>paid</code> and returns without writing. If a path ever skipped the lock, <code>uq_ledger_payment_leg</code> would reject the second payment row and the 23505 is treated as "the other writer won".</li>
+          <li data-row="8">The booking function returns the order ids it actually booked, so only A sends the confirmation email.</li>
+        </ol>
+        <div class="seq-canvas"></div>
+      </div>
+    </figure>
+
+    <figure class="failure" data-scene="tabClosed">
+      <figcaption><h3>The browser never reports the payment</h3></figcaption>
+      <div class="cols">
+        <ol class="steps">
+          <li data-row="1">Stripe charges the card. From here the money exists at Stripe and nowhere in the ledger.</li>
+          <li data-row="3">The tab closes before <code>mark-paid</code>. The webhook fails too: a deploy, or a 5xx. Any error in the handler returns 500 so that Stripe keeps retrying.</li>
+          <li data-row="5">Every five minutes the job selects orders still in <code>payment_processing</code> and asks Stripe directly. It needs neither the browser nor the webhook.</li>
+          <li data-row="8">It books through the same <code>applySucceededPaymentIntent</code>, under the same lock.</li>
+          <li data-row="9">When Stripe's retry finally lands, the order is already paid and nothing is written. Orders older than 30 minutes are cancelled by the same job, but only after this check.</li>
+        </ol>
+        <div class="seq-canvas"></div>
+      </div>
+    </figure>
+
+    <figure class="failure" data-scene="crash">
+      <figcaption><h3>The server dies between Stripe and Postgres</h3></figcaption>
+      <div class="cols">
+        <ol class="steps">
+          <li data-row="2">Before calling Stripe, the server inserts an outbox row in <code>stripe_transactions</code> under a key built from the sorted order ids and the amount in cents.</li>
+          <li data-row="3">The same key is sent to Stripe as the idempotency key.</li>
+          <li data-row="4">The process exits after Stripe created the PaymentIntent and before its id was saved. The order is still <code>quoted</code>, so it is still payable.</li>
+          <li data-row="6">The retry inserts with <code>ON CONFLICT DO NOTHING</code> and reads back the existing row.</li>
+          <li data-row="8">Stripe sees the same key and returns the original PaymentIntent. There is one PaymentIntent, so the card can be charged at most once.</li>
+        </ol>
+        <div class="seq-canvas"></div>
+      </div>
+    </figure>
+
+    <figure class="failure" data-scene="payout">
+      <figcaption><h3>An admin clicks Execute payout twice</h3></figcaption>
+      <div class="cols">
+        <ol class="steps">
+          <li data-row="3">Both requests run <code>COALESCE(idempotency_key, new_key)</code> on the payout row. Under the row lock the first key wins and both read it back.</li>
+          <li data-row="5">Before creating a transfer, the server lists transfers in the payout's <code>transfer_group</code> and reuses one if it exists.</li>
+          <li data-row="6">If both still reach <code>transfers.create</code>, they send the same key and Stripe returns one transfer.</li>
+          <li data-row="8">Confirmation is a compare-and-set on <code>status = 'pending'</code>. A gets one row back.</li>
+          <li data-row="9">B gets zero rows and fails with "already executed concurrently". On a definitive 4xx from Stripe the key is cleared instead, so a retry is not stuck replaying Stripe's cached failure for 24 hours.</li>
+        </ol>
+        <div class="seq-canvas"></div>
+      </div>
+    </figure>
+  </section>
+
+  <section id="audit" class="sec">
+    <h2><span class="secno">8</span>July 2026 audit</h2>
+    <div class="prose wide">
+      <p>The fees, taxes and escrow ledger merged as one pull request: 109 commits, 185 files, +30,656 and −8,634 lines. A July 2026 audit of the money path, run from a red test baseline and adversarial reviews, found and fixed 26 defects. Five of them shaped the design above.</p>
+    </div>
+    <ol class="findings">
+      <li>
+        <h3>The main payment path booked nothing</h3>
+        <p>The desktop success page called <code>mark-paid</code>, which set the order to paid without writing a ledger row. The webhook then skipped the order because it was already paid. 760 tests passed, because every test put money in through the webhook. The fix made <code>mark-paid</code> verify the PaymentIntent and call the single booking function.</p>
+      </li>
+      <li>
+        <h3>Duplicate webhooks could double-book a payment</h3>
+        <p>The already-booked check was a read followed by a write, with no lock and no constraint. The fix is the <code>FOR UPDATE</code> re-check plus the partial unique index in section 6.</p>
+      </li>
+      <li>
+        <h3>A stable payout key wedged retries</h3>
+        <p>The first fix gave each payout one fixed key. Stripe caches the first response for 24 hours, including a transient "insufficient funds", so every retry replayed the failure. Now the key is persisted once, transfers are found by <code>transfer_group</code>, and the key rotates only after a definitive 4xx.</p>
+      </li>
+      <li>
+        <h3>Tax shown at checkout was never charged</h3>
+        <p>Stripe Tax returns line items unexpanded unless asked. The quote read the aggregate, the order committed with zero tax, and the test mock returned line items unconditionally, so CI stayed green. The fix expands and pages line items, and the mock now behaves like the API.</p>
+      </li>
+      <li>
+        <h3>The finance fee was booked once per week</h3>
+        <p>One PaymentIntent can cover several weekly orders but charges the finance fee once. The ledger booked it per order. The fix is a once-guard keyed on the booked "Finance fee" row rather than an in-memory flag, so it survives a crash and retry.</p>
+      </li>
+    </ol>
+  </section>
+</main>
+<script type="module" src="/farmerdrop/js/main.js"></script>
 </body>
 </html>

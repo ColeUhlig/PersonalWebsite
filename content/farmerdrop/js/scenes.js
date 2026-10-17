@@ -1,64 +1,77 @@
 /**
- * Sequence-diagram scenes. Each row appears at its `step` (1-based) as the reader scrolls.
- * kind: "msg" (request), "reply" (response, dashed), "fail" (never arrives), "note" (work done on one lane),
- * "recover" (a request that repairs a failure).
+ * Sequence diagrams of the failure paths. kind: "msg" (default), "reply" (dashed), "fail" (never arrives),
+ * "note" (work on one lane), "crash" (a process dies), "recover" (a request that repairs a failure).
  */
 
 const BROWSER = { id: "browser", label: "Browser" };
-const SERVER = { id: "server", label: "My server" };
-const DB = { id: "db", label: "Database" };
+const ADMIN = { id: "admin", label: "Admin" };
+const SERVER = { id: "server", label: "Server" };
+const DB = { id: "db", label: "Postgres" };
 const STRIPE = { id: "stripe", label: "Stripe" };
 const SWEEP = { id: "sweep", label: "5-min job" };
 
 export const SCENES = Object.freeze({
-  pay: {
-    title: "Paying for the order",
+  race: {
+    title: "Webhook and mark-paid race for one order",
     lanes: [BROWSER, SERVER, DB, STRIPE],
     rows: [
-      { step: 1, from: "browser", to: "server", label: "Pay $10.00" },
-      { step: 1, from: "server", to: "db", label: "outbox row, key charge:42:1000" },
-      { step: 1, from: "server", to: "stripe", label: "create PaymentIntent, same key" },
-      { step: 1, from: "server", to: "browser", kind: "reply", label: "client secret" },
-      { step: 2, from: "browser", to: "stripe", label: "card details, confirm" },
-      { step: 2, at: "stripe", kind: "note", label: "charges the card $10.00" },
-      { step: 3, from: "browser", to: "server", label: "mark-paid" },
-      { step: 3, from: "server", to: "stripe", label: "really succeeded?" },
-      { step: 3, from: "stripe", to: "server", label: "webhook: payment succeeded" },
-      { step: 4, at: "db", kind: "note", label: "lock order · write ledger · paid" },
+      { from: "browser", to: "server", label: "A: POST /orders/42/mark-paid" },
+      { from: "stripe", to: "server", label: "B: payment_intent.succeeded" },
+      { from: "server", to: "stripe", label: "A: retrieve pi_42, must be succeeded" },
+      { from: "server", to: "db", label: "A: SELECT … FOR UPDATE" },
+      { from: "server", to: "db", label: "B: SELECT … FOR UPDATE (blocks)" },
+      { at: "db", kind: "note", label: "A: 7 ledger rows, status paid, COMMIT" },
+      { from: "db", to: "server", kind: "reply", label: "B: row unlocked, status = paid, return" },
+      { from: "server", to: "browser", kind: "reply", label: "A booked it, A sends the email" },
     ],
   },
 
   tabClosed: {
-    title: "What if the tab closes right after paying?",
+    title: "The browser never reports the payment",
     lanes: [BROWSER, SERVER, DB, STRIPE, SWEEP],
     rows: [
-      { step: 1, from: "browser", to: "stripe", label: "card details, confirm" },
-      { step: 1, at: "stripe", kind: "note", label: "charges the card $10.00" },
-      { step: 2, from: "browser", to: "server", kind: "fail", label: "mark-paid never sent" },
-      { step: 2, from: "stripe", to: "server", kind: "fail", label: "webhook fails" },
-      { step: 3, from: "sweep", to: "db", kind: "recover", label: "orders still processing?" },
-      { step: 3, from: "sweep", to: "stripe", kind: "recover", label: "did pi_42 succeed?" },
-      { step: 3, from: "stripe", to: "sweep", kind: "reply", label: "succeeded" },
-      { step: 4, from: "sweep", to: "db", kind: "recover", label: "same booking function" },
-      { step: 4, at: "db", kind: "note", label: "lock order · write ledger · paid" },
-      { step: 5, from: "stripe", to: "server", label: "webhook retry lands" },
-      { step: 5, from: "server", to: "db", label: "already paid: do nothing" },
+      { from: "browser", to: "stripe", label: "confirmPayment" },
+      { at: "stripe", kind: "note", label: "card charged $10.00" },
+      { from: "browser", to: "server", kind: "fail", label: "mark-paid: tab closed" },
+      { from: "stripe", to: "server", kind: "fail", label: "webhook: 5xx, Stripe retries" },
+      { from: "sweep", to: "db", kind: "recover", label: "orders in payment_processing" },
+      { from: "sweep", to: "stripe", kind: "recover", label: "retrieve pi_42" },
+      { from: "stripe", to: "sweep", kind: "reply", label: "succeeded" },
+      { from: "sweep", to: "db", kind: "recover", label: "applySucceededPaymentIntent" },
+      { from: "stripe", to: "server", label: "webhook retry delivered" },
+      { from: "server", to: "db", kind: "reply", label: "already paid: no rows written" },
     ],
   },
 
-  race: {
-    title: "What if both messages arrive at once?",
+  crash: {
+    title: "The server dies between Stripe and Postgres",
     lanes: [BROWSER, SERVER, DB, STRIPE],
     rows: [
-      { step: 1, from: "browser", to: "server", label: "A: mark-paid" },
-      { step: 1, from: "stripe", to: "server", label: "B: webhook" },
-      { step: 2, from: "server", to: "db", label: "A: SELECT … FOR UPDATE" },
-      { step: 2, from: "server", to: "db", label: "B: SELECT … FOR UPDATE" },
-      { step: 2, at: "db", kind: "note", label: "A holds the lock, B waits" },
-      { step: 3, at: "db", kind: "note", label: "A: write ledger · paid · commit" },
-      { step: 3, from: "db", to: "server", kind: "reply", label: "B: order is paid, stop" },
-      { step: 4, at: "db", kind: "note", label: "unique index: one payment row" },
-      { step: 4, from: "server", to: "browser", kind: "reply", label: "one email, sent by A" },
+      { from: "browser", to: "server", label: "POST /create-payment-intent" },
+      { from: "server", to: "db", label: "INSERT outbox, key charge:42:1000" },
+      { from: "server", to: "stripe", label: "paymentIntents.create, same key" },
+      { at: "server", kind: "crash", label: "process exits before saving pi_42" },
+      { from: "browser", to: "server", kind: "recover", label: "retry" },
+      { from: "server", to: "db", kind: "recover", label: "ON CONFLICT DO NOTHING: existing row" },
+      { from: "server", to: "stripe", kind: "recover", label: "paymentIntents.create, same key" },
+      { from: "stripe", to: "server", kind: "reply", label: "the original pi_42" },
+      { from: "server", to: "browser", kind: "reply", label: "client_secret" },
+    ],
+  },
+
+  payout: {
+    title: "An admin clicks Execute payout twice",
+    lanes: [ADMIN, SERVER, DB, STRIPE],
+    rows: [
+      { from: "admin", to: "server", label: "A: execute payout 17" },
+      { from: "admin", to: "server", label: "B: execute payout 17" },
+      { from: "server", to: "db", label: "A, B: SET idempotency_key = COALESCE(…)" },
+      { from: "db", to: "server", kind: "reply", label: "both get payout:17:<uuid>" },
+      { from: "server", to: "stripe", label: "transfers.list(transfer_group payout:17)" },
+      { from: "server", to: "stripe", label: "transfers.create, same key" },
+      { from: "stripe", to: "server", kind: "reply", label: "one transfer, tr_17" },
+      { from: "server", to: "db", label: "A: UPDATE … WHERE status = 'pending'" },
+      { from: "server", to: "db", kind: "fail", label: "B: 0 rows, already executed" },
     ],
   },
 });
